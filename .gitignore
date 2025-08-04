@@ -1,0 +1,22 @@
+# Ignore build directory
+/build/
+
+# Ignore user configuration files
+*.user
+*.swp
+*.swo
+*.log
+
+# Ignore generated files
+zephyr/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# VS Code settings
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
