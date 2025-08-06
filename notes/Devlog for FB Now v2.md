@@ -1,7 +1,7 @@
 ---
 title: Devlog for FB Now v2
 created: '2025-07-23T15:08:02.906Z'
-modified: '2025-08-04T21:23:48.147Z'
+modified: '2025-08-05T22:16:25.496Z'
 ---
 
 ## Devlog for FB Now v2
@@ -70,5 +70,29 @@ What can I do:
 7 Button I/O Sketch Startup:
 
 1. repurposed button press sketch to interface on board led w/ 4 + P0.28 GPIO w/ zephyr
+
+
+8/5
+1. got the nrf52840DK, Sample App lorawan class A, working. NOTE: for SX1262 mbed shield, the max SPI has to be changed from 16Mhz to 8Mhz for it work.
+2. The sample app doesn't save the DEVNonce onto NVS, because of which the network server won't allow the joinRequest all the time. So the nonce has to be stored on the NVS, and counted up everytime it joins OR create a random number, and then access it from NVS.
+
+2a. NVS sample App Learning. Storing and retrrieving data from NVS.
+-- done: what i learnt:
+1. stores things w/ key_ID.
+
+Next, I ported code to class_a code, now i create random app keys, store on nvs, use the last devNonce value and val++, (so theres no collisison). 
+Next step would be to reduce the nvs partition size
+
+
+
+
+
+
+
+
+
+
+
+
 
 
