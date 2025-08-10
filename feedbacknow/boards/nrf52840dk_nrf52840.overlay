@@ -1,0 +1,82 @@
+/ {
+    aliases {
+        sw0 = &button0;
+        sw1 = &button1;
+        sw2 = &button2;
+        sw3 = &button3;
+        sw4 = &button4;
+        sw5 = &button5;
+        sw6 = &button6;
+        led0 = &led0;
+        led1 = &led1;
+        led2 = &led2;
+        led3 = &led3;
+        led4 = &led4;
+        led5 = &led5;
+        led6 = &led6;
+        lora0 = &lora_semtech_sx1262mb2das;
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+
+        button4: button_4 {
+            label = "Button 4";
+            gpios = <&gpio1 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+        button5: button_5 {
+            label = "Button 5";
+            gpios = <&gpio0 28 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+        button6: button_6 {
+            label = "Button 6";
+            gpios = <&gpio0 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+    };
+
+leds {
+        compatible = "gpio-leds";
+
+        led4: led_4 {
+            gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;  // P1.02
+			label = "EXT LED 4";
+
+        };
+
+        led5: led_5 {
+            gpios = <&gpio1 7 GPIO_ACTIVE_LOW>;  // P1.07
+			label = "EXT LED 5";
+
+        };
+
+        led6: led_6 {
+            gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;  // P1.08
+			label = "EXT LED 6";
+
+        };
+    };
+};
+
+
+
+
+&arduino_spi {
+	status = "okay";
+
+	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>;
+
+	lora_semtech_sx1262mb2das: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+		label = "SX1262";
+		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
+		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>;
+		dio2-tx-enable;
+		tcxo-power-startup-delay-ms = <5>;
+	};
+};
