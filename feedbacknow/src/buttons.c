@@ -17,6 +17,10 @@ LOG_MODULE_REGISTER(buttons, LOG_LEVEL_INF);
 #define SW5_NODE DT_ALIAS(sw5)
 #define SW6_NODE DT_ALIAS(sw6)
 
+/* EVENT Q */
+#define BUTTON_Q_SIZE 10
+K_MSGQ_DEFINE(button_msgq, sizeof(button_event_t), BUTTON_Q_SIZE, 1);
+
 /* Array of button GPIO specs */
 const struct gpio_dt_spec buttons[NUM_BUTTONS] = {
     GPIO_DT_SPEC_GET_OR(SW0_NODE, gpios, {0}),
@@ -31,19 +35,31 @@ const struct gpio_dt_spec buttons[NUM_BUTTONS] = {
 /* Callback storage for each button */
 static struct gpio_callback button_cb_data[NUM_BUTTONS];
 
+/*Button ISR*/
+static void button_isr(const struct device *dev, struct gpio_callback *cb,
+                       uint32_t pins);
+
+bool buttons_get_event(button_event_t *event, k_timeout_t timeout) {
+  return k_msgq_get(&button_msgq, event, timeout) == 0;
+}
+
 /* Interrupt handler */
-static void button_pressed(const struct device *dev, struct gpio_callback *cb,
-                           uint32_t pins) {
+static void button_isr(const struct device *dev, struct gpio_callback *cb,
+                       uint32_t pins) {
+  int64_t now = k_uptime_get();
   for (int i = 0; i < NUM_BUTTONS; i++) {
-    if (dev == buttons[i].port && (pins & BIT(buttons[i].pin))) {
-      printk("Button %d pressed (pin %d)\n", i, buttons[i].pin);
-      led_toggle(i);
-      printk("LED %d toggled\n", i);
+    if (pins & BIT(buttons[i].pin)) {
+      int val = gpio_pin_get_dt(&buttons[i]);
+      button_event_t evt = {.button_id = i,
+                            .type =
+                                val ? BUTTON_EVENT_PRESS : BUTTON_EVENT_RELEASE,
+                            .timestamp_ms = now};
+      k_msgq_put(&button_msgq, &evt, K_NO_WAIT);
     }
   }
 }
 
-int button_handler_init(void) {
+int buttons_init(void) {
   int ret;
 
   for (int i = 0; i < NUM_BUTTONS; i++) {
@@ -58,13 +74,13 @@ int button_handler_init(void) {
       return ret;
     }
 
-    ret = gpio_pin_interrupt_configure_dt(&buttons[i], GPIO_INT_EDGE_TO_ACTIVE);
+    ret = gpio_pin_interrupt_configure_dt(&buttons[i], GPIO_INT_EDGE_BOTH);
     if (ret != 0) {
       LOG_ERR("Failed to set interrupt for button %d", i);
       return ret;
     }
 
-    gpio_init_callback(&button_cb_data[i], button_pressed, BIT(buttons[i].pin));
+    gpio_init_callback(&button_cb_data[i], button_isr, BIT(buttons[i].pin));
     gpio_add_callback(buttons[i].port, &button_cb_data[i]);
 
     LOG_INF("Initialized button %d on %s pin %d", i, buttons[i].port->name,

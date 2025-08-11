@@ -16,6 +16,9 @@ LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
 #define LED5_NODE DT_ALIAS(led5)
 #define LED6_NODE DT_ALIAS(led6)
 
+#define LED_Q_SIZE 10
+K_MSGQ_DEFINE(led_cmd_queue, sizeof(led_cmd_t), 10, 1);
+
 /* Array of button GPIO specs */
 const struct gpio_dt_spec leds[NUM_LEDS] = {
     GPIO_DT_SPEC_GET_OR(LED0_NODE, gpios, {0}),
@@ -58,4 +61,8 @@ int led_toggle(int led_idx) {
     return -EINVAL;
   }
   return gpio_pin_toggle_dt(&leds[led_idx]);
+}
+
+bool leds_get_command(led_cmd_t *cmd, k_timeout_t timeout) {
+  return k_msgq_get(&led_cmd_queue, cmd, timeout) == 0;
 }
