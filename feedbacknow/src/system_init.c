@@ -6,6 +6,7 @@
 LOG_MODULE_REGISTER(SYS_INIT);
 
 int system_init(void) {
+  LOG_INF("System init start\n");
   int ret;
 
   ret = buttons_init();
@@ -20,6 +21,6 @@ int system_init(void) {
     return ret;
   }
 
-  LOG_INF("System init complete");
+  LOG_INF("\nSystem init complete");
   return 0;
 }

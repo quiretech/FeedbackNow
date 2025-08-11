@@ -52,14 +52,12 @@ leds {
         };
 
         led6: led_6 {
-            gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;  // P1.08
+            gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;  // P1.09
 			label = "EXT LED 6";
 
         };
     };
 };
-
-
 
 
 &arduino_spi {
