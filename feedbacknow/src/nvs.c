@@ -1,24 +1,19 @@
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-// #include <zephyr/console/console.h>
-// #include <zephyr/device.h>
-// #include <zephyr/drivers/flash.h>
-// #include <zephyr/fs/nvs.h>
-// #include <zephyr/kernel.h>
-// #include <zephyr/logging/log.h>
-// #include <zephyr/random/random.h>
-// #include <zephyr/storage/flash_map.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <zephyr/console/console.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/flash.h>
+#include <zephyr/fs/nvs.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
+#include <zephyr/storage/flash_map.h>
 
-// #include "nvs.h"
+#include "nvs.h"
 
-// LOG_MODULE_REGISTER(nvs, LOG_LEVEL_INF);
-
-// const int nVars = 4;
-// const char *nvs_name[] = {"DevNonce", "DevEUI", "JoinEUI",
-//                           "AppKey"}; // params to store
-// int nvs_len[] = {2, 8, 8, 16};       // length of each param respectively
+LOG_MODULE_REGISTER(nvs, LOG_LEVEL_INF);
 
 // static int generate_random_key(uint8_t *buf, size_t len) {
 //   int ret = sys_csrand_get(buf, len);
@@ -29,30 +24,30 @@
 //   return 0;
 // }
 
-// void nvs_initialize(struct nvs_fs *fs) {
-//   int rc;
-//   struct flash_pages_info info;
+void nvs_initialize(struct nvs_fs *fs) {
+  int rc;
+  struct flash_pages_info info;
 
-//   fs->flash_device = NVS_PARTITION_DEVICE;
-//   if (!device_is_ready(fs->flash_device)) {
-//     LOG_ERR("Flash device %s is not ready\n", fs->flash_device->name);
-//     return;
-//   }
-//   fs->offset = NVS_PARTITION_OFFSET;
-//   rc = flash_get_page_info_by_offs(fs->flash_device, fs->offset, &info);
-//   if (rc) {
-//     LOG_ERR("Unable to get page info, rc=%d\n", rc);
-//     return;
-//   }
-//   fs->sector_size = info.size;
-//   fs->sector_count = 3U;
+  fs->flash_device = NVS_PARTITION_DEVICE;
+  if (!device_is_ready(fs->flash_device)) {
+    LOG_ERR("Flash device %s is not ready\n", fs->flash_device->name);
+    return;
+  }
+  fs->offset = NVS_PARTITION_OFFSET;
+  rc = flash_get_page_info_by_offs(fs->flash_device, fs->offset, &info);
+  if (rc) {
+    LOG_ERR("Unable to get page info, rc=%d\n", rc);
+    return;
+  }
+  fs->sector_size = info.size;
+  fs->sector_count = 3U;
 
-//   rc = nvs_mount(fs);
-//   if (rc) {
-//     LOG_ERR("Flash Init failed, rc=%d\n", rc);
-//     return;
-//   }
-// }
+  rc = nvs_mount(fs);
+  if (rc) {
+    LOG_ERR("Flash Init failed, rc=%d\n", rc);
+    return;
+  }
+}
 
 // void nvs_read_init_parameter(struct nvs_fs *fs, uint16_t id, void *data) {
 //   int ret;
@@ -139,19 +134,19 @@
 //   }
 // }
 
-// // int main(void)
-// // {
-// // 	struct nvs_fs fs;
-// // 	LOG_INF("Starting NVS test app\n");
+// int main(void)
+// {
+// 	struct nvs_fs fs;
+// 	LOG_INF("Starting NVS test app\n");
 
-// // 	nvs_initialize(&fs);
+// 	nvs_initialize(&fs);
 
-// // 	for (int i = 0; i < nVars; i++) {
-// // 		uint8_t data[16] = {0}; // max size buffer for keys (16 bytes)
-// // 		LOG_INF("Reading NVS variable: %s (ID %d)", nvs_name[i], i);
-// // 		nvs_read_init_parameter(&fs, i, data);
-// // 	}
+// 	for (int i = 0; i < nVars; i++) {
+// 		uint8_t data[16] = {0}; // max size buffer for keys (16 bytes)
+// 		LOG_INF("Reading NVS variable: %s (ID %d)", nvs_name[i], i);
+// 		nvs_read_init_parameter(&fs, i, data);
+// 	}
 
-// // 	LOG_INF("NVS test complete\n");
-// // 	return 0;
-// // }
+// 	LOG_INF("NVS test complete\n");
+// 	return 0;
+// }

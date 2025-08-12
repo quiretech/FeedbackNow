@@ -4,9 +4,11 @@
 /*stack size*/
 #define LED_THREAD_STACK_SIZE 2048
 #define BUTTON_THREAD_STACK_SIZE 2048
+#define NVS_THREAD_STACK_SIZE 2048
 
 /*thread priority*/
 #define LED_THREAD_PRIORITY 8
 #define BUTTON_THREAD_PRIORITY 7
+#define NVS_THREAD_PRIORITY 6
 
 #endif // K_CONFIG_H

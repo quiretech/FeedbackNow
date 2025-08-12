@@ -12,14 +12,11 @@ cmake:
      source-dir: C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow
      type: MAIN
   kconfig:
-    files:
-     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
-     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
     user-files:
      - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
   sysbuild: true
 version: 0.1.0
 west:
-  command: C:\ncs\toolchains\0b393f9e1b\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --pristine -- -DSHIELD=semtech_sx1262mb2das
+  command: C:\ncs\toolchains\0b393f9e1b\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 -- -DSHIELD=semtech_sx1262mb2das
   topdir: c:\ncs\v3.0.2
   version: 1.2.0

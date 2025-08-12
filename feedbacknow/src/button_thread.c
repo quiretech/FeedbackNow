@@ -1,6 +1,7 @@
 #include "buttons.h"
 #include "k_config.h"
 #include "leds.h"
+#include "nvs.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -23,7 +24,8 @@ void button_thread_func(void *a, void *b, void *c) {
               evt.type == BUTTON_EVENT_PRESS ? "pressed" : "released",
               evt.timestamp_ms);
 
-      /* Simple logic: turn on LED with same ID when pressed, off when released
+      /* Simple logic: turn on LED with same ID when pressed, off when
+      released
        */
       led_cmd.led_id = evt.button_id;
       led_cmd.cmd = (evt.type == BUTTON_EVENT_PRESS) ? LED_ON : LED_OFF;

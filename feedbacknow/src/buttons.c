@@ -74,7 +74,7 @@ int buttons_init(void) {
       return ret;
     }
 
-    ret = gpio_pin_interrupt_configure_dt(&buttons[i], GPIO_INT_EDGE_BOTH);
+    ret = gpio_pin_interrupt_configure_dt(&buttons[i], GPIO_INT_EDGE_FALLING);
     if (ret != 0) {
       LOG_ERR("Failed to set interrupt for button %d", i);
       return ret;
