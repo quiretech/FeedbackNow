@@ -1,6 +1,7 @@
 #include "system_init.h"
 #include "buttons.h"
 #include "leds.h"
+#include "lora_app.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(SYS_INIT);
@@ -18,6 +19,12 @@ int system_init(void) {
   ret = leds_init();
   if (ret) {
     LOG_ERR("LEDs init failed: %d", ret);
+    return ret;
+  }
+
+  ret = lora_app_init();
+  if (ret) {
+    LOG_ERR("LoRaWAN init failed: %d", ret);
     return ret;
   }
 

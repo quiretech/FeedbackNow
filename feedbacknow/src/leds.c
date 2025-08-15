@@ -17,7 +17,7 @@ LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
 #define LED6_NODE DT_ALIAS(led6)
 
 #define LED_Q_SIZE 10
-K_MSGQ_DEFINE(led_cmd_queue, sizeof(led_cmd_t), 10, 1);
+K_MSGQ_DEFINE(led_cmd_queue, sizeof(led_cmd_t), LED_Q_SIZE, 1);
 
 /* Array of button GPIO specs */
 const struct gpio_dt_spec leds[NUM_LEDS] = {
