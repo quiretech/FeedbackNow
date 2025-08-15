@@ -10,25 +10,6 @@ LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 // Ensure proper alignment for the message queue
 K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE, 4);
 
-// static uint8_t serialize_button_payload(button_payload_t *payload,
-//                                         uint8_t *buffer) {
-//   uint8_t idx = 0;
-//   buffer[idx++] = payload->button_id;
-
-//   // Serialize timestamp (4 bytes, little-endian)
-//   buffer[idx++] = (payload->timestamp_ms >> 0) & 0xFF;
-//   buffer[idx++] = (payload->timestamp_ms >> 8) & 0xFF;
-//   buffer[idx++] = (payload->timestamp_ms >> 16) & 0xFF;
-//   buffer[idx++] = (payload->timestamp_ms >> 24) & 0xFF;
-
-//   buffer[idx++] = payload->text_len;
-//   for (uint8_t i = 0; i < payload->text_len; i++) {
-//     buffer[idx++] = payload->text[i];
-//   }
-
-//   return idx; // total length of serialized payload
-// }
-
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (msg == NULL) {
     LOG_ERR("lora_get_event: NULL message pointer");
@@ -109,6 +90,10 @@ int lora_app_init(void) {
   lorawan_register_downlink_callback(&dl_cb);
 
   lorawan_register_dr_changed_callback(lora_app_dr_changed);
+
+  // **Enable ADR** so network manages DR dynamically
+  lorawan_enable_adr(true);
+  LOG_INF("Adaptive Data Rate (ADR) enabled");
 
   LOG_INF("LoRaWAN stack initialized successfully.");
   return 0;

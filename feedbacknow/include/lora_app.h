@@ -35,7 +35,7 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
 void lora_app_dr_changed(enum lorawan_datarate dr);
 
 #define LORA_MSG_DATA_MAX 1
-#define LORA_MSGQ_SIZE 32
+#define LORA_MSGQ_SIZE 10
 #define LORA_PAYLOAD_MAX 11
 
 typedef struct {

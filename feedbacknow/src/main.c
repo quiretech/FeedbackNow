@@ -224,11 +224,14 @@
 #include <zephyr/drivers/gpio.h>
 
 #include "buttons.h"
+#include "heartbeat_work.h"
 #include "lora_app.h"
 #include "nvs.h"
 
+
 int main(void) {
   system_init(); // NVS, buttons, LEDs, etc.
+  heartbeat_init();
 
   while (1) {
     k_sleep(K_SECONDS(1));
