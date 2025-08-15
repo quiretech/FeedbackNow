@@ -104,8 +104,8 @@ int lora_app_init(void) {
     return ret;
   }
 
-  struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
-                                      .cb = lora_app_dl_callback};
+  static struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
+                                             .cb = lora_app_dl_callback};
   lorawan_register_downlink_callback(&dl_cb);
 
   lorawan_register_dr_changed_callback(lora_app_dr_changed);

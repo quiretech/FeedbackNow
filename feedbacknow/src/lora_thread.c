@@ -33,7 +33,7 @@ static uint16_t generate_dev_nonce(void) {
 }
 #endif
 
-K_MUTEX_DEFINE(lora_send_mutex);
+// K_MUTEX_DEFINE(lora_send_mutex);
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
                             bool confirmed) {
   int ret;
@@ -48,15 +48,15 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   LOG_HEXDUMP_INF(data, len, "");
 
   // Lock mutex BEFORE any operations
-  k_mutex_lock(&lora_send_mutex, K_FOREVER);
-  LOG_INF("MUTEX LOCK");
+  // k_mutex_lock(&lora_send_mutex, K_FOREVER);
+  // LOG_INF("MUTEX LOCK");
 
   ret =
       lorawan_send(port, (uint8_t *)data, (uint8_t)len,
                    confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
 
-  k_mutex_unlock(&lora_send_mutex);
-  LOG_INF("MUTEX unLOCK");
+  // k_mutex_unlock(&lora_send_mutex);
+  // LOG_INF("MUTEX unLOCK");
 
   if (ret == -EAGAIN) {
     LOG_WRN("lorawan_send: busy / too long");

@@ -39,17 +39,20 @@ void button_thread_func(void *a, void *b, void *c) {
     /* Simple logic: turn on LED with same ID when pressed, off when released */
     led_cmd.led_id = btn_evt.button_id;
     led_cmd.cmd = (btn_evt.type == BUTTON_EVENT_PRESS) ? LED_ON : LED_OFF;
-    // Temporarily comment out LED control to test if it's causing the MPU fault
-    // k_msgq_put(&led_cmd_queue, &led_cmd, K_NO_WAIT);
+    k_msgq_put(&led_cmd_queue, &led_cmd, K_NO_WAIT);
 
     // Create message on stack with proper initialization
     lora_uplink_msg_t lora_msg = {0}; // Zero-initialize the entire structure
 
     // Then set the fields properly
     lora_msg.port = 1;
-    lora_msg.len = 1;
-    lora_msg.data[0] = btn_evt.button_id; // Set the first byte of the array
-    lora_msg.confirmed = false;           // Try unconfirmed messages
+    const char *payload_str = "HelloWorld";
+    size_t payload_len = strlen(payload_str);
+
+    lora_msg.data[0] = btn_evt.button_id;
+    memcpy(&lora_msg.data[1], payload_str, payload_len);
+    lora_msg.len = 1 + payload_len;
+    lora_msg.confirmed = true;
 
     if (lora_msg.len > LORA_PAYLOAD_MAX) {
       LOG_ERR("Payload too long for current datarate! (%d bytes)",

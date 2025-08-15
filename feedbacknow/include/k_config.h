@@ -9,8 +9,8 @@
 
 /* Thread priorities (lower number = higher priority) */
 #define LED_THREAD_PRIORITY 4
-#define BUTTON_THREAD_PRIORITY 5 // Lower priority than LoRa
+#define BUTTON_THREAD_PRIORITY 5
 #define NVS_THREAD_PRIORITY 1
-#define LORA_THREAD_PRIORITY 3 // Higher priority than button
+#define LORA_THREAD_PRIORITY 3
 
 #endif // K_CONFIG_H
