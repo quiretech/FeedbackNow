@@ -10527,6 +10527,11 @@ DT_COMPAT_VOLTAGE_DIVIDER := voltage-divider
 config DT_HAS_VOLTAGE_DIVIDER_ENABLED
 	def_bool $(dt_compat_enabled,$(DT_COMPAT_VOLTAGE_DIVIDER))
 
+DT_COMPAT_WAVESHARE_EPD := waveshare,epd
+
+config DT_HAS_WAVESHARE_EPD_ENABLED
+	def_bool $(dt_compat_enabled,$(DT_COMPAT_WAVESHARE_EPD))
+
 DT_COMPAT_WCH_AFIO := wch,afio
 
 config DT_HAS_WCH_AFIO_ENABLED
