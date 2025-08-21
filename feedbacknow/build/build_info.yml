@@ -12,6 +12,9 @@ cmake:
      source-dir: C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow
      type: MAIN
   kconfig:
+    files:
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
     user-files:
      - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/_sysbuild/empty.conf
   sysbuild: true
