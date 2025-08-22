@@ -9,4 +9,11 @@ project(lvgl_1)
 # Keep source files in src/ and list them below.
 target_sources(app PRIVATE
     src/main.c
+    src/ssd1683.c
+    src/ssd1683.h
+    src/image_bitmap.h
+    src/image_bitmap.c
+
+
+
 )
