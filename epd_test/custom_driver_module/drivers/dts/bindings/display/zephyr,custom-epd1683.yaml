@@ -1,0 +1,30 @@
+description: SSD1683 EPD display controller
+include:
+  - display-controller.yaml
+  - spi-device.yaml
+properties:
+  reset-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to RESET signal.
+    required: true
+  busy-gpios:
+    type: phandle-array
+    description: |
+      GPIO connected to the BUSY signal.
+    required: true
+  dc-gpios:
+    type: phandle-array
+    description: |
+      DC enable pin.
+    required: true
+  height:
+    type: int
+    required: true
+    description: |
+      Height of the panel driven by the controller, with the units in pixels.
+  width:
+    type: int
+    required: true
+    description: |
+      Width of the panel driven by the controller, with the units in pixels.

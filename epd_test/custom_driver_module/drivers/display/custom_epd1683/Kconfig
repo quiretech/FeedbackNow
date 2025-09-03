@@ -1,0 +1,7 @@
+#STEP 6.2 Populate the Kconfig file for the custom driver
+config CUSTOM_EPD1683
+	bool "Custom EPD"
+	default n
+	select SPI
+	help
+	  Enable EPD 1683
