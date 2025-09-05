@@ -1,2 +1,0 @@
-#STEP 7.3: Create the Kconfig file for our module
-rsource "drivers/Kconfig"

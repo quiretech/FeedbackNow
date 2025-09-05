@@ -1,6 +1,0 @@
-config CUSTOM_EPD1683
-	bool "Custom EPD1683 display driver"
-	default n
-	depends on DISPLAY && SPI && GPIO
-	help
-	  Enable EPD1683 display driver support.
