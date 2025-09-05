@@ -171,7 +171,7 @@ build _sysbuild\rebuild_cache: phony _sysbuild\CMakeFiles\rebuild_cache.util
 # Custom command for _sysbuild\CMakeFiles\sysbuild_guiconfig
 
 build _sysbuild\CMakeFiles\sysbuild_guiconfig | ${cmake_ninja_workdir}_sysbuild\CMakeFiles\sysbuild_guiconfig: CUSTOM_COMMAND
-  COMMAND = _sysbuild\CMakeFiles\sysbuild_guiconfig-015c191.bat 0f4f9b6482084d62
+  COMMAND = _sysbuild\CMakeFiles\sysbuild_guiconfig-015c191.bat 06952afe2c031b8a
   pool = console
 
 
@@ -209,7 +209,7 @@ build _sysbuild\CMakeFiles\config-twister | ${cmake_ninja_workdir}_sysbuild\CMak
 # Custom command for _sysbuild\CMakeFiles\sysbuild_menuconfig
 
 build _sysbuild\CMakeFiles\sysbuild_menuconfig | ${cmake_ninja_workdir}_sysbuild\CMakeFiles\sysbuild_menuconfig: CUSTOM_COMMAND
-  COMMAND = _sysbuild\CMakeFiles\sysbuild_menuconfig-1e014e8.bat 71a463cf3db83d63
+  COMMAND = _sysbuild\CMakeFiles\sysbuild_menuconfig-1e014e8.bat 28c6f35320547fe8
   pool = console
 
 

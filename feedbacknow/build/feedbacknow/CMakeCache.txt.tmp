@@ -48,7 +48,7 @@ BYPRODUCT_KERNEL_HEX_NAME:FILEPATH=C:/Users/jatan/Desktop/githubrepo/fb_now/feed
 CACHED_BOARD:STRING=nrf52840dk/nrf52840
 
 //Selected shield
-CACHED_SHIELD:STRING=
+CACHED_SHIELD:STRING=semtech_sx1262mb2das
 
 //Selected snippet
 CACHED_SNIPPET:STRING=
@@ -371,6 +371,9 @@ Picolibc_SOURCE_DIR:STATIC=C:/ncs/v3.0.2/modules/lib/picolibc
 
 //Path to a program.
 Python3_EXECUTABLE:FILEPATH=C:/ncs/toolchains/0b393f9e1b/opt/bin/python.exe
+
+//Selected shield
+SHIELD:STRING=semtech_sx1262mb2das
 
 //Path to the SoC directory.
 SOC_FULL_DIR:PATH=C:/ncs/v3.0.2/zephyr/soc/nordic

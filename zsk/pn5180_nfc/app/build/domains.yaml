@@ -1,0 +1,7 @@
+default: app
+build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/pn5180_nfc/app/build
+domains:
+  - name: app
+    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/pn5180_nfc/app/build/app
+flash_order:
+  - app

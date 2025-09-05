@@ -228,7 +228,6 @@
 #include "lora_app.h"
 #include "nvs.h"
 
-
 int main(void) {
   system_init(); // NVS, buttons, LEDs, etc.
   heartbeat_init();
