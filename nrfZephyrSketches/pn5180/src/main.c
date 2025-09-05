@@ -21,7 +21,7 @@ int main(void) {
 
   /* 6. Heartbeat loop */
   while (1) {
-    k_msleep(1000);
+    // k_msleep(1000);
     if (pn5180_get_inventory(uid)) {
       LOG_INF("Tag detected! UID:");
       LOG_HEXDUMP_INF(uid, sizeof(uid), "UID");

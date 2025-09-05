@@ -60,9 +60,10 @@
 struct pn5180_cfg {
   const struct device *spi_dev;
   struct spi_config spi_cfg;
-  struct gpio_dt_spec irq;
-  struct gpio_dt_spec rst;
-  struct gpio_dt_spec busy;
+  const struct gpio_dt_spec irq;
+  const struct gpio_dt_spec rst;
+  const struct gpio_dt_spec busy;
+  const struct gpio_dt_spec nss;
 };
 
 /* Public function prototypes */

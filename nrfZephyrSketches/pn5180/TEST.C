@@ -13,6 +13,11 @@ LOG_MODULE_REGISTER(pn5180, LOG_LEVEL_INF);
 #define MY_SPI_MASTER DT_NODELABEL(my_spi_master)
 #define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
 
+static struct spi_cs_control pn5180_cs = {
+    .gpio = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, nfc_nss_gpios),
+    .delay = 0,
+};
+
 static struct pn5180_cfg nfc_dev = {
     .spi_dev = DEVICE_DT_GET(MY_SPI_MASTER),
     .spi_cfg =
@@ -25,13 +30,12 @@ static struct pn5180_cfg nfc_dev = {
     .irq = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, nfc_irq_gpios),
     .rst = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, nfc_rst_gpios),
     .busy = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, nfc_busy_gpios),
-    .nss = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, nfc_nss_gpios),
 };
 
 /* HELPERS */
 
-static inline void cs_low(void) { gpio_pin_set_dt(&nfc_dev.nss, 1); }
-static inline void cs_high(void) { gpio_pin_set_dt(&nfc_dev.nss, 0); }
+static inline void cs_low(void) { gpio_pin_set_dt(&pn5180_cs.gpio, 1); }
+static inline void cs_high(void) { gpio_pin_set_dt(&pn5180_cs.gpio, 0); }
 
 /*DEVICE HELPERS*/
 
@@ -50,8 +54,8 @@ void pn5180_init(void) {
   }
 
   // Configure CS
-  if (device_is_ready(nfc_dev.nss.port)) {
-    gpio_pin_configure_dt(&nfc_dev.nss, GPIO_OUTPUT_HIGH);
+  if (device_is_ready(pn5180_cs.gpio.port)) {
+    gpio_pin_configure_dt(&pn5180_cs.gpio, GPIO_OUTPUT_HIGH);
   } else {
     LOG_ERR("CS GPIO not ready");
     return;
@@ -77,6 +81,12 @@ void pn5180_init(void) {
   } else {
     LOG_ERR("BUSY GPIO not ready");
   }
+
+  // NSS HIGH
+  cs_high();
+
+  // RST HIGH
+  gpio_pin_set_dt(&nfc_dev.rst, 1); //  HIGH
 
   pn5180_reset();
 }

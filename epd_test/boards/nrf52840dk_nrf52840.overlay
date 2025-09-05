@@ -10,11 +10,16 @@
 	pinctrl-names = "default", "sleep";
 	cs-gpios = <&gpio0 30 GPIO_ACTIVE_LOW>;
 
-/* STEP 8.3 Create bme280 node */
-	epd1683: epd1683@0 {
-		compatible = "zephyr,custom-epd1683";
+/* EPD SSD1683 display node */
+	epd_ssd1683: custom-epd1683@0 {
+		compatible = "custom,epd1683";
 		reg = <0>;
-		spi-max-frequency = <1000000>; 
+		spi-max-frequency = <4000000>;
+		reset-gpios = <&gpio0 2 GPIO_ACTIVE_LOW>;
+		dc-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
+		busy-gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+		width = <400>;
+		height = <300>;
 	};
 };
 

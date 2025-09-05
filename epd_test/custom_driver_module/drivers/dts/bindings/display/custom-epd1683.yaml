@@ -1,4 +1,5 @@
 description: SSD1683 EPD display controller
+compatible: "custom,epd1683"
 include:
   - display-controller.yaml
   - spi-device.yaml

@@ -1,7 +1,6 @@
-#STEP 6.2 Populate the Kconfig file for the custom driver
 config CUSTOM_EPD1683
-	bool "Custom EPD"
+	bool "Custom EPD1683 display driver"
 	default n
-	select SPI
+	depends on DISPLAY && SPI && GPIO
 	help
-	  Enable EPD 1683
+	  Enable EPD1683 display driver support.

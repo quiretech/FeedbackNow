@@ -1,0 +1,2 @@
+# Drivers Kconfig
+rsource "display/Kconfig"
