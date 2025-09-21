@@ -278,8 +278,8 @@ int main(void) {
   k_thread_start(state_manager_thread_id);
 
   // Start the LoRa thread (after LoRaWAN stack is initialized)
-  // k_thread_start(lora_thread_id);
-  // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
+  k_thread_start(lora_thread_id);
+  LOG_INF("LoRa thread started after LoRaWAN stack initialization");
 
   // Send system ready event
   system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
