@@ -7,7 +7,7 @@
 
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define LORA_JOIN_RETRY_DELAY K_SECONDS(5)
+#define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
 #define LORA_RANDOM_DEVNONCE
 // Default join credentials (unless loaded from NVS)
 
@@ -39,7 +39,7 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   int ret;
 
   // Validate input parameters
-  if (data == NULL || len == 0 || len > LORA_PAYLOAD_MAX) {
+  if (data == NULL || len == 0 || len > LORA_MAX_PAYLOAD_SIZE) {
     LOG_ERR("Invalid parameters: data=%p, len=%zu", data, len);
     return -EINVAL;
   }
@@ -126,7 +126,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     if (lora_get_event(&msg, K_FOREVER)) {
 
       // Additional validation before sending
-      if (msg.len > 0 && msg.len <= LORA_PAYLOAD_MAX) {
+      if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
         ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
         if (ret < 0) {
           LOG_ERR("Failed to send LoRa message: %d", ret);
@@ -137,6 +137,6 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     }
   }
 }
-// Define and auto-start the thread
+// Define the thread but don't auto-start it (delay = -1 means don't auto-start)
 K_THREAD_DEFINE(lora_thread_id, LORA_THREAD_STACK_SIZE, lora_thread_fn, NULL,
                 NULL, NULL, LORA_THREAD_PRIORITY, 0, 0);

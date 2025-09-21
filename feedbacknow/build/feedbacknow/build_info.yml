@@ -11,10 +11,10 @@ cmake:
   devicetree:
     bindings-dirs:
      - C:/ncs/v3.0.2/nrf/dts/bindings
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/pn5180/dts/bindings
      - C:/ncs/v3.0.2/zephyr/dts/bindings
     files:
      - C:/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840.dts
-     - C:/ncs/v3.0.2/zephyr/boards/shields/semtech_sx1262mb2das/semtech_sx1262mb2das.overlay
      - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/boards/nrf52840dk_nrf52840.overlay
     include-dirs:
      - C:/ncs/v3.0.2/nrf/include
@@ -22,6 +22,8 @@ cmake:
      - C:/ncs/v3.0.2/nrf/dts/riscv
      - C:/ncs/v3.0.2/nrf/dts/arm
      - C:/ncs/v3.0.2/nrf/dts
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/pn5180/include
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/pn5180/dts
      - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/include
      - C:/ncs/v3.0.2/zephyr/include
      - C:/ncs/v3.0.2/zephyr/include/zephyr

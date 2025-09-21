@@ -48,7 +48,7 @@ BYPRODUCT_KERNEL_HEX_NAME:FILEPATH=C:/Users/jatan/Desktop/githubrepo/fb_now/feed
 CACHED_BOARD:STRING=nrf52840dk/nrf52840
 
 //Selected shield
-CACHED_SHIELD:STRING=semtech_sx1262mb2das
+CACHED_SHIELD:STRING=
 
 //Selected snippet
 CACHED_SNIPPET:STRING=
@@ -372,9 +372,6 @@ Picolibc_SOURCE_DIR:STATIC=C:/ncs/v3.0.2/modules/lib/picolibc
 //Path to a program.
 Python3_EXECUTABLE:FILEPATH=C:/ncs/toolchains/0b393f9e1b/opt/bin/python.exe
 
-//Selected shield
-SHIELD:STRING=semtech_sx1262mb2das
-
 //Path to the SoC directory.
 SOC_FULL_DIR:PATH=C:/ncs/v3.0.2/zephyr/soc/nordic
 
@@ -440,7 +437,7 @@ feedbacknow_SOURCE_DIR:STATIC=C:/Users/jatan/Desktop/githubrepo/fb_now/feedbackn
 //List of board directories for board (nrf52840dk)
 BOARD_DIRECTORIES:INTERNAL=C:/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk
 //DT bindings root directories
-CACHED_DTS_ROOT_BINDINGS:INTERNAL=C:/ncs/v3.0.2/nrf/dts/bindings;C:/ncs/v3.0.2/zephyr/dts/bindings
+CACHED_DTS_ROOT_BINDINGS:INTERNAL=C:/ncs/v3.0.2/nrf/dts/bindings;C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/pn5180/dts/bindings;C:/ncs/v3.0.2/zephyr/dts/bindings
 //ADVANCED property for variable: CMAKE_ADDR2LINE
 CMAKE_ADDR2LINE-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_AR
@@ -550,7 +547,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=168
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=170
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

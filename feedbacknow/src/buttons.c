@@ -18,8 +18,8 @@ LOG_MODULE_REGISTER(buttons, LOG_LEVEL_INF);
 #define SW6_NODE DT_ALIAS(sw6)
 
 /* EVENT Q */
-#define BUTTON_Q_SIZE 10
-K_MSGQ_DEFINE(button_msgq, sizeof(button_event_t), BUTTON_Q_SIZE, 1);
+K_MSGQ_DEFINE(button_msgq, sizeof(button_event_t), BUTTON_QUEUE_SIZE,
+              BUTTON_QUEUE_ALIGNMENT);
 
 /* Array of button GPIO specs */
 const struct gpio_dt_spec buttons[NUM_BUTTONS] = {

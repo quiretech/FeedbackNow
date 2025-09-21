@@ -1,4 +1,5 @@
 #include "leds.h"
+#include "led_manager.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
@@ -16,8 +17,7 @@ LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
 #define LED5_NODE DT_ALIAS(led5)
 #define LED6_NODE DT_ALIAS(led6)
 
-#define LED_Q_SIZE 10
-K_MSGQ_DEFINE(led_cmd_queue, sizeof(led_cmd_t), LED_Q_SIZE, 1);
+// LED command queue is now defined in led_manager.c
 
 /* Array of button GPIO specs */
 const struct gpio_dt_spec leds[NUM_LEDS] = {
@@ -63,6 +63,4 @@ int led_toggle(int led_idx) {
   return gpio_pin_toggle_dt(&leds[led_idx]);
 }
 
-bool leds_get_command(led_cmd_t *cmd, k_timeout_t timeout) {
-  return k_msgq_get(&led_cmd_queue, cmd, timeout) == 0;
-}
+// LED command functions are now in led_manager.c

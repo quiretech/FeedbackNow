@@ -211,28 +211,88 @@
 //     k_sleep(DELAY);
 //   }
 // }
+#include "heartbeat_work.h"
+#include "led_manager.h"
+#include "lora_app.h"
+#include "lora_manager.h"
+#include "nfc_manager.h"
+#include "state_manager.h"
+#include "sys_config.h"
 #include "system_init.h"
+#include "system_monitor.h"
+
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <zephyr/drivers/flash.h>
-#include <zephyr/fs/nvs.h>
-#include <zephyr/lorawan/lorawan.h>
-#include <zephyr/storage/flash_map.h>
-
-#include <zephyr/drivers/gpio.h>
-
-#include "buttons.h"
-#include "heartbeat_work.h"
-#include "lora_app.h"
-#include "nvs.h"
+LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 int main(void) {
-  system_init(); // NVS, buttons, LEDs, etc.
+  LOG_INF("FeedbackNow System Starting...");
+
+  // Initialize all subsystems
+  int ret = system_init();
+  if (ret != 0) {
+    LOG_ERR("System initialization failed: %d", ret);
+    return ret;
+  }
+
+  // Initialize new architecture components
+  ret = state_manager_init();
+  if (ret != 0) {
+    LOG_ERR("State manager initialization failed: %d", ret);
+    return ret;
+  }
+
+  ret = led_manager_init();
+  if (ret != 0) {
+    LOG_ERR("LED manager initialization failed: %d", ret);
+    return ret;
+  }
+
+  ret = lora_manager_init();
+  if (ret != 0) {
+    LOG_ERR("LoRa manager initialization failed: %d", ret);
+    return ret;
+  }
+
+  ret = system_monitor_init();
+  if (ret != 0) {
+    LOG_ERR("System monitor initialization failed: %d", ret);
+    return ret;
+  }
+
+  // SPI mutex removed for simplified LoRa operation
+
+  // Initialize NFC manager (SPI mutex removed for simplified operation)
+  ret = nfc_manager_init();
+  if (ret != 0) {
+    LOG_ERR("NFC manager initialization failed: %d", ret);
+    return ret;
+  }
+
+  // Initialize heartbeat
   heartbeat_init();
 
+  // Start the state manager thread
+  k_thread_start(state_manager_thread_id);
+
+  // Start the LoRa thread (after LoRaWAN stack is initialized)
+  // k_thread_start(lora_thread_id);
+  // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
+
+  // Send system ready event
+  system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
+  state_manager_send_event(&ready_event);
+
+  LOG_INF("System initialization complete. All threads started.");
+  LOG_INF("System ready for user input.");
+
+  // Main loop - just monitor system health
   while (1) {
-    k_sleep(K_SECONDS(1));
+    system_state_t current_state = state_manager_get_current_state();
+    LOG_DBG("Current system state: %d", current_state);
+
+    k_sleep(K_SECONDS(MAIN_LOOP_SLEEP_SECONDS));
   }
 }

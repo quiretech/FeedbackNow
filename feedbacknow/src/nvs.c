@@ -12,6 +12,7 @@
 #include <zephyr/storage/flash_map.h>
 
 #include "nvs.h"
+#include "sys_config.h"
 
 LOG_MODULE_REGISTER(nvs, LOG_LEVEL_INF);
 
@@ -24,29 +25,32 @@ LOG_MODULE_REGISTER(nvs, LOG_LEVEL_INF);
 //   return 0;
 // }
 
-void nvs_initialize(struct nvs_fs *fs) {
+int nvs_initialize(struct nvs_fs *fs) {
   int rc;
   struct flash_pages_info info;
 
   fs->flash_device = NVS_PARTITION_DEVICE;
   if (!device_is_ready(fs->flash_device)) {
     LOG_ERR("Flash device %s is not ready\n", fs->flash_device->name);
-    return;
+    return -ENODEV;
   }
   fs->offset = NVS_PARTITION_OFFSET;
   rc = flash_get_page_info_by_offs(fs->flash_device, fs->offset, &info);
   if (rc) {
     LOG_ERR("Unable to get page info, rc=%d\n", rc);
-    return;
+    return rc;
   }
   fs->sector_size = info.size;
-  fs->sector_count = 3U;
+  fs->sector_count = NVS_SECTOR_COUNT;
 
   rc = nvs_mount(fs);
   if (rc) {
     LOG_ERR("Flash Init failed, rc=%d\n", rc);
-    return;
+    return rc;
   }
+
+  LOG_INF("NVS initialized successfully");
+  return 0;
 }
 
 // void nvs_read_init_parameter(struct nvs_fs *fs, uint16_t id, void *data) {

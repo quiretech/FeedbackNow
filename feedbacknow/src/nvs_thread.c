@@ -1,5 +1,5 @@
-#include "k_config.h"
 #include "nvs.h"
+#include "sys_config.h"
 #include <zephyr/fs/nvs.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -7,7 +7,8 @@
 
 LOG_MODULE_REGISTER(nvs_thread, LOG_LEVEL_INF);
 
-K_MSGQ_DEFINE(nvs_msgq, sizeof(struct nvs_msg), NVS_MSGQ_MAX_MSGS, 4);
+K_MSGQ_DEFINE(nvs_msgq, sizeof(struct nvs_msg), NVS_MSGQ_MAX_MSGS,
+              NVS_MSG_ALIGNMENT);
 
 static struct nvs_fs fs;
 
@@ -126,7 +127,7 @@ int nvs_manager_read_or_generate(uint16_t id, uint8_t *data, size_t size) {
   LOG_WRN("%s not found or incomplete in NVS, generating new key...",
           nvs_name[id]);
 
-  uint8_t rand_key[16]; // max size buffer
+  uint8_t rand_key[NVS_MAX_KEY_SIZE]; // max size buffer
   if (size > sizeof(rand_key)) {
     LOG_ERR("Size too large for random key buffer");
     return -EINVAL;

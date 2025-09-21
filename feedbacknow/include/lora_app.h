@@ -1,7 +1,7 @@
 #ifndef LORA_APP_H
 #define LORA_APP_H
 
-#include "k_config.h"
+#include "sys_config.h"
 #include <stdint.h>
 #include <zephyr/kernel.h>
 #include <zephyr/lorawan/lorawan.h>
@@ -34,15 +34,13 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
  */
 void lora_app_dr_changed(enum lorawan_datarate dr);
 
-#define LORA_MSG_DATA_MAX 1
-#define LORA_MSGQ_SIZE 10
-#define LORA_PAYLOAD_MAX 11
+// LoRa configuration is now in sys_config.h
 
 typedef struct {
   uint8_t port;
   uint8_t len;
   bool confirmed;
-  uint8_t data[LORA_PAYLOAD_MAX]; // Moved to end for better alignment
+  uint8_t data[LORA_MAX_PAYLOAD_SIZE]; // Moved to end for better alignment
 } lora_uplink_msg_t;
 
 typedef struct {
@@ -51,6 +49,9 @@ typedef struct {
 
 extern struct k_msgq lora_msgq;
 extern struct k_mutex lora_send_mutex;
+
+// LoRa thread ID
+extern const k_tid_t lora_thread_id;
 
 /* Message queue API */
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout);

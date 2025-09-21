@@ -30,9 +30,9 @@ int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
     return -EINVAL;
   }
 
-  if (msg->len > LORA_PAYLOAD_MAX) {
+  if (msg->len > LORA_MAX_PAYLOAD_SIZE) {
     LOG_ERR("lora_put_event: message too long (%d > %d)", msg->len,
-            LORA_PAYLOAD_MAX);
+            LORA_MAX_PAYLOAD_SIZE);
     return -EINVAL;
   }
 

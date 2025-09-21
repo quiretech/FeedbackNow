@@ -11,3 +11,4 @@
 "SNIPPET_ROOT":"C:/ncs/v3.0.2/nrf"
 "SOC_ROOT":"C:/ncs/v3.0.2/nrf"
 "MODULE_EXT_ROOT":"C:/ncs/v3.0.2/nrf"
+"DTS_ROOT":"C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/pn5180"

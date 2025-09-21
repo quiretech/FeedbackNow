@@ -1,10 +1,11 @@
 #ifndef BUTTONS_H
 #define BUTTONS_H
 
+#include "sys_config.h"
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 
-#define NUM_BUTTONS 7
+// NUM_BUTTONS is now defined in sys_config.h
 
 extern const struct gpio_dt_spec buttons[NUM_BUTTONS];
 

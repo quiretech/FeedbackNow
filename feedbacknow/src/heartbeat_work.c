@@ -1,10 +1,11 @@
 #include "lora_app.h"
+#include "sys_config.h"
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(heartbeat, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define HEARTBEAT_INTERVAL_MS 60000 // 60 seconds
+// HEARTBEAT_INTERVAL_MS is now defined in sys_config.h
 
 static struct k_work heartbeat_work;
 static struct k_timer heartbeat_timer;

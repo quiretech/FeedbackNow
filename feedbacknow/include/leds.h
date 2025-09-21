@@ -1,24 +1,12 @@
 #ifndef LEDS_H
 #define LEDS_H
 
-#include "k_config.h"
+#include "sys_config.h"
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 
-#define NUM_LEDS 7
+// NUM_LEDS is now defined in sys_config.h
 
-typedef enum {
-  LED_ON,
-  LED_OFF,
-} led_cmd_type_t;
-
-typedef struct {
-  uint8_t led_id;
-  led_cmd_type_t cmd;
-} led_cmd_t;
-
-bool leds_get_command(led_cmd_t *cmd, k_timeout_t timeout);
-extern struct k_msgq led_cmd_queue;
 extern const struct gpio_dt_spec leds[NUM_LEDS];
 
 // Initialize all LEDs; return 0 on success, negative error code on failure

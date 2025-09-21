@@ -1,6 +1,7 @@
 #ifndef NVS_H
 #define NVS_H
 
+#include "sys_config.h"
 #include <zephyr/drivers/flash.h>
 #include <zephyr/fs/nvs.h>
 #include <zephyr/kernel.h>
@@ -10,12 +11,7 @@
 #define NVS_PARTITION_DEVICE FIXED_PARTITION_DEVICE(NVS_PARTITION)
 #define NVS_PARTITION_OFFSET FIXED_PARTITION_OFFSET(NVS_PARTITION)
 
-#define NVS_DEVNONCE_ID 0
-#define NVS_LORAWAN_DEV_EUI_ID 1
-#define NVS_LORAWAN_JOIN_EUI_ID 2
-#define NVS_LORAWAN_APP_KEY_ID 3
-
-#define NVS_MSGQ_MAX_MSGS 10
+// NVS configuration is now in sys_config.h
 
 enum nvs_op {
   NVS_OP_READ,
@@ -31,5 +27,11 @@ struct nvs_msg {
   int *result_ptr;        // new pointer for returning result
   struct k_sem *sync_sem; // pointer to sync semaphore
 };
+
+// NVS functions
+int nvs_initialize(struct nvs_fs *fs);
+int nvs_manager_read(uint16_t id, void *buf, size_t len);
+int nvs_manager_write(uint16_t id, const void *buf, size_t len);
+int nvs_manager_read_or_generate(uint16_t id, uint8_t *data, size_t size);
 
 #endif
