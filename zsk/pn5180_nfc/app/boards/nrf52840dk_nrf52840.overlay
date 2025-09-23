@@ -12,3 +12,19 @@
 		timeout-ms = <1000>;
 	};
 };
+
+/* Wake-up GPIO configuration */
+/ {
+	aliases {
+		wakeup = &button6;
+	};
+	
+	buttons {
+		compatible = "gpio-keys";
+
+        button6: button_6 {
+            label = "Button 6";
+            gpios = <&gpio0 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+	};
+};

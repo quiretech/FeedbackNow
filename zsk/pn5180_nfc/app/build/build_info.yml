@@ -20,6 +20,6 @@ cmake:
   sysbuild: true
 version: 0.1.0
 west:
-  command: C:\ncs\toolchains\0b393f9e1b\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --pristine
+  command: C:\ncs\toolchains\0b393f9e1b\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 -p always
   topdir: c:\ncs\v3.0.2
   version: 1.2.0
