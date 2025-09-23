@@ -61,7 +61,7 @@
 
 // LoRaWAN credentials (default values)
 #define LORAWAN_DEV_EUI                                                        \
-  { 0x97, 0xC7, 0x6C, 0x42, 0x89, 0x0E, 0x17, 0xDC }
+  { 0xDC, 0x17, 0x0E, 0x89, 0x42, 0x6C, 0xC7, 0x97 }
 #define LORAWAN_JOIN_EUI                                                       \
   { 0xEB, 0x62, 0x2C, 0x56, 0xE2, 0xF2, 0xAD, 0xE8 }
 #define LORAWAN_APP_KEY                                                        \
@@ -83,8 +83,8 @@
 // ============================================================================
 
 // System monitoring
-#define METRICS_UPDATE_INTERVAL_MS 1000
-#define HEALTH_CHECK_INTERVAL_MS 5000
+#define METRICS_UPDATE_INTERVAL_MS 10000
+#define HEALTH_CHECK_INTERVAL_MS 50000
 
 // ============================================================================
 // NVS CONFIGURATION
