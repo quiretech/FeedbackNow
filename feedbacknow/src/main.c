@@ -263,11 +263,11 @@ int main(void) {
   }
 
   // Initialize NFC manager - delayed to avoid SPI conflict with LoRa join
-  // ret = nfc_manager_init();
-  // if (ret != 0) {
-  //   LOG_ERR("NFC manager initialization failed: %d", ret);
-  //   return ret;
-  // }
+  ret = nfc_manager_init();
+  if (ret != 0) {
+    LOG_ERR("NFC manager initialization failed: %d", ret);
+    return ret;
+  }
 
   // Initialize heartbeat
   heartbeat_init();
