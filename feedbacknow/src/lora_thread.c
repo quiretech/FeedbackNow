@@ -1,5 +1,4 @@
 #include "lora_app.h"
-#include "nvs.h"
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -8,30 +7,22 @@
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
-#define LORA_RANDOM_DEVNONCE
-// Default join credentials (unless loaded from NVS)
+// Always use a random DevNonce; do not use NVS.
 
-#ifdef LORA_RANDOM_DEVNONCE
-#include <stdlib.h>
 #include <zephyr/random/random.h>
-#endif
 
-#ifndef NVS_LORAWAN_KEYS
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
-#endif
 
 static uint16_t dev_nonce = 0;
 
-#ifdef LORA_RANDOM_DEVNONCE
 static uint16_t generate_dev_nonce(void) {
   uint32_t rnd = 0;
   sys_rand_get(&rnd, sizeof(rnd));
   uint32_t mix = rnd ^ k_uptime_get_32() ^ k_cycle_get_32();
   return (uint16_t)(mix & 0xFFFF);
 }
-#endif
 
 // K_MUTEX_DEFINE(lora_send_mutex);
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
@@ -65,38 +56,21 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   int ret;
 
   LOG_INF("LoRa thread started");
-#ifdef LORA_RANDOM_DEVNONCE
-  dev_nonce = generate_dev_nonce();
-  LOG_INF("Using robust random dev_nonce: %d", dev_nonce);
-#else
-  // sequential dev_nonce
-  if (nvs_manager_read(NVS_DEVNONCE_ID, &dev_nonce, sizeof(dev_nonce)) < 0) {
-    dev_nonce = 0;
-    LOG_WRN("Dev nonce not found in NVS, starting from 0");
-  } else {
-    LOG_INF("Read dev_nonce from NVS: %d", dev_nonce);
-  }
-#endif
-
-#ifdef NVS_LORAWAN_KEYS
-  nvs_manager_read_or_generate(NVS_LORAWAN_DEV_EUI_ID, dev_eui,
-                               sizeof(dev_eui));
-  nvs_manager_read_or_generate(NVS_LORAWAN_JOIN_EUI_ID, join_eui,
-                               sizeof(join_eui));
-  nvs_manager_read_or_generate(NVS_LORAWAN_APP_KEY_ID, app_key,
-                               sizeof(app_key));
-#endif
+  // Use compile-time keys and random DevNonce; no NVS access.
 
   struct lorawan_join_config join_cfg = {.mode = LORAWAN_ACT_OTAA,
                                          .dev_eui = dev_eui,
                                          .otaa.join_eui = join_eui,
                                          .otaa.app_key = app_key,
                                          .otaa.nwk_key = app_key,
-                                         .otaa.dev_nonce = dev_nonce};
+                                         .otaa.dev_nonce = 0};
 
   // Try to join until success
   int attempt = 0;
   do {
+    // Generate a fresh random DevNonce for each join attempt
+    dev_nonce = generate_dev_nonce();
+    join_cfg.otaa.dev_nonce = dev_nonce;
     LOG_INF("Joining network using OTAA, devNonce: %d; attempt: %d", dev_nonce,
             attempt++);
     ret = lorawan_join(&join_cfg);
@@ -108,12 +82,6 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     } else {
       LOG_INF("Join successful");
     }
-
-#ifndef LORA_RANDOM_DEVNONCE
-    // Increment & persist dev_nonce after each join attempt
-    dev_nonce++;
-    nvs_manager_write(NVS_DEVNONCE_ID, &dev_nonce, sizeof(dev_nonce));
-#endif
 
     if (ret != 0)
       k_sleep(LORA_JOIN_RETRY_DELAY);
@@ -139,4 +107,4 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 }
 // Define the thread but don't auto-start it (delay = -1 means don't auto-start)
 K_THREAD_DEFINE(lora_thread_id, LORA_THREAD_STACK_SIZE, lora_thread_fn, NULL,
-                NULL, NULL, LORA_THREAD_PRIORITY, 0, -1);
+                NULL, NULL, LORA_THREAD_PRIORITY, 0, 0);

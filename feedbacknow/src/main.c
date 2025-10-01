@@ -262,9 +262,7 @@ int main(void) {
     return ret;
   }
 
-  // SPI mutex removed for simplified LoRa operation
-
-  // Initialize NFC manager (SPI mutex removed for simplified operation)
+  // Initialize NFC manager
   ret = nfc_manager_init();
   if (ret != 0) {
     LOG_ERR("NFC manager initialization failed: %d", ret);

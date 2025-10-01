@@ -61,13 +61,13 @@
 
 // LoRaWAN credentials (default values)
 #define LORAWAN_DEV_EUI                                                        \
-  { 0xDC, 0x17, 0x0E, 0x89, 0x42, 0x6C, 0xC7, 0x97 }
+  { 0x3a, 0x2b, 0x35, 0xf2, 0x09, 0x78, 0x6d, 0x1e }
 #define LORAWAN_JOIN_EUI                                                       \
-  { 0xEB, 0x62, 0x2C, 0x56, 0xE2, 0xF2, 0xAD, 0xE8 }
+  { 0x15, 0x4e, 0x09, 0x81, 0x5d, 0xf3, 0x08, 0x2c }
 #define LORAWAN_APP_KEY                                                        \
   {                                                                            \
-    0x1C, 0x57, 0xE2, 0x1C, 0xD4, 0xF5, 0xB2, 0x9A, 0x05, 0x8A, 0x6D, 0x12,    \
-        0x44, 0x63, 0x7F, 0xFE                                                 \
+    0x89, 0x77, 0xe5, 0x9d, 0x13, 0x46, 0x35, 0x7d, 0x00, 0x8c, 0x32, 0x66,    \
+        0xd5, 0xee, 0xa6, 0x1b                                                 \
   }
 
 // ============================================================================
@@ -87,21 +87,9 @@
 #define HEALTH_CHECK_INTERVAL_MS 50000
 
 // ============================================================================
-// NVS CONFIGURATION
+// NVS CONFIGURATION - REMOVED
 // ============================================================================
-
-// NVS storage
-#define NVS_SECTOR_COUNT 3
-#define NVS_MSGQ_MAX_MSGS 10
-#define NVS_DEVNONCE_ID 0
-#define NVS_LORAWAN_DEV_EUI_ID 1
-#define NVS_LORAWAN_JOIN_EUI_ID 2
-#define NVS_LORAWAN_APP_KEY_ID 3
-#define NVS_MAX_KEY_SIZE 16
-#define NVS_DEVNONCE_SIZE 2
-#define NVS_DEVEUI_SIZE 8
-#define NVS_JOINEUI_SIZE 8
-#define NVS_APPKEY_SIZE 16
+// NVS functionality has been removed from the system
 
 // ============================================================================
 // HEARTBEAT CONFIGURATION
@@ -117,18 +105,16 @@
 // Thread stack sizes
 #define LED_THREAD_STACK_SIZE 1024
 #define BUTTON_THREAD_STACK_SIZE 2048
-#define NVS_THREAD_STACK_SIZE 1024
 #define LORA_THREAD_STACK_SIZE 16384
 #define STATE_MANAGER_THREAD_STACK_SIZE 2048
 #define SYSTEM_MONITOR_THREAD_STACK_SIZE 1024
 
 // Thread priorities (lower number = higher priority)
 #define STATE_MANAGER_THREAD_PRIORITY 1
-#define NVS_THREAD_PRIORITY 2
-#define LORA_THREAD_PRIORITY 3
-#define LED_THREAD_PRIORITY 4
-#define BUTTON_THREAD_PRIORITY 5
-#define SYSTEM_MONITOR_THREAD_PRIORITY 6
+#define LORA_THREAD_PRIORITY 2
+#define LED_THREAD_PRIORITY 3
+#define BUTTON_THREAD_PRIORITY 4
+#define SYSTEM_MONITOR_THREAD_PRIORITY 5
 
 // ============================================================================
 // MESSAGE QUEUE ALIGNMENTS
@@ -139,7 +125,6 @@
 #define BUTTON_EVENT_ALIGNMENT 1
 #define LORA_MESSAGE_ALIGNMENT 4
 #define STATE_EVENT_ALIGNMENT 4
-#define NVS_MSG_ALIGNMENT 4
 
 // ============================================================================
 // ZEPHYR CONFIGURATION OVERRIDES
