@@ -244,8 +244,9 @@ int nfc_manager_trigger_scan(void) {
   LOG_INF("Button triggered NFC scan");
   return nfc_manager_start_scan();
 }
+extern const k_tid_t nfc_manager_thread_id;
 
 // NFC manager thread definition
 K_THREAD_DEFINE(nfc_manager_thread_id, NFC_THREAD_STACK_SIZE,
                 nfc_manager_thread, NULL, NULL, NULL, NFC_THREAD_PRIORITY, 0,
-                0);
+                -1);

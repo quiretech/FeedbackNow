@@ -90,7 +90,7 @@ leds {
 		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
 		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
 		dio2-tx-enable;
-		tcxo-power-startup-delay-ms = <5>;
+		tcxo-power-startup-delay-ms = <10>;
 	};
     
     pn5180: pn5180@1 {
