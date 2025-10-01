@@ -96,7 +96,10 @@
 // ============================================================================
 
 // Heartbeat timing
-#define HEARTBEAT_INTERVAL_MS 60000 // 60 seconds
+#define HEARTBEAT_INTERVAL_MS 5000 // 60 seconds
+#define HEARTBEAT_PORT 100
+#define HEARTBEAT_PORT 100
+#define HEARTBEAT_CONFIRM_BOOL true
 
 // ============================================================================
 // THREAD CONFIGURATION

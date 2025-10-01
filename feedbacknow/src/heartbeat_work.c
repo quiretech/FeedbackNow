@@ -12,13 +12,14 @@ static struct k_timer heartbeat_timer;
 
 static void heartbeat_work_handler(struct k_work *work) {
   lora_uplink_msg_t hb_msg = {0};
-  hb_msg.port = 10;
-  hb_msg.len = 3;
-  hb_msg.data[0] = 0xAA;
-  hb_msg.data[1] = 0xBB;
-  hb_msg.data[2] = 0xCC;
+  hb_msg.port = HEARTBEAT_PORT;
+  hb_msg.len = 4;
+  hb_msg.data[0] = 0xFF;
+  hb_msg.data[1] = 0xFF;
+  hb_msg.data[2] = 0xFF;
+  hb_msg.data[3] = 0xFF;
 
-  hb_msg.confirmed = false;
+  hb_msg.confirmed = HEARTBEAT_CONFIRM_BOOL;
 
   int ret = lora_put_event(&hb_msg, K_NO_WAIT);
   if (ret == 0) {

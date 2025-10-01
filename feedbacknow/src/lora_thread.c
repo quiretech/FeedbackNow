@@ -1,4 +1,5 @@
 #include "lora_app.h"
+#include "nfc_manager.h"
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -18,10 +19,16 @@ static uint8_t app_key[] = LORAWAN_APP_KEY;
 static uint16_t dev_nonce = 0;
 
 static uint16_t generate_dev_nonce(void) {
+  // Generate a DevNonce in the full 0..65535 range, maximizing randomness
+  uint16_t dev_nonce;
   uint32_t rnd = 0;
   sys_rand_get(&rnd, sizeof(rnd));
-  uint32_t mix = rnd ^ k_uptime_get_32() ^ k_cycle_get_32();
-  return (uint16_t)(mix & 0xFFFF);
+  // Mix in uptime and cycle count for extra entropy
+  rnd ^= k_uptime_get_32();
+  rnd ^= k_cycle_get_32();
+  // Use all 16 bits for DevNonce
+  dev_nonce = (uint16_t)(rnd & 0xFFFF);
+  return dev_nonce;
 }
 
 // K_MUTEX_DEFINE(lora_send_mutex);
@@ -81,6 +88,16 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       LOG_ERR("Join failed (%d)", ret);
     } else {
       LOG_INF("Join successful");
+
+      // Initialize NFC manager after successful LoRa join to avoid SPI
+      // conflicts
+      LOG_INF("Initializing NFC manager after LoRa join...");
+      int nfc_ret = nfc_manager_init();
+      if (nfc_ret != 0) {
+        LOG_ERR("NFC manager initialization failed: %d", nfc_ret);
+      } else {
+        LOG_INF("NFC manager initialized successfully");
+      }
     }
 
     if (ret != 0)
@@ -107,4 +124,4 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 }
 // Define the thread but don't auto-start it (delay = -1 means don't auto-start)
 K_THREAD_DEFINE(lora_thread_id, LORA_THREAD_STACK_SIZE, lora_thread_fn, NULL,
-                NULL, NULL, LORA_THREAD_PRIORITY, 0, 0);
+                NULL, NULL, LORA_THREAD_PRIORITY, 0, -1);

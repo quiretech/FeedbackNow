@@ -262,12 +262,12 @@ int main(void) {
     return ret;
   }
 
-  // Initialize NFC manager
-  ret = nfc_manager_init();
-  if (ret != 0) {
-    LOG_ERR("NFC manager initialization failed: %d", ret);
-    return ret;
-  }
+  // Initialize NFC manager - delayed to avoid SPI conflict with LoRa join
+  // ret = nfc_manager_init();
+  // if (ret != 0) {
+  //   LOG_ERR("NFC manager initialization failed: %d", ret);
+  //   return ret;
+  // }
 
   // Initialize heartbeat
   heartbeat_init();
@@ -276,6 +276,8 @@ int main(void) {
   k_thread_start(state_manager_thread_id);
 
   // Start the LoRa thread (after LoRaWAN stack is initialized)
+  // Small delay to ensure LoRaWAN stack is fully ready
+  k_sleep(K_MSEC(100));
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started after LoRaWAN stack initialization");
 

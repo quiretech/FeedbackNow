@@ -39,7 +39,7 @@ void button_thread_func(void *a, void *b, void *c) {
     }
 
     // Special handling for button 3 (NFC trigger)
-    if (btn_evt.button_id == 3 && btn_evt.type == BUTTON_EVENT_PRESS) {
+    if (btn_evt.button_id == 6 && btn_evt.type == BUTTON_EVENT_PRESS) {
       LOG_INF("Button 6 pressed - triggering NFC scan");
       nfc_manager_trigger_scan();
     }
