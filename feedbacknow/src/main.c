@@ -277,8 +277,8 @@ int main(void) {
 
   // Start the LoRa thread (after LoRaWAN stack is initialized)
   // Small delay to ensure LoRaWAN stack is fully ready
-  k_sleep(K_MSEC(100));
-  k_thread_start(lora_thread_id);
+  // k_sleep(K_MSEC(100));
+  // k_thread_start(lora_thread_id);
   // k_thread_start(nfc_manager_thread_id);
 
   LOG_INF("LoRa thread started after LoRaWAN stack initialization");

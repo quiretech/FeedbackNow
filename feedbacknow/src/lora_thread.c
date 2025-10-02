@@ -124,4 +124,4 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 }
 // Define the thread but don't auto-start it (delay = -1 means don't auto-start)
 K_THREAD_DEFINE(lora_thread_id, LORA_THREAD_STACK_SIZE, lora_thread_fn, NULL,
-                NULL, NULL, LORA_THREAD_PRIORITY, 0, -1);
+                NULL, NULL, LORA_THREAD_PRIORITY, 0, 0);
