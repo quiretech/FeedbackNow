@@ -62,7 +62,10 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 static void lora_thread_fn(void *a, void *b, void *c) {
   int ret;
 
-  LOG_INF("LoRa thread started");
+  LOG_INF("=== LORA THREAD ENTRY ===");
+  LOG_INF("LoRa thread started - Thread ID: %p", k_current_get());
+  LOG_INF("LoRa thread priority: %d", k_thread_priority_get(k_current_get()));
+  LOG_INF("LoRa thread stack size: %d", LORA_THREAD_STACK_SIZE);
   // Use compile-time keys and random DevNonce; no NVS access.
 
   struct lorawan_join_config join_cfg = {.mode = LORAWAN_ACT_OTAA,
@@ -74,20 +77,28 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
   // Try to join until success
   int attempt = 0;
+  LOG_INF("=== STARTING LORA JOIN LOOP ===");
   do {
     // Generate a fresh random DevNonce for each join attempt
     dev_nonce = generate_dev_nonce();
     join_cfg.otaa.dev_nonce = dev_nonce;
+    LOG_INF("=== JOIN ATTEMPT %d ===", attempt);
     LOG_INF("Joining network using OTAA, devNonce: %d; attempt: %d", dev_nonce,
             attempt++);
+    LOG_INF("About to call lorawan_join()...");
+    LOG_INF("Current uptime before join: %llu ms", k_uptime_get());
     ret = lorawan_join(&join_cfg);
+    LOG_INF("lorawan_join() returned: %d", ret);
+    LOG_INF("Current uptime after join: %llu ms", k_uptime_get());
 
     if (ret == -ETIMEDOUT) {
-      LOG_WRN("Join timed out");
+      LOG_WRN("Join timed out - will retry in %d seconds",
+              LORA_JOIN_RETRY_DELAY_SECONDS);
     } else if (ret < 0) {
-      LOG_ERR("Join failed (%d)", ret);
+      LOG_ERR("Join failed (%d) - will retry in %d seconds", ret,
+              LORA_JOIN_RETRY_DELAY_SECONDS);
     } else {
-      LOG_INF("Join successful");
+      LOG_INF("=== LORA JOIN SUCCESSFUL ===");
 
       // Initialize NFC manager after successful LoRa join to avoid SPI
       // conflicts
@@ -100,15 +111,24 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       }
     }
 
-    if (ret != 0)
+    if (ret != 0) {
+      LOG_INF("Sleeping for %d seconds before retry...",
+              LORA_JOIN_RETRY_DELAY_SECONDS);
       k_sleep(LORA_JOIN_RETRY_DELAY);
+      LOG_INF("Wake up from sleep, continuing join loop...");
+    }
 
   } while (ret != 0);
 
+  LOG_INF("=== LORA JOIN LOOP COMPLETED SUCCESSFULLY ===");
+
+  LOG_INF("=== LORA THREAD ENTERING MESSAGE LOOP ===");
   while (1) {
     lora_uplink_msg_t msg = {0}; // Zero-initialize to prevent garbage data
 
+    LOG_DBG("LoRa thread waiting for events...");
     if (lora_get_event(&msg, K_FOREVER)) {
+      LOG_INF("=== LORA THREAD PROCESSING EVENT ===");
 
       // Additional validation before sending
       if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
@@ -124,4 +144,4 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 }
 // Define the thread but don't auto-start it (delay = -1 means don't auto-start)
 K_THREAD_DEFINE(lora_thread_id, LORA_THREAD_STACK_SIZE, lora_thread_fn, NULL,
-                NULL, NULL, LORA_THREAD_PRIORITY, 0, 0);
+                NULL, NULL, LORA_THREAD_PRIORITY, 0, -1);

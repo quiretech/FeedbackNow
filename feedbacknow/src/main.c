@@ -262,7 +262,7 @@ int main(void) {
     return ret;
   }
 
-  // Initialize NFC manager - delayed to avoid SPI conflict with LoRa join
+  // Initialize NFC manager (now done here, not delayed)
   // ret = nfc_manager_init();
   // if (ret != 0) {
   //   LOG_ERR("NFC manager initialization failed: %d", ret);
@@ -273,15 +273,22 @@ int main(void) {
   heartbeat_init();
 
   // Start the state manager thread
+  LOG_INF("Starting state manager thread...");
   k_thread_start(state_manager_thread_id);
+  LOG_INF("State manager thread start command issued");
 
   // Start the LoRa thread (after LoRaWAN stack is initialized)
   // Small delay to ensure LoRaWAN stack is fully ready
-  // k_sleep(K_MSEC(100));
-  // k_thread_start(lora_thread_id);
-  // k_thread_start(nfc_manager_thread_id);
+  k_sleep(K_MSEC(100));
+  LOG_INF("Starting LoRa thread...");
+  k_thread_start(lora_thread_id);
+  LOG_INF("LoRa thread start command issued");
 
-  LOG_INF("LoRa thread started after LoRaWAN stack initialization");
+  // Start NFC manager thread
+  k_thread_start(nfc_manager_thread_id);
+  LOG_INF("NFC manager thread start command issued");
+
+  // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
 
   // Send system ready event
   system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
@@ -290,10 +297,28 @@ int main(void) {
   LOG_INF("System initialization complete. All threads started.");
   LOG_INF("System ready for user input.");
 
+  // Log thread status
+  LOG_INF("=== THREAD STATUS CHECK ===");
+  LOG_INF("Main thread ID: %p", k_current_get());
+  LOG_INF("State manager thread ID: %p", state_manager_thread_id);
+  LOG_INF("LoRa thread ID: %p", lora_thread_id);
+  LOG_INF("NFC manager thread ID: %p", nfc_manager_thread_id);
+
+  // Thread status logged above
+
   // Main loop - just monitor system health
+  int loop_count = 0;
   while (1) {
     system_state_t current_state = state_manager_get_current_state();
     LOG_DBG("Current system state: %d", current_state);
+
+    // Periodic thread health check
+    if (loop_count % 6 == 0) { // Every 60 seconds
+      LOG_INF("=== PERIODIC THREAD HEALTH CHECK ===");
+      LOG_INF("Uptime: %llu ms", k_uptime_get());
+      LOG_INF("Thread health check completed");
+    }
+    loop_count++;
 
     k_sleep(K_SECONDS(MAIN_LOOP_SLEEP_SECONDS));
   }

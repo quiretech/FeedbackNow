@@ -39,7 +39,7 @@
 #define NFC_UID_LENGTH 8
 #define NFC_QUEUE_SIZE 5
 #define NFC_QUEUE_ALIGNMENT 4
-#define NFC_THREAD_STACK_SIZE 2048
+#define NFC_THREAD_STACK_SIZE 4096
 #define NFC_THREAD_PRIORITY 4
 
 // ============================================================================
@@ -49,7 +49,7 @@
 // LoRa communication
 #define LORA_MAX_RETRIES 3
 #define LORA_RETRY_DELAY_MS 1000
-#define LORA_MESSAGE_QUEUE_SIZE 10
+#define LORA_MESSAGE_QUEUE_SIZE 20
 #define LORA_SEND_BUSY_RETRY_MS 100
 #define LORA_BUTTON_PORT 1
 #define LORA_NFC_PORT 100
@@ -83,8 +83,8 @@
 // ============================================================================
 
 // System monitoring
-#define METRICS_UPDATE_INTERVAL_MS 10000
-#define HEALTH_CHECK_INTERVAL_MS 50000
+#define METRICS_UPDATE_INTERVAL_MS 100000
+#define HEALTH_CHECK_INTERVAL_MS 500000
 
 // ============================================================================
 // NVS CONFIGURATION - REMOVED
@@ -96,8 +96,7 @@
 // ============================================================================
 
 // Heartbeat timing
-#define HEARTBEAT_INTERVAL_MS 5000 // 60 seconds
-#define HEARTBEAT_PORT 100
+#define HEARTBEAT_INTERVAL_MS 6000 // 60 seconds
 #define HEARTBEAT_PORT 100
 #define HEARTBEAT_CONFIRM_BOOL true
 
@@ -105,12 +104,12 @@
 // THREAD CONFIGURATION
 // ============================================================================
 
-// Thread stack sizes
-#define LED_THREAD_STACK_SIZE 1024
-#define BUTTON_THREAD_STACK_SIZE 2048
-#define LORA_THREAD_STACK_SIZE 16384
-#define STATE_MANAGER_THREAD_STACK_SIZE 2048
-#define SYSTEM_MONITOR_THREAD_STACK_SIZE 1024
+// Thread stack sizes (increased for stability)
+#define LED_THREAD_STACK_SIZE 4096
+#define BUTTON_THREAD_STACK_SIZE 4096
+#define LORA_THREAD_STACK_SIZE 4096
+#define STATE_MANAGER_THREAD_STACK_SIZE 4096
+#define SYSTEM_MONITOR_THREAD_STACK_SIZE 4096
 
 // Thread priorities (lower number = higher priority)
 #define STATE_MANAGER_THREAD_PRIORITY 1
@@ -133,8 +132,8 @@
 // ZEPHYR CONFIGURATION OVERRIDES
 // ============================================================================
 
-// Main stack size
-#define CONFIG_MAIN_STACK_SIZE 16384
-#define CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE 16384
+// Main stack size (increased for stability)
+#define CONFIG_MAIN_STACK_SIZE 32768
+#define CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE 32768
 
 #endif // SYS_CONFIG_H

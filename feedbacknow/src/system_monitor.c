@@ -124,7 +124,10 @@ static void system_monitor_log_metrics(void) {
 }
 
 void system_monitor_thread(void *a, void *b, void *c) {
-  LOG_INF("System monitor thread started");
+  LOG_INF("=== SYSTEM MONITOR THREAD ENTRY ===");
+  LOG_INF("System monitor thread started - Thread ID: %p", k_current_get());
+  LOG_INF("System monitor thread priority: %d",
+          k_thread_priority_get(k_current_get()));
 
   while (1) {
     // Update health status

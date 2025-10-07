@@ -14,7 +14,9 @@ void button_thread_func(void *a, void *b, void *c) {
   button_event_t btn_evt;
   system_event_msg_t event;
 
-  LOG_INF("Button thread started");
+  LOG_INF("=== BUTTON THREAD ENTRY ===");
+  LOG_INF("Button thread started - Thread ID: %p", k_current_get());
+  LOG_INF("Button thread priority: %d", k_thread_priority_get(k_current_get()));
 
   while (1) {
     LOG_DBG("Button thread waiting for event...");
@@ -38,9 +40,9 @@ void button_thread_func(void *a, void *b, void *c) {
       LOG_ERR("Failed to send button event to state manager: %d", ret);
     }
 
-    // Special handling for button 3 (NFC trigger)
+    // Special handling for button 0 (NFC trigger)
     if (btn_evt.button_id == 0 && btn_evt.type == BUTTON_EVENT_PRESS) {
-      LOG_INF("Button 6 pressed - triggering NFC scan");
+      LOG_INF("Button 0 pressed - triggering NFC scan");
       nfc_manager_trigger_scan();
     }
   }

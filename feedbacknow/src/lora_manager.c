@@ -158,10 +158,15 @@ static void lora_retry_timer_handler(struct k_timer *timer) {
 void lora_manager_thread(void *a, void *b, void *c) {
   lora_message_t msg;
 
-  LOG_INF("LoRa manager thread started");
+  LOG_INF("=== LORA MANAGER THREAD ENTRY ===");
+  LOG_INF("LoRa manager thread started - Thread ID: %p", k_current_get());
+  LOG_INF("LoRa manager thread priority: %d",
+          k_thread_priority_get(k_current_get()));
 
   while (1) {
+    LOG_DBG("LoRa manager waiting for messages...");
     if (k_msgq_get(&lora_message_queue, &msg, K_FOREVER) == 0) {
+      LOG_INF("=== LORA MANAGER PROCESSING MESSAGE ===");
       LOG_DBG("Processing LoRa message: port %d, len %d", msg.port, msg.len);
 
       int ret = lora_manager_send_with_retry(&msg);

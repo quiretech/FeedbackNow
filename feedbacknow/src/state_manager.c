@@ -162,10 +162,15 @@ static void state_manager_handle_led_event(const led_event_data_t *led_data) {
 void state_manager_thread(void *a, void *b, void *c) {
   system_event_msg_t event;
 
-  LOG_INF("State manager thread started");
+  LOG_INF("=== STATE MANAGER THREAD ENTRY ===");
+  LOG_INF("State manager thread started - Thread ID: %p", k_current_get());
+  LOG_INF("State manager thread priority: %d",
+          k_thread_priority_get(k_current_get()));
 
   while (1) {
+    LOG_DBG("State manager waiting for events...");
     if (k_msgq_get(&state_event_queue, &event, K_FOREVER) == 0) {
+      LOG_INF("=== STATE MANAGER PROCESSING EVENT ===");
       LOG_DBG("Processing event: %s", event_names[event.event_type]);
 
       switch (event.event_type) {

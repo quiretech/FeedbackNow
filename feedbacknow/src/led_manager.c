@@ -140,7 +140,10 @@ int led_manager_set_led(uint8_t led_id, bool state) {
 void led_manager_thread(void *a, void *b, void *c) {
   led_cmd_t cmd;
 
-  LOG_INF("LED manager thread started");
+  LOG_INF("=== LED MANAGER THREAD ENTRY ===");
+  LOG_INF("LED manager thread started - Thread ID: %p", k_current_get());
+  LOG_INF("LED manager thread priority: %d",
+          k_thread_priority_get(k_current_get()));
 
   while (1) {
     if (k_msgq_get(&led_cmd_queue, &cmd, K_FOREVER) == 0) {

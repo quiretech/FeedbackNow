@@ -121,7 +121,12 @@ void nfc_manager_thread(void *a, void *b, void *c) {
   nfc_event_t event;
   system_event_msg_t system_event;
 
-  LOG_INF("NFC manager thread started");
+  LOG_INF("=== NFC MANAGER THREAD ENTRY ===");
+  LOG_INF("NFC manager thread started - Thread ID: %p", k_current_get());
+  LOG_INF("NFC manager thread priority: %d",
+          k_thread_priority_get(k_current_get()));
+  LOG_INF(
+      "NFC manager waiting for LoRa join to complete before initialization...");
 
   while (1) {
     // Wait for NFC events
@@ -156,11 +161,9 @@ void nfc_manager_thread(void *a, void *b, void *c) {
 
         // Pack UID and 24-bit timestamp
         memcpy(lora_msg.data, event.uid, NFC_UID_LENGTH);
-        uint32_t timestamp_24 =
-            (uint32_t)event.timestamp_ms & 0xFFFFFF; // 24-bit timestamp
-        lora_msg.data[NFC_UID_LENGTH] = (timestamp_24 >> 16) & 0xFF;
-        lora_msg.data[NFC_UID_LENGTH + 1] = (timestamp_24 >> 8) & 0xFF;
-        lora_msg.data[NFC_UID_LENGTH + 2] = timestamp_24 & 0xFF;
+        lora_msg.data[NFC_UID_LENGTH] = 'N';     // 0x4E
+        lora_msg.data[NFC_UID_LENGTH + 1] = 'F'; // 0x46
+        lora_msg.data[NFC_UID_LENGTH + 2] = 'C'; // 0x43
 
         lora_manager_send_message(&lora_msg);
 
@@ -190,12 +193,15 @@ void nfc_manager_thread(void *a, void *b, void *c) {
 }
 
 int nfc_manager_init(void) {
+  LOG_INF("=== NFC MANAGER INITIALIZATION ===");
+
   // Get NFC device
   nfc_dev = DEVICE_DT_GET(DT_NODELABEL(pn5180));
   if (!device_is_ready(nfc_dev)) {
     LOG_ERR("NFC device not ready");
     return -ENODEV;
   }
+  LOG_INF("NFC device ready: %s", nfc_dev->name);
 
   // Initialize NFC driver
   int ret = pn5180_init(nfc_dev);
@@ -239,8 +245,9 @@ int nfc_manager_stop_scan(void) {
 
 bool nfc_manager_is_scanning(void) { return get_nfc_state() != NFC_SLEEP; }
 
-// Function to trigger NFC scan (called by button 3)
+// Function to trigger NFC scan (called by button 0)
 int nfc_manager_trigger_scan(void) {
+  LOG_INF("=== NFC TRIGGER SCAN ===");
   LOG_INF("Button triggered NFC scan");
   return nfc_manager_start_scan();
 }
