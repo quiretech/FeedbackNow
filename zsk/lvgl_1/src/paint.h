@@ -71,6 +71,8 @@ void paint_DrawPoint(paint_color_t color, uint32_t x, uint32_t y);
 void paint_FillRect(paint_color_t color, paint_rect_t *rect);
 void paint_DrawString(const char *s, sFONT *font, paint_color_t color, int x,
                       int y);
+void paint_DrawFont(char c, sFONT *font, paint_color_t color, int x, int y);
+void paint_DrawRect(paint_color_t color, paint_rect_t *rect);
 static inline void paint_clear(void) { paint_Fill(WHITE); }
 
 #ifdef __cplusplus

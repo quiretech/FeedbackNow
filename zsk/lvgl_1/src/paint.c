@@ -223,6 +223,23 @@ void paint_DrawString(const char *s, sFONT *font, paint_color_t color, int x,
   } while (s_index < s_length);
 }
 
+void paint_DrawRect(paint_color_t color, paint_rect_t *rect) {
+  if ((rect->x + rect->width > p_Paint->x_end) ||
+      (rect->y + rect->height > p_Paint->y_end)) {
+    return;
+  }
+
+  // Draw top and bottom horizontal lines
+  drawHline(color, rect->x, rect->y, rect->width);
+  drawHline(color, rect->x, rect->y + rect->height - 1, rect->width);
+
+  // Draw left and right vertical lines
+  for (uint32_t i = rect->y; i < rect->y + rect->height; i++) {
+    paint_DrawPoint(color, rect->x, i);
+    paint_DrawPoint(color, rect->x + rect->width - 1, i);
+  }
+}
+
 /* Overrride functions -------------------------------------------------------*/
 
 /* Private Functions ---------------------------------------------------------*/
