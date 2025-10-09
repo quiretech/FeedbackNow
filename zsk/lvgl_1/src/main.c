@@ -90,6 +90,8 @@ int main(void) {
   int heading_y = 30; // Place above the cards, not in a bar
   paint_DrawString(heading, &Font24, WHITE, heading_x, heading_y);
 
+  // Test new Font14
+
   // Timestamp "card" backgrounds
   int card_w = 320;
   int card_h = Font16.Height + 12;
@@ -118,6 +120,13 @@ int main(void) {
     int ts_y = card_y + (card_h - Font16.Height) / 2;
     paint_DrawString(timestamps[i], &Font16, BLACK, ts_x, ts_y);
   }
+
+  // Add some Font20 text below the timestamp cards, centered in the panel
+  const char *font20_msg = "Next cleaning due soon!";
+  int font20_width = Font20.Width * (int)strlen(font20_msg);
+  int font20_x = 20 + (360 - font20_width) / 2;
+  int font20_y = first_card_y + 3 * (card_h + card_spacing) + 8;
+  paint_DrawString(font20_msg, &Font20, WHITE, font20_x, font20_y);
 
   // Footer bar (filled white)
   int footer_bar_h = Font12.Height + 12;

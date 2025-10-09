@@ -2475,7 +2475,6 @@ const uint8_t Font24_Table[] = {
 };
 
 sFONT Font24 = {
-	Font24_Table,
-	22, /* Width */
-	24, /* Height */
+    Font24_Table, 22, /* Width */
+    24,               /* Height */
 };
