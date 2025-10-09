@@ -24,7 +24,7 @@ static const struct ssd1683_config epd_cfg = {
         {
             .operation = SPI_WORD_SET(8) | SPI_WORD_SET(8) | SPI_TRANSFER_MSB |
                          SPI_MODE_CPOL | SPI_MODE_CPHA,
-            .frequency = 4000000,
+            .frequency = 7000000,
             .slave = 0,
             .cs = {.gpio = EPD_SPI_CS_DT_SPEC, .delay = 0},
         },
@@ -38,7 +38,7 @@ static const struct ssd1683_config epd_cfg = {
 int main(void) {
   int ret;
 
-  LOG_INF("Starting SSD1683 EPD test");
+  LOG_INF("Starting SSD1683 EPD font demo");
 
   // Configure LED
   if (!device_is_ready(led.port)) {
@@ -68,68 +68,38 @@ int main(void) {
   paint.scanmode = PAINT_SCAN_MODE_1;
   paint.wb_buffer = wb_buffer;
   paint.rw_buffer = rw_buffer;
-  paint.buffer_size = 400 * 300 / 8; // 15000 bytes
-  paint.x_end = 400;
-  paint.y_end = 300;
   paint_Init(&paint);
 
-  // Clear screen (white)
+  // Clear screen (white background)
   paint_Fill(BLACK);
 
-  // Draw all printable ASCII characters using Font12 in a grid
+  // --- Centered Text Drawing ---
 
-  // Assume Font12 and paint_DrawString are available
-  // Print 95 printable ASCII characters (from ' ' to '~'), 16 per row
+  // Draw heading in Font24: "LAST CLEANED AT:" centered
+  const char *heading = "LAST CLEANED AT:";
+  int heading_width = Font24.Width * (int)strlen(heading);
+  int heading_x = (paint.width - heading_width) / 2;
+  int heading_y = 40; // some top margin
+  paint_DrawString(heading, &Font24, WHITE, heading_x, heading_y);
 
-  int chars_per_row = 16;
-  int start_x = 10;
-  int start_y = 20;
-  int spacing_x = Font12.Width + 2;
-  int spacing_y = Font12.Height + 4;
-  char line_buf[chars_per_row + 1];
-  int ascii = 32; // ' '
-  int row = 0;
+  // Draw three timestamps in Font16, neatly below heading, centered
+  const char *timestamps[3] = {"2024-06-01 14:23", "2024-05-28 09:10",
+                               "2024-05-20 18:45"};
 
-  while (ascii <= 126) { // '~'
-    int col;
-    int n = 0;
-    for (col = 0; col < chars_per_row && ascii <= 126; col++, ascii++) {
-      line_buf[n++] = (char)ascii;
-    }
-    line_buf[n] = '\0';
-    paint_DrawString(line_buf, &Font12, WHITE, start_x,
-                     start_y + row * spacing_y);
-    row++;
+  int ts_y = heading_y + Font24.Height + 18; // space below heading
+  for (int i = 0; i < 3; ++i) {
+    int ts_width = Font16.Width * (int)strlen(timestamps[i]);
+    int ts_x = (paint.width - ts_width) / 2;
+    paint_DrawString(timestamps[i], &Font16, WHITE, ts_x, ts_y);
+    ts_y += Font16.Height + 10; // vertical spacing
   }
 
-  // Draw all printable ASCII characters using Font16 in a grid
-
-  // Draw all printable ASCII characters using Font8 in a grid, nicely spaced
-
-  chars_per_row = 8; // Fewer per row, since Font24 is large
-  start_x = 10;
-  start_y = 20 + row * spacing_y + 30; // Continue below previous grid
-  spacing_x = Font24.Width + 4;
-  spacing_y = Font24.Height + 8;
-  ascii = 32; // ' '
-  row = 0;
-
-  while (ascii <= 126) { // '~'
-    int col;
-    int n = 0;
-    for (col = 0; col < chars_per_row && ascii <= 126; col++, ascii++) {
-      line_buf[n++] = (char)ascii;
-    }
-    line_buf[n] = '\0';
-    paint_DrawString(line_buf, &Font24, WHITE, start_x,
-                     start_y + row * spacing_y);
-    row++;
-  }
+  // --- End Centered Text Drawing ---
 
   // Send paint buffers to display
   ssd1683_flush_from_paint(&epd_cfg, wb_buffer, rw_buffer);
 
-  LOG_INF("Display initialized with paint library demo");
+  LOG_INF("Display initialized with last cleaned at GUI");
 
   // Blink LED to show main loop running
   while (1) {

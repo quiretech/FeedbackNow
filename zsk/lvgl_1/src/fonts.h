@@ -7,8 +7,8 @@
 #ifndef __FONTS_H
 #define __FONTS_H
 
-#define MAX_HEIGHT_FONT 24
-#define MAX_WIDTH_FONT 22
+// #define MAX_HEIGHT_FONT 24
+// #define MAX_WIDTH_FONT 22
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,9 +17,9 @@ extern "C" {
 #include <stdint.h>
 
 typedef struct tFont {
-	const uint8_t *table;
-	uint16_t Width;
-	uint16_t Height;
+  const uint8_t *table;
+  uint16_t Width;
+  uint16_t Height;
 
 } sFONT;
 
