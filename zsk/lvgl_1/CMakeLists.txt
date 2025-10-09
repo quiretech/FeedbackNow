@@ -11,4 +11,10 @@ target_sources(app PRIVATE
     src/main.c
     src/ssd1683.c
     src/ssd1683.h
+
+)
+
+# Include directories
+target_include_directories(app PRIVATE 
+    src
 )

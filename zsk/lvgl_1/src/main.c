@@ -53,32 +53,18 @@ int main(void) {
     LOG_ERR("SSD1683 init failed: %d", ret);
   }
 
-  // Clear screen
-  ssd1683_clear(&epd_cfg);
+  // Draw two red boxes
+  ssd1683_draw_rect_fb(20, 20, 100, 60, SSD1683_COLOR_RED);
+  ssd1683_draw_rect_fb(150, 100, 120, 80, SSD1683_COLOR_RED);
 
-  ssd1683_draw_rect_fb(46, 31, 31, 235, SSD1683_COLOR_WHITE);
-  ssd1683_draw_rect_fb(86, 31, 31, 235, SSD1683_COLOR_WHITE);
-  ssd1683_draw_rect_fb(126, 31, 31, 235, SSD1683_COLOR_WHITE);
-  ssd1683_draw_rect_fb(246, 31, 31, 235, SSD1683_COLOR_WHITE);
-  ssd1683_draw_rect_fb(286, 31, 31, 235, SSD1683_COLOR_WHITE);
-  ssd1683_draw_rect_fb(326, 31, 31, 235, SSD1683_COLOR_WHITE);
+  // Draw red text inside the boxes
+  ssd1683_draw_string_fb(30, 40, "Red Box 1", SSD1683_COLOR_BLACK);
+  ssd1683_draw_string_fb(160, 130, "Red Box 2", SSD1683_COLOR_BLACK);
 
-  ssd1683_draw_rect_fb(58, 85, 9, 130, SSD1683_COLOR_RED);
-  ssd1683_draw_rect_fb(137, 85, 9, 130, SSD1683_COLOR_RED);
-  ssd1683_draw_rect_fb(257, 85, 9, 130, SSD1683_COLOR_RED);
-  ssd1683_draw_rect_fb(337, 85, 9, 130, SSD1683_COLOR_RED);
-  ssd1683_draw_rect_fb(176, 85, 54, 130, SSD1683_COLOR_RED);
-  //   //   ssd1683_draw_string_fb(10, 20, "Quick Brown Fox Jumps Over The Lazy
-  //   Dog",
-  //   //                          SSD1683_COLOR_RED);
-  //   //   ssd1683_draw_string_fb(10, 40, "1234567890~!@#$%^&*()_+=",
-  //   //   SSD1683_COLOR_RED);
-
-  //   ssd1683_draw_bitmap(&epd_cfg); // draw your header image
+  // Flush framebuffer to display
   ssd1683_flush(&epd_cfg);
 
-  ssd1683_deep_sleep(&epd_cfg);
-  LOG_INF("Display initialized and circle drawn");
+  LOG_INF("Display initialized, red boxes and text drawn");
 
   // Blink LED to show main loop running
   while (1) {
