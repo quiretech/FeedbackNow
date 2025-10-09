@@ -1,8 +1,11 @@
+#include <string.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
+#include "fonts.h"
+#include "paint.h"
 #include "ssd1683.h"
 
 LOG_MODULE_REGISTER(epd_main, LOG_LEVEL_INF);
@@ -53,18 +56,58 @@ int main(void) {
     LOG_ERR("SSD1683 init failed: %d", ret);
   }
 
-  // Draw two red boxes
-  ssd1683_draw_rect_fb(20, 20, 100, 60, SSD1683_COLOR_RED);
-  ssd1683_draw_rect_fb(150, 100, 120, 80, SSD1683_COLOR_RED);
+  // Create paint library buffers
+  static uint8_t wb_buffer[15000]; // Black/White buffer
+  static uint8_t rw_buffer[15000]; // Red buffer
 
-  // Draw red text inside the boxes
-  ssd1683_draw_string_fb(30, 40, "Red Box 1", SSD1683_COLOR_BLACK);
-  ssd1683_draw_string_fb(160, 130, "Red Box 2", SSD1683_COLOR_BLACK);
+  // Initialize paint library
+  paint_obj_t paint;
+  paint.width = 400;
+  paint.height = 300;
+  paint.direction = PAINT_DIRECTION_0;
+  paint.scanmode = PAINT_SCAN_MODE_1;
+  paint.wb_buffer = wb_buffer;
+  paint.rw_buffer = rw_buffer;
+  paint_Init(&paint);
 
-  // Flush framebuffer to display
-  ssd1683_flush(&epd_cfg);
+  // Clear screen (white)
+  paint_Fill(WHITE);
 
-  LOG_INF("Display initialized, red boxes and text drawn");
+  // Draw three centered boxes
+  paint_rect_t rect;
+  int screen_width = 400;
+  int box_widths[3] = {40, 60, 80};
+  int box_heights[3] = {40, 60, 80};
+  int box_y[3] = {30, 90, 180}; // vertical positions for each box
+
+  for (int i = 0; i < 3; i++) {
+    rect.width = box_widths[i];
+    rect.height = box_heights[i];
+    rect.x = (screen_width - rect.width) / 2;
+    rect.y = box_y[i];
+    paint_FillRect(BLACK, &rect);
+  }
+
+  // Draw centered text below the boxes
+  const char *text = "QUICK BROWN FOX JUMPS OVER THE LAZY DOG";
+  sFONT *font = &Font12;
+  int text_len = strlen(text);
+  int text_pixel_width = text_len * font->Width;
+  int text_x = (screen_width - text_pixel_width) / 2;
+  int text_y = box_y[2] + box_heights[2] + 20; // 20px below last box
+
+  // Clamp text_x and text_y to be non-negative
+  if (text_x < 0)
+    text_x = 0;
+  if (text_y + font->Height > paint.height)
+    text_y = paint.height - font->Height;
+
+  paint_DrawString(text, font, BLACK, text_x, text_y);
+
+  // Send paint buffers to display
+  ssd1683_flush_from_paint(&epd_cfg, wb_buffer, rw_buffer);
+
+  LOG_INF("Display initialized with paint library demo");
 
   // Blink LED to show main loop running
   while (1) {

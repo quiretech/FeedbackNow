@@ -10,8 +10,12 @@ project(lvgl_1)
 target_sources(app PRIVATE
     src/main.c
     src/ssd1683.c
-    src/ssd1683.h
-
+    src/paint.c
+    src/font8.c
+    src/font12.c
+    src/font16.c
+    src/font20.c
+    src/font24.c
 )
 
 # Include directories

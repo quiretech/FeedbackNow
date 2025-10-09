@@ -31,9 +31,7 @@ void ssd1683_clear(const struct ssd1683_config *cfg);
 void ssd1683_refresh(const struct ssd1683_config *cfg);
 void ssd1683_deep_sleep(const struct ssd1683_config *cfg);
 
-void ssd1683_set_pixel_fb(int x, int y, uint8_t color);
-void ssd1683_draw_rect_fb(int x, int y, int w, int h, uint8_t color);
-void ssd1683_flush(const struct ssd1683_config *cfg);
-
-void ssd1683_draw_bitmap(const struct ssd1683_config *cfg);
+void ssd1683_flush(const struct ssd1683_config *cfg, uint8_t *image_buffer);
+void ssd1683_flush_from_paint(const struct ssd1683_config *cfg,
+                              uint8_t *wb_buffer, uint8_t *rw_buffer);
 #endif // SSD1683_H
