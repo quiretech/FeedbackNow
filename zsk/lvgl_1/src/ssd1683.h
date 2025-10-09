@@ -1,7 +1,7 @@
 #ifndef SSD1683_H
 #define SSD1683_H
 
-#include "image_bitmap.h" // Contains bw_bitmap[15000]
+// #include "image_bitmap.h" // Contains bw_bitmap[15000] - file deleted
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>

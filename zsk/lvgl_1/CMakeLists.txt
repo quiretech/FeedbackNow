@@ -11,9 +11,4 @@ target_sources(app PRIVATE
     src/main.c
     src/ssd1683.c
     src/ssd1683.h
-    src/image_bitmap.h
-    src/image_bitmap.c
-
-
-
 )

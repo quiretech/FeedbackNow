@@ -335,15 +335,9 @@ void ssd1683_draw_rect_fb(int x, int y, int w, int h, uint8_t color) {
 }
 
 void ssd1683_draw_bitmap(const struct ssd1683_config *cfg) {
-  int total_bytes = SSD1683_WIDTH * SSD1683_HEIGHT / 8;
-
-  // Copy BW plane
-  for (int i = 0; i < total_bytes; i++) {
-    fb_bw[i] = bw_bitmap[i];   // from header
-    fb_red[i] = red_bitmap[i]; // clear red
-  }
-
-  ssd1683_flush(cfg); // push to display
+  // Bitmap functionality removed - image_bitmap.h file was deleted
+  // This function now does nothing to avoid compilation errors
+  LOG_INF("Bitmap drawing disabled - image_bitmap.h file was deleted");
 }
 
 void ssd1683_flush(const struct ssd1683_config *cfg) {
