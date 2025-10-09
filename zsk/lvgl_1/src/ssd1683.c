@@ -74,6 +74,12 @@ int ssd1683_init(const struct ssd1683_config *cfg) {
   ssd1683_write_cmd(cfg, 0x3C); // Border waveform
   ssd1683_write_data(cfg, 0x05);
 
+  // Load temperature value (SSD1683 sequence)
+  ssd1683_write_cmd(cfg, 0x22); // Load temperature value
+  ssd1683_write_data(cfg, 0x91);
+  ssd1683_write_cmd(cfg, 0x20);
+  wait_busy(cfg);
+
   ssd1683_write_cmd(cfg, 0x11); // Data entry mode
   ssd1683_write_data(cfg, 0x03);
 

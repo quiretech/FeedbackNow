@@ -189,21 +189,53 @@ void paint_DrawFont(char c, sFONT *font, paint_color_t color, int x, int y) {
 
   uint32_t char_offset;
   int i, j;
-  int bytes_per_row = (font->Width + 7) / 8;
+  // Calculate bytes per row based on actual data structure
+  // The font data is padded to byte boundaries, so we need to figure out the
+  // actual width
+  int bytes_per_row;
+
+  // Based on the actual font data structure:
+  // Font8: 1 byte per row (8 bits)
+  // Font12: 2 bytes per row (16 bits)
+  // Font16: 2 bytes per row (16 bits)
+  // Font20: 3 bytes per row (24 bits)
+  // Font24: 3 bytes per row (24 bits)
+
+  // Based on actual font data structure:
+  // Font8: 7 pixels → 1 byte per row
+  // Font12: 11 pixels → 2 bytes per row
+  // Font16: 14 pixels → 2 bytes per row
+  // Font20: 18 pixels → 3 bytes per row
+  // Font24: 22 pixels → 3 bytes per row
+
+  // Specific handling for each font based on actual data structure
+  if (font->Width == 7) { // Font8
+    bytes_per_row = 1;
+  } else if (font->Width == 11) { // Font12
+    bytes_per_row = 2;
+  } else if (font->Width == 14) { // Font16
+    bytes_per_row = 2;
+  } else if (font->Width == 18) { // Font20
+    bytes_per_row = 3;
+  } else if (font->Width == 22) { // Font24
+    bytes_per_row = 3;
+  } else {
+    bytes_per_row = (font->Width + 7) / 8;
+  }
 
   c = c - ' ';
   char_offset = c * font->Height * bytes_per_row;
 
-  // Debug: Check if we're going out of bounds
-  uint32_t max_offset = 95 * font->Height * bytes_per_row;
-  if (char_offset >= max_offset) {
-    return; // Character not in font table
-  }
+  // Remove bounds checking for now to see if that's the issue
+  // uint32_t max_offset = 95 * font->Height * bytes_per_row;
+  // if (char_offset >= max_offset) {
+  //   return; // Character not in font table
+  // }
 
-  // Additional safety check
-  if (char_offset + (font->Height * bytes_per_row) > max_offset) {
-    return; // Would go out of bounds
-  }
+  // // Additional safety check
+  // if (char_offset + (font->Height * bytes_per_row) > max_offset) {
+  //   return; // Would go out of bounds
+  // }
 
   const uint8_t *ptr = &font->table[char_offset];
 

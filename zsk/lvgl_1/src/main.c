@@ -68,41 +68,63 @@ int main(void) {
   paint.scanmode = PAINT_SCAN_MODE_1;
   paint.wb_buffer = wb_buffer;
   paint.rw_buffer = rw_buffer;
+  paint.buffer_size = 400 * 300 / 8; // 15000 bytes
+  paint.x_end = 400;
+  paint.y_end = 300;
   paint_Init(&paint);
 
   // Clear screen (white)
-  paint_Fill(WHITE);
+  paint_Fill(BLACK);
 
-  // Draw three centered boxes
-  paint_rect_t rect;
-  int screen_width = 400;
-  int box_widths[3] = {40, 60, 80};
-  int box_heights[3] = {40, 60, 80};
-  int box_y[3] = {30, 90, 180}; // vertical positions for each box
+  // Draw all printable ASCII characters using Font12 in a grid
 
-  for (int i = 0; i < 3; i++) {
-    rect.width = box_widths[i];
-    rect.height = box_heights[i];
-    rect.x = (screen_width - rect.width) / 2;
-    rect.y = box_y[i];
-    paint_FillRect(BLACK, &rect);
+  // Assume Font12 and paint_DrawString are available
+  // Print 95 printable ASCII characters (from ' ' to '~'), 16 per row
+
+  int chars_per_row = 16;
+  int start_x = 10;
+  int start_y = 20;
+  int spacing_x = Font12.Width + 2;
+  int spacing_y = Font12.Height + 4;
+  char line_buf[chars_per_row + 1];
+  int ascii = 32; // ' '
+  int row = 0;
+
+  while (ascii <= 126) { // '~'
+    int col;
+    int n = 0;
+    for (col = 0; col < chars_per_row && ascii <= 126; col++, ascii++) {
+      line_buf[n++] = (char)ascii;
+    }
+    line_buf[n] = '\0';
+    paint_DrawString(line_buf, &Font12, WHITE, start_x,
+                     start_y + row * spacing_y);
+    row++;
   }
 
-  // Draw centered text below the boxes
-  const char *text = "QUICK BROWN FOX JUMPS OVER THE LAZY DOG";
-  sFONT *font = &Font12;
-  int text_len = strlen(text);
-  int text_pixel_width = text_len * font->Width;
-  int text_x = (screen_width - text_pixel_width) / 2;
-  int text_y = box_y[2] + box_heights[2] + 20; // 20px below last box
+  // Draw all printable ASCII characters using Font16 in a grid
 
-  // Clamp text_x and text_y to be non-negative
-  if (text_x < 0)
-    text_x = 0;
-  if (text_y + font->Height > paint.height)
-    text_y = paint.height - font->Height;
+  // Draw all printable ASCII characters using Font8 in a grid, nicely spaced
 
-  paint_DrawString(text, font, BLACK, text_x, text_y);
+  chars_per_row = 8; // Fewer per row, since Font24 is large
+  start_x = 10;
+  start_y = 20 + row * spacing_y + 30; // Continue below previous grid
+  spacing_x = Font24.Width + 4;
+  spacing_y = Font24.Height + 8;
+  ascii = 32; // ' '
+  row = 0;
+
+  while (ascii <= 126) { // '~'
+    int col;
+    int n = 0;
+    for (col = 0; col < chars_per_row && ascii <= 126; col++, ascii++) {
+      line_buf[n++] = (char)ascii;
+    }
+    line_buf[n] = '\0';
+    paint_DrawString(line_buf, &Font24, WHITE, start_x,
+                     start_y + row * spacing_y);
+    row++;
+  }
 
   // Send paint buffers to display
   ssd1683_flush_from_paint(&epd_cfg, wb_buffer, rw_buffer);
