@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.20.0)
+
+# Add the PN5180 driver module before finding Zephyr
+list(APPEND EXTRA_ZEPHYR_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../ssd1683)
+
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
+project(lvgl_1)
+
+# Add custom driver module
+# add_subdirectory(../ssd1683 ssd1683_build)
+
+# Add all the C files you want built for the app here.
+# Keep source files in src/ and list them below.
+target_sources(app PRIVATE
+    src/main.c
+)
+
+# Include directories
+target_include_directories(app PRIVATE
+    ../ssd1683/include
+)

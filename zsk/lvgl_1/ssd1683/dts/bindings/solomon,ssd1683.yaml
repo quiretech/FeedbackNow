@@ -1,0 +1,40 @@
+description: Solomon SSD1683 EPD Display Controller
+
+compatible: "solomon,ssd1683"
+
+include: spi-device.yaml
+
+properties:
+  width:
+    type: int
+    required: true
+    description: Display width in pixels
+
+  height:
+    type: int
+    required: true
+    description: Display height in pixels
+
+  dc-gpios:
+    type: phandle-array
+    required: true
+    description: Data/Command control GPIO
+
+  rst-gpios:
+    type: phandle-array
+    required: true
+    description: Reset control GPIO
+
+  busy-gpios:
+    type: phandle-array
+    required: true
+    description: Busy status GPIO
+
+
+required:
+  - width
+  - height
+  - dc-gpios
+  - rst-gpios
+  - busy-gpios
+  - spi-dev
