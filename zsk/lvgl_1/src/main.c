@@ -34,6 +34,11 @@ static const struct ssd1683_config epd_cfg = {
     .height = 300,
 };
 
+// Paint system buffers
+static uint8_t wb_buffer[15000]; // White/Black buffer
+static uint8_t rw_buffer[15000]; // Red/White buffer
+static paint_obj_t paint_obj;
+
 int main(void) {
   int ret;
 
@@ -42,86 +47,37 @@ int main(void) {
   if (ret < 0) {
     return ret;
   }
-
   ssd1683_clear(&epd_cfg);
   ssd1683_refresh(&epd_cfg);
+  // Initialize paint system
+  paint_obj.scanmode = PAINT_SCAN_MODE_1;
+  paint_obj.direction = PAINT_DIRECTION_0;
+  paint_obj.width = epd_cfg.width;
+  paint_obj.height = epd_cfg.height;
+  paint_obj.wb_buffer = wb_buffer;
+  paint_obj.rw_buffer = rw_buffer;
+  paint_obj.buffer_size = epd_cfg.height * (epd_cfg.width / 8);
 
-  // Buffers for paint
-  static uint8_t wb_buffer[15000];
-  static uint8_t rw_buffer[15000];
+  paint_Init(&paint_obj);
 
-  paint_obj_t paint = {
-      .width = 400,
-      .height = 300,
-      .direction = PAINT_DIRECTION_0,
-      .scanmode = PAINT_SCAN_MODE_1,
-      .wb_buffer = wb_buffer,
-      .rw_buffer = rw_buffer,
-  };
-  paint_Init(&paint);
-
-  // List of fonts and label strings
-  extern sFONT Font20;
-  extern sFONT Font24;
-  struct {
-    sFONT *font;
-    const char *label;
-  } font_cards[] = {
-      {&Font20, "Font 20"},
-      {&Font24, "Font 24"},
-  };
-
-  // Setup basic ascii for card
-  const char start_char = 32; // ' '
-  const char end_char = 127;  // last printable (not including DEL)
-  const int max_chars = end_char - start_char;
-
-  int margin = 8;
-  int current_y = margin;
-  int card_spacing = 6;
-
+  // Clear screen to white
   paint_Fill(BLACK);
 
-  for (unsigned f = 0; f < sizeof(font_cards) / sizeof(font_cards[0]); ++f) {
-    sFONT *font = font_cards[f].font;
-    const char *label = font_cards[f].label;
+  // Draw some boxes
+  paint_rect_t box1 = {50, 50, 80, 60};
+  paint_FillRect(WHITE, &box1);
 
-    // Draw font label at card top
-    paint_rect_t label_bg = {0, current_y, paint.width, font->Height};
-    paint_FillRect(WHITE, &label_bg);
-    for (int l = 0; label[l]; ++l) {
-      paint_DrawFont(label[l], font, BLACK, margin + l * font->Width,
-                     current_y);
-    }
+  paint_rect_t box2 = {150, 50, 80, 60};
+  paint_DrawRect(WHITE, &box2);
 
-    current_y += font->Height + 2;
+  paint_rect_t box3 = {250, 50, 80, 60};
+  paint_FillRect(WHITE, &box3);
 
-    // Compute how many glyphs per row
-    int chars_per_row = (paint.width - margin * 2) / font->Width;
-    if (chars_per_row > max_chars)
-      chars_per_row = max_chars;
-    int rows = (max_chars + chars_per_row - 1) / chars_per_row;
+  // Draw "Hello World" using Font16
+  paint_DrawString("Hello World", &Font16, WHITE, 50, 150);
 
-    char c = start_char;
-    for (int row = 0; row < rows && c < end_char; ++row) {
-      int x = margin;
-      int y = current_y + row * font->Height;
-      for (int ch = 0; ch < chars_per_row && c < end_char; ++ch, ++c) {
-        paint_DrawFont(c, font, WHITE, x, y);
-        x += font->Width;
-      }
-    }
-    current_y += rows * font->Height + card_spacing;
-    if (current_y + font->Height > paint.height)
-      break; // stop if out of screen
-  }
-
-  // Draw frame
-  paint_rect_t border = {0, 0, paint.width, paint.height};
-  paint_DrawRect(WHITE, &border);
-
+  // Display the result
   ssd1683_flush_from_paint(&epd_cfg, wb_buffer, rw_buffer);
-  ssd1683_refresh(&epd_cfg);
-
+  ssd1683_refresh_fast(&epd_cfg);
   return 0;
 }
