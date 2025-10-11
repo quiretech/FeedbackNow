@@ -35,67 +35,61 @@ static const struct ssd1683_config epd_cfg = {
 int main(void) {
   int ret;
 
-  // Initialize display in 4-gray mode (required for 3-color)
+  // Initialize display
   ret = ssd1683_init(&epd_cfg);
   if (ret < 0) {
     return ret;
   }
   ssd1683_clear(&epd_cfg);
-  ssd1683_refresh(&epd_cfg);
-  // // Allocate framebuffers
-  static uint8_t fb_bw[15000] = {0xFF};  // (400 x 300 / 8)
-  static uint8_t fb_red[15000] = {0xFF}; // (400 x 300 / 8)
+
+  // Allocate framebuffers
+  static uint8_t fb_bw[15000] = {0xFF};  // Black layer
+  static uint8_t fb_red[15000] = {0xFF}; // Red layer
   int width = epd_cfg.width;
   int height = epd_cfg.height;
 
-  // Clear framebuffers to white (all bits set)
+  // Clear framebuffers
   memset(fb_bw, 0xFF, sizeof(fb_bw));
   memset(fb_red, 0xFF, sizeof(fb_red));
 
-  // Draw THICK RED vertical line (x=50 to x=59, y=40..260)
-  for (int x = 50; x < 60; ++x) {
-    ssd1683_draw_vline(fb_red, x, 40, 260, width, height);
-  }
-  // Draw THICK RED horizontal line (y=120 to y=129, x=60..340)
-  for (int y = 120; y < 130; ++y) {
-    ssd1683_draw_hline(fb_red, 60, 340, y, width, height);
-  }
-
-  // Draw THICK BLACK vertical line (x=340 to x=349, y=40..260)
-  for (int x = 340; x < 350; ++x) {
-    ssd1683_draw_vline(fb_bw, x, 40, 260, width, height);
-  }
-  // Draw THICK BLACK horizontal line (y=170 to y=179, x=60..340)
-  for (int y = 170; y < 180; ++y) {
-    ssd1683_draw_hline(fb_bw, 60, 340, y, width, height);
+  // === Draw thick box ===
+  void draw_box(uint8_t * fb, int x0, int y0, int x1, int y1, int thickness) {
+    for (int i = 0; i < thickness; ++i) {
+      ssd1683_draw_hline(fb, x0, x1, y0 + i, width, height); // Top
+      ssd1683_draw_hline(fb, x0, x1, y1 - i, width, height); // Bottom
+      ssd1683_draw_vline(fb, x0 + i, y0, y1, width, height); // Left
+      ssd1683_draw_vline(fb, x1 - i, y0, y1, width, height); // Right
+    }
   }
 
-  // // Draw THICK WHITE vertical line: by erasing red/black in a band
-  // (x=195..205,
-  // // y=40..260)
-  // for (int x = 195; x <= 205; ++x) {
-  //   for (int y = 40; y <= 260; ++y) {
-  //     int width_bytes = (width + 7) / 8;
-  //     int byte_index = (x / 8) + y * width_bytes;
-  //     uint8_t mask = 1 << (7 - (x % 8));
-  //     fb_bw[byte_index] |= mask;  // white: set bit in black buffer
-  //     fb_red[byte_index] |= mask; //      : set bit in red buffer
-  //   }
-  // }
-  // // Draw THICK WHITE horizontal line (erasing a band at y = 145..154, x
-  // // = 70..330)
-  // for (int y = 145; y <= 154; ++y) {
-  //   for (int x = 70; x <= 330; ++x) {
-  //     int width_bytes = (width + 7) / 8;
-  //     int byte_index = (x / 8) + y * width_bytes;
-  //     uint8_t mask = 1 << (7 - (x % 8));
-  //     fb_bw[byte_index] |= mask;
-  //     fb_red[byte_index] |= mask;
-  //   }
-  // }
+  // === Center box parameters ===
+  int box_width = 200;
+  int box_height = 200;
+  int box_x0 = (width - box_width) / 2;
+  int box_y0 = (height - box_height) / 2;
+  int box_x1 = box_x0 + box_width;
+  int box_y1 = box_y0 + box_height;
 
+  draw_box(fb_bw, box_x0, box_y0, box_x1, box_y1, 25); // Draw box in center
+
+  // === Draw checkerboard inside the box ===
+  int square_size = 20;
+  for (int row = 0; row < box_height / square_size; ++row) {
+    for (int col = 0; col < box_width / square_size; ++col) {
+      if ((row + col) % 2 == 0) {
+        int sx0 = box_x0 + col * square_size;
+        int sy0 = box_y0 + row * square_size;
+        for (int y = 0; y < square_size; ++y) {
+          ssd1683_draw_hline(fb_bw, sx0, sx0 + square_size - 1, sy0 + y, width,
+                             height);
+        }
+      }
+    }
+  }
+
+  // === Display the image ===
   ssd1683_flush_from_paint(&epd_cfg, fb_bw, fb_red);
   ssd1683_refresh(&epd_cfg);
-
+  ssd1683_deep_sleep(&epd_cfg);
   return 0;
 }
