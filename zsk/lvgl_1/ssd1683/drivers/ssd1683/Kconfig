@@ -1,0 +1,23 @@
+config SSD1683
+	bool "SSD1683 EPD Display Driver"
+	depends on DISPLAY
+	depends on SPI
+	depends on GPIO
+	help
+	  Enable driver for SSD1683 EPD display controller.
+
+if SSD1683
+
+config SSD1683_INIT_PRIORITY
+	int "SSD1683 init priority"
+	default 80
+	help
+	  SSD1683 device driver initialization priority.
+
+config SSD1683_LOG_LEVEL
+	int "SSD1683 log level"
+	default 3
+	help
+	  SSD1683 driver log level.
+
+endif # SSD1683
