@@ -30,11 +30,10 @@
 #define SSD1683_COLOR_RED 2
 
 struct ssd1683_config {
-  const struct device *spi_dev;
-  struct spi_config spi_cfg;
-  const struct gpio_dt_spec dc;
-  const struct gpio_dt_spec rst;
-  const struct gpio_dt_spec busy;
+  struct spi_dt_spec bus; // Modern Zephyr: combines device + config
+  struct gpio_dt_spec dc;
+  struct gpio_dt_spec rst;
+  struct gpio_dt_spec busy;
   uint16_t width;
   uint16_t height;
 };

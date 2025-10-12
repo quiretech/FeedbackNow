@@ -1,23 +1,26 @@
 config SSD1683
-	bool "SSD1683 EPD Display Driver"
+	bool "SSD1683 E-Paper Display Driver"
+	default y
+	depends on DT_HAS_SOLOMON_SSD1683_ENABLED
 	depends on DISPLAY
 	depends on SPI
 	depends on GPIO
 	help
-	  Enable driver for SSD1683 EPD display controller.
+	  Enable Zephyr display driver for Solomon SSD1683 E-Paper
+	  display controller. This driver implements the Zephyr display
+	  API and works with graphics frameworks like LVGL.
+	  
+	  The SSD1683 is a tri-color (black/white/red) EPD controller,
+	  but this driver currently operates in monochrome mode only.
 
 if SSD1683
 
 config SSD1683_INIT_PRIORITY
-	int "SSD1683 init priority"
-	default 80
+	int "SSD1683 initialization priority"
+	default 90
 	help
-	  SSD1683 device driver initialization priority.
-
-config SSD1683_LOG_LEVEL
-	int "SSD1683 log level"
-	default 3
-	help
-	  SSD1683 driver log level.
+	  Initialization priority for SSD1683 display driver.
+	  Must be greater than SPI and GPIO priorities.
+	  Default: 90 (after SPI at 70, before application at 99)
 
 endif # SSD1683

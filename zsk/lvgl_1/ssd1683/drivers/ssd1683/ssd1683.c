@@ -51,7 +51,7 @@ void ssd1683_write_cmd(const struct ssd1683_config *cfg, uint8_t cmd) {
   gpio_pin_set_dt(&cfg->dc, 0); // command mode
   struct spi_buf buf = {.buf = &cmd, .len = 1};
   struct spi_buf_set tx = {.buffers = &buf, .count = 1};
-  int ret = spi_write(cfg->spi_dev, &cfg->spi_cfg, &tx);
+  int ret = spi_write_dt(&cfg->bus, &tx);
   if (ret < 0) {
     LOG_ERR("SPI write command failed: %d", ret);
   }
@@ -61,7 +61,7 @@ void ssd1683_write_data(const struct ssd1683_config *cfg, uint8_t data) {
   gpio_pin_set_dt(&cfg->dc, 1); // data mode
   struct spi_buf buf = {.buf = &data, .len = 1};
   struct spi_buf_set tx = {.buffers = &buf, .count = 1};
-  int ret = spi_write(cfg->spi_dev, &cfg->spi_cfg, &tx);
+  int ret = spi_write_dt(&cfg->bus, &tx);
   if (ret < 0) {
     LOG_ERR("SPI write data failed: %d", ret);
   }
@@ -92,20 +92,20 @@ void ssd1683_deep_sleep(const struct ssd1683_config *cfg) {
 // Common initialization code shared by all init functions
 static int ssd1683_init_common(const struct ssd1683_config *cfg) {
   // Check if all devices are ready
-  if (!device_is_ready(cfg->spi_dev)) {
-    LOG_ERR("SPI device not ready");
+  if (!spi_is_ready_dt(&cfg->bus)) {
+    LOG_ERR("SPI bus not ready");
     return -ENODEV;
   }
-  if (!device_is_ready(cfg->dc.port)) {
-    LOG_ERR("DC GPIO port not ready");
+  if (!gpio_is_ready_dt(&cfg->dc)) {
+    LOG_ERR("DC GPIO not ready");
     return -ENODEV;
   }
-  if (!device_is_ready(cfg->rst.port)) {
-    LOG_ERR("RST GPIO port not ready");
+  if (!gpio_is_ready_dt(&cfg->rst)) {
+    LOG_ERR("RST GPIO not ready");
     return -ENODEV;
   }
-  if (!device_is_ready(cfg->busy.port)) {
-    LOG_ERR("BUSY GPIO port not ready");
+  if (!gpio_is_ready_dt(&cfg->busy)) {
+    LOG_ERR("BUSY GPIO not ready");
     return -ENODEV;
   }
 
