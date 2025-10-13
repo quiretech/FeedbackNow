@@ -39,20 +39,40 @@
 leds {
         compatible = "gpio-leds";
 
-        led4: led_4 {
-            gpios = <&gpio1 2 GPIO_ACTIVE_LOW>;  // P1.02
+		led4: led_4 {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 0";
+		};
+
+		led3: led_3 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 1";
+		};
+
+		led2: led_2 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 2";
+		};
+
+		led1: led_1 {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 3";
+		};
+
+        led0: led_0 {
+            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;  // P1.02
 			label = "EXT LED 4";
 
         };
 
         led5: led_5 {
-            gpios = <&gpio1 7 GPIO_ACTIVE_LOW>;  // P1.07
+            gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;  // P1.07 // 9/24 changed from 1,7 - 1,9 (led 5,6)
 			label = "EXT LED 5";
 
         };
 
         led6: led_6 {
-            gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;  // P1.09
+            gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;  // P1.09 //  9/24 changed from 1,9 - 1,7 (led 5,6)
 			label = "EXT LED 6";
 
         };
@@ -60,6 +80,10 @@ leds {
 };
 
 &uart0 {	
+	status="disabled";
+};	
+
+&uart1 {	
 	status="disabled";
 };	
 	
@@ -81,7 +105,7 @@ leds {
 	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=NFC */
 	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>,  /* LoRa CS - P1.08 */
 	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
-	        //    <&gpio0 29 GPIO_ACTIVE_LOW>;           /* NFC CS - P0.29 */
+	       
 	
 	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
@@ -96,25 +120,19 @@ leds {
 		tcxo-power-startup-delay-ms = <10>;
 	};
     
-
-
     	ssd1683: ssd1683@1 {
 		compatible = "solomon,ssd1683";
 		reg = <1>;
 		spi-max-frequency = <4000000>;
-		
 		/* Display dimensions */
 		width = <400>;
 		height = <300>;
-		
 		/* Control GPIOs */
 		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
 
 	};
-
-
         pn5180: pn5180@2 {
  		compatible = "nxp,pn5180";
 		reg = <2>;
