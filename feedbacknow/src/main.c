@@ -292,8 +292,8 @@ int main(void) {
   LOG_INF("LoRa thread start command issued");
 
   // Start NFC manager thread
-  k_thread_start(nfc_manager_thread_id);
-  LOG_INF("NFC manager thread start command issued");
+  // k_thread_start(nfc_manager_thread_id);
+  // LOG_INF("NFC manager thread start command issued");
 
   // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
 

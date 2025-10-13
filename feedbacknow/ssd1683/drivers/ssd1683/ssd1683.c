@@ -159,7 +159,7 @@ int ssd1683_init(const struct ssd1683_config *cfg) {
 
   // Border waveform
   ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
-  ssd1683_write_data(cfg, 0x10);
+  ssd1683_write_data(cfg, 0x05);
 
   // Data entry mode (increment X and Y)
   ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
