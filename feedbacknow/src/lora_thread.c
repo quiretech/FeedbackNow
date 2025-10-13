@@ -102,13 +102,13 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
       // Initialize NFC manager after successful LoRa join to avoid SPI
       // conflicts
-      LOG_INF("Initializing NFC manager after LoRa join...");
-      int nfc_ret = nfc_manager_init();
-      if (nfc_ret != 0) {
-        LOG_ERR("NFC manager initialization failed: %d", nfc_ret);
-      } else {
-        LOG_INF("NFC manager initialized successfully");
-      }
+      // LOG_INF("Initializing NFC manager after LoRa join...");
+      // int nfc_ret = nfc_manager_init();
+      // if (nfc_ret != 0) {
+      //   LOG_ERR("NFC manager initialization failed: %d", nfc_ret);
+      // } else {
+      //   LOG_INF("NFC manager initialized successfully");
+      // }
     }
 
     if (ret != 0) {

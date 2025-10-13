@@ -78,8 +78,11 @@ leds {
 &arduino_spi {
 	status = "okay";
 
-	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>; // 1,8
-
+	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=NFC */
+	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>,  /* LoRa CS - P1.08 */
+	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
+	        //    <&gpio0 29 GPIO_ACTIVE_LOW>;           /* NFC CS - P0.29 */
+	
 	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
 		reg = <0>;
@@ -93,9 +96,28 @@ leds {
 		tcxo-power-startup-delay-ms = <10>;
 	};
     
-    pn5180: pn5180@1 {
- 		compatible = "nxp,pn5180";
+
+
+    	ssd1683: ssd1683@1 {
+		compatible = "solomon,ssd1683";
 		reg = <1>;
+		spi-max-frequency = <4000000>;
+		
+		/* Display dimensions */
+		width = <400>;
+		height = <300>;
+		
+		/* Control GPIOs */
+		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
+
+	};
+
+
+        pn5180: pn5180@2 {
+ 		compatible = "nxp,pn5180";
+		reg = <2>;
 		spi-max-frequency = <400000>;
 		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
 		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
@@ -106,3 +128,8 @@ leds {
 
 };
 
+/ {
+	chosen {
+		zephyr,display = &ssd1683;
+	};
+};

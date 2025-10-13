@@ -221,11 +221,18 @@
 #include "system_init.h"
 #include "system_monitor.h"
 
+#include <lvgl.h>
 #include <zephyr/device.h>
+#include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+
+// External font declarations
+LV_FONT_DECLARE(roboto_28);
+LV_FONT_DECLARE(roboto_36);
+LV_FONT_DECLARE(roboto_bold_42);
 
 int main(void) {
   LOG_INF("FeedbackNow System Starting...");
@@ -290,6 +297,75 @@ int main(void) {
 
   // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
 
+  // ========================================================================
+  // LVGL DISPLAY DEMO - Simple initialization
+  // ========================================================================
+  LOG_INF("=== INITIALIZING LVGL DISPLAY ===");
+
+  const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+  if (!device_is_ready(display_dev)) {
+    LOG_ERR("Display device not ready");
+    return -ENODEV;
+  }
+  LOG_INF("Display device ready: %s", display_dev->name);
+
+  // Display info
+  struct display_capabilities caps;
+  display_get_capabilities(display_dev, &caps);
+  LOG_INF("Display: %dx%d, format=%d", caps.x_resolution, caps.y_resolution,
+          caps.current_pixel_format);
+
+  // Get the active screen (don't create a new one)
+  lv_obj_t *scr = lv_scr_act();
+
+  // IMPORTANT: For monochrome EPD, set background to WHITE (1)
+  lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
+
+  // Heading - Using roboto_28 (closest to 24 we have)
+  lv_obj_t *heading = lv_label_create(scr);
+  lv_label_set_text(heading, "last cleaned at:");
+  lv_obj_set_style_text_font(heading, &roboto_bold_42,
+                             LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_color(heading, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(heading, LV_ALIGN_TOP_MID, 0, 20);
+  // Add a horizontal line below the heading using LVGL
+  lv_obj_t *line = lv_line_create(scr);
+  static lv_point_t line_points[] = {{-80, 0}, {80, 0}}; // 160px wide centered
+  lv_line_set_points(line, line_points, 2);
+  lv_obj_set_style_line_width(line, 2,
+                              LV_PART_MAIN); // adjust thickness as needed
+  lv_obj_set_style_line_color(line, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(line, heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+  // Line 1 - roboto_36
+  lv_obj_t *line1 = lv_label_create(scr);
+  lv_label_set_text(line1, "2025-10-12 13:25:65");
+  lv_obj_set_style_text_font(line1, &roboto_36,
+                             LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_color(line1, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(line1, LV_ALIGN_CENTER, 0, -30);
+
+  // Line 2 - roboto_36
+  lv_obj_t *line2 = lv_label_create(scr);
+  lv_label_set_text(line2, "2025-10-12 18:35:47");
+  lv_obj_set_style_text_font(line2, &roboto_36,
+                             LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_color(line2, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(line2, LV_ALIGN_CENTER, 0, 30);
+
+  // Line 3 - roboto_36
+  lv_obj_t *line3 = lv_label_create(scr);
+  lv_label_set_text(line3, "2025-10-12 19:25:37");
+  lv_obj_set_style_text_font(line3, &roboto_36,
+                             LV_PART_MAIN | LV_STATE_DEFAULT);
+  lv_obj_set_style_text_color(line3, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(line3, LV_ALIGN_CENTER, 0, 90);
+
+  LOG_INF("LVGL widgets created");
+  LOG_INF("=== LVGL DISPLAY DEMO COMPLETE ===");
+  // ========================================================================
+
   // Send system ready event
   system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
   state_manager_send_event(&ready_event);
@@ -306,20 +382,19 @@ int main(void) {
 
   // Thread status logged above
 
-  // Main loop - just monitor system health
+  // Main loop - monitor system health and update LVGL
   int loop_count = 0;
   while (1) {
-    system_state_t current_state = state_manager_get_current_state();
-    LOG_DBG("Current system state: %d", current_state);
+    // Update LVGL periodically
+    lv_task_handler();
+
+    // Small sleep to prevent tight loop
+    k_sleep(K_MSEC(100));
 
     // Periodic thread health check
-    if (loop_count % 6 == 0) { // Every 60 seconds
-      LOG_INF("=== PERIODIC THREAD HEALTH CHECK ===");
+    if (loop_count % 100 == 0) { // Every ~10 seconds
       LOG_INF("Uptime: %llu ms", k_uptime_get());
-      LOG_INF("Thread health check completed");
     }
     loop_count++;
-
-    k_sleep(K_SECONDS(MAIN_LOOP_SLEEP_SECONDS));
   }
 }

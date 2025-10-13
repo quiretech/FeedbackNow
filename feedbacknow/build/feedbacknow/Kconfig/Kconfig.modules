@@ -247,6 +247,12 @@ config ZEPHYR_PN5180_MODULE
 	bool
 	default y
 endmenu
+menu "ssd1683 (C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/ssd1683)"
+osource "C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/ssd1683/Kconfig"
+config ZEPHYR_SSD1683_MODULE
+	bool
+	default y
+endmenu
 menu "nrfxlib (C:/ncs/v3.0.2/nrfxlib)"
 osource "C:/ncs/v3.0.2/nrfxlib/Kconfig.nrfxlib"
 config ZEPHYR_NRFXLIB_MODULE

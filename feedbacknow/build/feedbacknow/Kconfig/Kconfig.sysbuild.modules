@@ -133,6 +133,9 @@ config ZEPHYR_ZCBOR_MODULE
 config ZEPHYR_PN5180_MODULE
    bool
    default y
+config ZEPHYR_SSD1683_MODULE
+   bool
+   default y
 config ZEPHYR_NRFXLIB_MODULE
    bool
    default y
