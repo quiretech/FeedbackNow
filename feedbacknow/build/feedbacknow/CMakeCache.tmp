@@ -316,7 +316,7 @@ DTC:FILEPATH=C:/ncs/toolchains/0b393f9e1b/opt/bin/dtc.exe
 // parameter. These settings will override the settings in the
 // board's .dts file. Multiple files may be listed, e.g. DTC_OVERLAY_FILE="dts1.overlay
 // dts2.overlay"
-DTC_OVERLAY_FILE:STRING=C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/boards/nrf52840dk_nrf52840.overlay
+DTC_OVERLAY_FILE:STRING=boards/nrf52840dk_nrf52840.overlay
 
 //No help, variable specified on the command line.
 EXTRA_KCONFIG_TARGETS:UNINITIALIZED=
@@ -547,7 +547,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=167
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=173
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

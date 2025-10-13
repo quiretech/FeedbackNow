@@ -15,7 +15,7 @@ cmake:
      - C:/ncs/v3.0.2/zephyr/dts/bindings
     files:
      - C:/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840.dts
-     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/boards/nrf52840dk_nrf52840.overlay
+     - boards/nrf52840dk_nrf52840.overlay
     include-dirs:
      - C:/ncs/v3.0.2/nrf/include
      - C:/ncs/v3.0.2/nrf/dts/common
@@ -39,7 +39,7 @@ cmake:
      - C:/ncs/v3.0.2/zephyr/dts/arc
      - C:/ncs/v3.0.2/zephyr/dts
     user-files:
-     - C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/boards/nrf52840dk_nrf52840.overlay
+     - boards/nrf52840dk_nrf52840.overlay
   kconfig:
     files:
      - C:/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk/nrf52840dk_nrf52840_defconfig
