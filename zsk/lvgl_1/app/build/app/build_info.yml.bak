@@ -48,7 +48,7 @@ cmake:
      - C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/lvgl_1/app/prj.conf
   toolchain:
     name: zephyr
-    path: C:/ncs/toolchains/0b393f9e1b/opt/zephyr-sdk
+    path: C:/ncs/toolchains/c1a76fddb2/opt/zephyr-sdk
   vendor-specific:
     nordic:
       svdfile: C:/ncs/v3.0.2/modules/hal/nordic/nrfx/mdk/nrf52840.svd
