@@ -17,6 +17,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/pm/device.h>
+#include <zephyr/sys/util.h>
 
 #include "ssd1683.h"
 
@@ -32,7 +33,8 @@ LOG_MODULE_REGISTER(ssd1683_display, CONFIG_DISPLAY_LOG_LEVEL);
  * Currently minimal, can be extended for framebuffer caching if needed
  */
 struct ssd1683_display_data {
-  bool blanking_on; // Track blanking state
+  bool blanking_on;         // Track blanking state
+  bool last_write_was_full; // Track if last batched write was full screen
 };
 
 /**
@@ -84,12 +86,16 @@ static int ssd1683_display_blanking_off(const struct device *dev) {
   const struct ssd1683_config *epd_cfg = get_epd_config(dev);
 
   if (data->blanking_on) {
-    LOG_DBG("Blanking OFF (triggering full refresh of batched changes)");
     data->blanking_on = false;
 
-    // Trigger full refresh to show all accumulated changes
-    // This also updates the base map (0x26 RAM) for future partial refreshes
-    ssd1683_refresh(epd_cfg);
+    // Choose refresh type based on last write
+    if (data->last_write_was_full) {
+      LOG_DBG("Blanking OFF (triggering FULL refresh of batched changes)");
+      ssd1683_refresh(epd_cfg);
+    } else {
+      LOG_DBG("Blanking OFF (triggering PARTIAL refresh of batched changes)");
+      ssd1683_refresh_partial(epd_cfg);
+    }
   }
 
   return 0;
@@ -112,61 +118,75 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
       (x == 0 && y == 0 && desc->width == epd_cfg->width &&
        desc->height == epd_cfg->height);
 
+  // FIXED: Use correct partial refresh logic like official ssd16xx driver
+  const bool have_partial_refresh = true; // SSD1683 supports partial refresh
+  const bool partial_refresh = !data->blanking_on && have_partial_refresh;
+
   if (buf == NULL || buf_len == 0) {
     LOG_ERR("Display buffer is not available");
     return -EINVAL;
   }
 
-  LOG_DBG("Write: x=%d, y=%d, w=%d, h=%d, blanked=%d, full_screen=%d", x, y,
-          desc->width, desc->height, data->blanking_on, is_full_screen);
+  LOG_DBG("Write: x=%d, y=%d, w=%d, h=%d, blanked=%d, partial=%d", x, y,
+          desc->width, desc->height, data->blanking_on, partial_refresh);
 
   // Set window and cursor for the write region
   ssd1683_set_window(epd_cfg, x, y, x + desc->width - 1, y + desc->height - 1);
   ssd1683_set_cursor(epd_cfg, x, y);
 
   // Write to BW RAM (0x24) - always happens
-  // Use efficient bulk write instead of byte-by-byte
   ssd1683_write_cmd_buffer(epd_cfg, 0x24, (const uint8_t *)buf, buf_len);
 
-  if (data->blanking_on) {
-    // BLANKED MODE: Also write to RED RAM (0x26) to maintain base frame
-    // This ensures future partial refreshes will work correctly
-    // (From ssd16xx lines 438-450)
-    LOG_DBG("Blanked write - also updating base map (0x26)");
-
-    // Reset window/cursor for 0x26 write (controller auto-incremented after
-    // 0x24)
-    ssd1683_set_window(epd_cfg, x, y, x + desc->width - 1,
-                       y + desc->height - 1);
-    ssd1683_set_cursor(epd_cfg, x, y);
-    ssd1683_write_cmd_buffer(epd_cfg, 0x26, (const uint8_t *)buf, buf_len);
-    // DO NOT REFRESH - wait for blanking_off()
-    return 0;
+  if (!data->blanking_on) {
+    // NOT BLANKED: Refresh immediately
+    if (partial_refresh) {
+      LOG_DBG("Partial refresh - using partial update");
+      ssd1683_refresh_partial(epd_cfg);
+    } else {
+      LOG_DBG("Full refresh - using full update");
+      ssd1683_refresh(epd_cfg);
+    }
   }
 
-  // NOT BLANKED: Refresh immediately
-  if (is_full_screen) {
-    // Full screen: Write to 0x26 as well, then full refresh
-    LOG_DBG("Full screen write - updating base map and full refresh");
+  if (data->blanking_on && have_partial_refresh) {
+    // BLANKED MODE: Write to RED RAM (0x26) to maintain base frame
+    // For partial refresh, RED RAM should contain the base frame (white
+    // background)
+    LOG_DBG("Blanked write - updating base map (0x26) with white background");
 
     // Reset window/cursor for 0x26 write
     ssd1683_set_window(epd_cfg, x, y, x + desc->width - 1,
                        y + desc->height - 1);
     ssd1683_set_cursor(epd_cfg, x, y);
-    ssd1683_write_cmd_buffer(epd_cfg, 0x26, (const uint8_t *)buf, buf_len);
-    ssd1683_refresh(epd_cfg);
-  } else {
-    // Partial screen: Refresh, then write again to compensate for buffer swap
-    LOG_DBG("Partial write - refresh then double-write for buffer sync");
-    ssd1683_refresh_partial(epd_cfg);
 
-    // CRITICAL: After partial refresh, controller swaps 0x24/0x26 buffers
-    // Write again to ensure future partial updates have correct base
-    // (From ssd16xx lines 451-463)
+    // Create white background buffer for base frame
+    uint8_t *white_buf = k_malloc(buf_len);
+    if (white_buf) {
+      memset(white_buf, 0xFF, buf_len); // White background
+      ssd1683_write_cmd_buffer(epd_cfg, 0x26, white_buf, buf_len);
+      k_free(white_buf);
+    }
+
+    // Track if this was a full screen write for proper refresh later
+    data->last_write_was_full = is_full_screen;
+  } else if (partial_refresh) {
+    // PARTIAL REFRESH: Write white background to RED RAM after buffer swap
+    // After partial refresh, controller swaps 0x24/0x26 buffers
+    // RED RAM should contain white background for future partial updates
+    LOG_DBG("Partial refresh - setting white background in RED RAM after "
+            "buffer swap");
+
     ssd1683_set_window(epd_cfg, x, y, x + desc->width - 1,
                        y + desc->height - 1);
     ssd1683_set_cursor(epd_cfg, x, y);
-    ssd1683_write_cmd_buffer(epd_cfg, 0x24, (const uint8_t *)buf, buf_len);
+
+    // Create white background buffer for base frame
+    uint8_t *white_buf = k_malloc(buf_len);
+    if (white_buf) {
+      memset(white_buf, 0xFF, buf_len); // White background
+      ssd1683_write_cmd_buffer(epd_cfg, 0x26, white_buf, buf_len);
+      k_free(white_buf);
+    }
   }
 
   return 0;
@@ -321,6 +341,7 @@ static int ssd1683_display_init(const struct device *dev) {
   k_free(white_buffer);
 
   data->blanking_on = false;
+  data->last_write_was_full = true; // Initial clear was full screen
 
   LOG_INF("SSD1683 display driver initialized with base map");
   return 0;

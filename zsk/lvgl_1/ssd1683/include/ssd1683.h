@@ -77,6 +77,25 @@ void ssd1683_partial_display(const struct ssd1683_config *cfg, uint16_t x,
                              uint16_t y, uint16_t w, uint16_t l,
                              uint8_t *image);
 
+// Partial refresh write to RAM without refreshing (matches Arduino
+// EPD_Dis_Part_RAM)
+void ssd1683_partial_display_ram(const struct ssd1683_config *cfg, uint16_t x,
+                                 uint16_t y, uint16_t w, uint16_t l,
+                                 uint8_t *image);
+
+// Full screen partial refresh (matches Arduino EPD_Dis_PartAll)
+void ssd1683_partial_display_all(const struct ssd1683_config *cfg,
+                                 uint8_t *image);
+
+// Multi-region partial refresh (matches Arduino EPD_Dis_Part_Time)
+void ssd1683_partial_display_time(const struct ssd1683_config *cfg, uint16_t x1,
+                                  uint16_t y1, uint8_t *image1, uint16_t x2,
+                                  uint16_t y2, uint8_t *image2, uint16_t x3,
+                                  uint16_t y3, uint8_t *image3, uint16_t x4,
+                                  uint16_t y4, uint8_t *image4, uint16_t x5,
+                                  uint16_t y5, uint8_t *image5, uint16_t w,
+                                  uint16_t h);
+
 // Write to display buffer without refreshing
 void ssd1683_write_display(const struct ssd1683_config *cfg, uint16_t x,
                            uint16_t y, uint16_t w, uint16_t l, uint8_t *image);
