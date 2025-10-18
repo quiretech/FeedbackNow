@@ -70,7 +70,7 @@
 		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
-		fast-mode;
+		// fast-mode;
 	};
 };
 

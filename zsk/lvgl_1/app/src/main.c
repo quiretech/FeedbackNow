@@ -1,11 +1,9 @@
 /*
- * SSD1683 E-Paper Display + LVGL
- * Simple Counter Demo
- * Displays "counter = X" in the center of screen and updates every second
+ * SSD1683 E-Paper Display with Custom Font Rendering
+ * Displays "Hello World" using custom font rendering
  */
 
-#include "test_partial.h"
-// #include <lvgl.h>
+#include "custom_font.h"
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/device.h>
@@ -31,17 +29,22 @@ int main(void) {
   LOG_INF("Display: %dx%d, format: %d", caps.x_resolution, caps.y_resolution,
           caps.current_pixel_format);
 
+  // Wait a moment for display to be ready
+  k_sleep(K_SECONDS(1));
+
+  // Render "Hello World" text
+  LOG_INF("Rendering Hello World with custom font...");
+  int ret = custom_font_render_text(display_dev, "Hello World", 50, 100);
+  if (ret < 0) {
+    LOG_ERR("Failed to render text: %d", ret);
+    return ret;
+  }
+
+  LOG_INF("Hello World rendered successfully!");
+
+  // Keep running
   while (1) {
-    // Test CFB text rendering with single font
-    test_cfb_text(display_dev);
-    k_sleep(K_SECONDS(3));
-
-    // Test CFB with multiple fonts
-    test_cfb_multiple_fonts(display_dev);
-    k_sleep(K_SECONDS(3));
-
-    // Test partial refresh
-    test_partial_refresh_direct(display_dev);
-    k_sleep(K_SECONDS(3));
+    k_sleep(K_SECONDS(10));
+    LOG_INF("System running...");
   }
 }

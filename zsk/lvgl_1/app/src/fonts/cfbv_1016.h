@@ -5,7 +5,6 @@
  * --center-x -o cfbv_1016
  */
 
-#include <zephyr/display/cfb.h>
 #include <zephyr/kernel.h>
 
 static const uint8_t cfb_font_custom_1016[95][20] = {
@@ -1246,6 +1245,3 @@ static const uint8_t cfb_font_custom_1016[95][20] = {
     },
 
 };
-
-FONT_ENTRY_DEFINE(custom_1016, 10, 16, CFB_FONT_MONO_VPACKED,
-                  cfb_font_custom_1016, 32, 126);
