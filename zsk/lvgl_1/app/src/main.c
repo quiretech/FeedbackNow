@@ -1,9 +1,4 @@
-/*
- * SSD1683 E-Paper Display with Custom Font Rendering
- * Displays "Hello World" using custom font rendering
- */
 
-#include "custom_font.h"
 #include <stdio.h>
 #include <string.h>
 #include <zephyr/device.h>
@@ -29,22 +24,9 @@ int main(void) {
   LOG_INF("Display: %dx%d, format: %d", caps.x_resolution, caps.y_resolution,
           caps.current_pixel_format);
 
-  // Wait a moment for display to be ready
-  k_sleep(K_SECONDS(1));
-
-  // Render "Hello World" text
-  LOG_INF("Rendering Hello World with custom font...");
-  int ret = custom_font_render_text(display_dev, "Hello World", 50, 100);
-  if (ret < 0) {
-    LOG_ERR("Failed to render text: %d", ret);
-    return ret;
-  }
-
-  LOG_INF("Hello World rendered successfully!");
-
   // Keep running
   while (1) {
-    k_sleep(K_SECONDS(10));
+    k_sleep(K_SECONDS(1));
     LOG_INF("System running...");
   }
 }

@@ -11,8 +11,6 @@ project(lvgl_1)
 # Keep source files in src/ and list them below.
 target_sources(app PRIVATE
     src/main.c
-    src/custom_font.c
-    src/fonts/cfbv_1016.h
 )
 
 # Include directories

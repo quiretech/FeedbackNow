@@ -46,8 +46,6 @@ int ssd1683_init_fast(const struct ssd1683_config *cfg);
 void ssd1683_reset(const struct ssd1683_config *cfg);
 void ssd1683_write_cmd(const struct ssd1683_config *cfg, uint8_t cmd);
 void ssd1683_write_data(const struct ssd1683_config *cfg, uint8_t data);
-void ssd1683_write_cmd_buffer(const struct ssd1683_config *cfg, uint8_t cmd,
-                              const uint8_t *data, size_t len);
 void ssd1683_deep_sleep(const struct ssd1683_config *cfg);
 
 // === Display Control ===
@@ -61,10 +59,6 @@ void ssd1683_refresh_partial(const struct ssd1683_config *cfg);
 // All functions write to BW RAM only. RED RAM is cleared once during init/clear
 // to ensure no red pixels interfere with the black/white display.
 
-// Set base map for partial refresh (writes to both 0x24 and 0x26 RAM)
-void ssd1683_set_base_map(const struct ssd1683_config *cfg,
-                          uint8_t *image_buffer);
-
 // Flush framebuffer to display and refresh
 void ssd1683_flush(const struct ssd1683_config *cfg, uint8_t *image_buffer);
 
@@ -77,37 +71,9 @@ void ssd1683_partial_display(const struct ssd1683_config *cfg, uint16_t x,
                              uint16_t y, uint16_t w, uint16_t l,
                              uint8_t *image);
 
-// Partial refresh write to RAM without refreshing (matches Arduino
-// EPD_Dis_Part_RAM)
-void ssd1683_partial_display_ram(const struct ssd1683_config *cfg, uint16_t x,
-                                 uint16_t y, uint16_t w, uint16_t l,
-                                 uint8_t *image);
-
-// Full screen partial refresh (matches Arduino EPD_Dis_PartAll)
-void ssd1683_partial_display_all(const struct ssd1683_config *cfg,
-                                 uint8_t *image);
-
-// Multi-region partial refresh (matches Arduino EPD_Dis_Part_Time)
-void ssd1683_partial_display_time(const struct ssd1683_config *cfg, uint16_t x1,
-                                  uint16_t y1, uint8_t *image1, uint16_t x2,
-                                  uint16_t y2, uint8_t *image2, uint16_t x3,
-                                  uint16_t y3, uint8_t *image3, uint16_t x4,
-                                  uint16_t y4, uint8_t *image4, uint16_t x5,
-                                  uint16_t y5, uint8_t *image5, uint16_t w,
-                                  uint16_t h);
-
 // Write to display buffer without refreshing
 void ssd1683_write_display(const struct ssd1683_config *cfg, uint16_t x,
                            uint16_t y, uint16_t w, uint16_t l, uint8_t *image);
-
-// === Window/Cursor Management (for display wrapper) ===
-// Set display window (RAM address range)
-void ssd1683_set_window(const struct ssd1683_config *cfg, uint16_t x_start,
-                        uint16_t y_start, uint16_t x_end, uint16_t y_end);
-
-// Set cursor position (RAM write pointer)
-void ssd1683_set_cursor(const struct ssd1683_config *cfg, uint16_t x,
-                        uint16_t y);
 
 // === Drawing Helper Functions ===
 // Draw vertical line on buffer (application-level helper)
