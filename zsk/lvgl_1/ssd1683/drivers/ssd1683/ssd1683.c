@@ -156,15 +156,8 @@ static int ssd1683_init_common(const struct ssd1683_config *cfg) {
   // === 4.2" EPD Init Sequence (matches EPD_4IN2_V2_Init) ===
 
   // Hardware reset (100ms delay)
-  gpio_pin_set_dt(&cfg->rst, 1);
-  k_msleep(100);
-  gpio_pin_set_dt(&cfg->rst, 0);
-  k_msleep(2);
-  gpio_pin_set_dt(&cfg->rst, 1);
-  k_msleep(100);
-
+  ssd1683_reset(cfg);
   wait_busy(cfg);
-
   // Soft reset
   ssd1683_write_cmd(cfg, 0x12); // SWRESET
   wait_busy(cfg);

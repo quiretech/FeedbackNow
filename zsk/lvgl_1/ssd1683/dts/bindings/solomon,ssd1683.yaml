@@ -56,7 +56,7 @@ properties:
 
   fast-mode:
     type: boolean
-    required: true
+    # required: true
     description: |
       Enable fast refresh mode. Provides faster screen updates with
       slightly reduced image quality. Recommended for applications

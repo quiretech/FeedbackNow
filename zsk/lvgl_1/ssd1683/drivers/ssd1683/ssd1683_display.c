@@ -224,19 +224,21 @@ ssd1683_display_get_capabilities(const struct device *dev,
   caps->x_resolution = epd_cfg->width;
   caps->y_resolution = epd_cfg->height;
 
-  // Pixel format: MONO10 = 1 bit/pixel, 1=white, 0=black
-  caps->supported_pixel_formats = PIXEL_FORMAT_MONO10;
-  caps->current_pixel_format = PIXEL_FORMAT_MONO10;
+  // Pixel format: MONO01 = 1 bit/pixel, 0=white, 1=black (inverted for EPD)
+  caps->supported_pixel_formats = PIXEL_FORMAT_MONO01;
+  caps->current_pixel_format = PIXEL_FORMAT_MONO01;
 
   // Screen info:
+  // - MONO_VTILED: 8 pixels per tile vertically (required by CFB)
   // - MONO_MSB_FIRST: MSB is leftmost pixel
   // - EPD: Electrophoretic Display
-  caps->screen_info = SCREEN_INFO_MONO_MSB_FIRST | SCREEN_INFO_EPD;
+  caps->screen_info =
+      SCREEN_INFO_MONO_VTILED | SCREEN_INFO_MONO_MSB_FIRST | SCREEN_INFO_EPD;
 
   caps->current_orientation = DISPLAY_ORIENTATION_NORMAL;
 
-  LOG_DBG("Capabilities: %dx%d, MONO10, MSB_FIRST, EPD", caps->x_resolution,
-          caps->y_resolution);
+  LOG_DBG("Capabilities: %dx%d, MONO01, VTILED, MSB_FIRST, EPD",
+          caps->x_resolution, caps->y_resolution);
 }
 
 /**
@@ -245,7 +247,7 @@ ssd1683_display_get_capabilities(const struct device *dev,
 static int
 ssd1683_display_set_pixel_format(const struct device *dev,
                                  const enum display_pixel_format pf) {
-  if (pf == PIXEL_FORMAT_MONO10) {
+  if (pf == PIXEL_FORMAT_MONO01) {
     return 0; // Already in correct format
   }
 
