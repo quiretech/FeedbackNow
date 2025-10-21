@@ -23,33 +23,4 @@ config SSD1683_LOG_LEVEL
 	help
 	  SSD1683 driver log level.
 
-config SSD1683_DEFAULT_FAST_MODE
-	bool "Enable fast mode by default"
-	default n
-	help
-	  Enable fast refresh mode by default for all SSD1683 displays.
-	  Fast mode provides quicker updates but may have slightly reduced
-	  image quality. Can be overridden per-device in device tree.
-
-config SSD1683_SUPPORT_PARTIAL_REFRESH
-	bool "Enable partial refresh support"
-	default y
-	help
-	  Enable support for partial screen updates. This allows more
-	  efficient updates when only part of the screen needs to change.
-
-config SSD1683_SUPPORT_4GRAY_MODE
-	bool "Enable 4-gray mode support"
-	default y
-	help
-	  Enable support for 4-level grayscale display mode. This provides
-	  better image quality but requires more complex image processing.
-
-config SSD1683_SUPPORT_ROTATION
-	bool "Enable display rotation support"
-	default y
-	help
-	  Enable support for 180-degree display rotation. Useful for
-	  displays that are mounted upside down.
-
 endif # SSD1683

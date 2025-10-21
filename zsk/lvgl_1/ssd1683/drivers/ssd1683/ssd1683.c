@@ -187,14 +187,6 @@ void ssd1683_update_fast(const struct ssd1683_config *cfg) {
   LOG_INF("Fast display update completed");
 }
 
-void ssd1683_update_4g(const struct ssd1683_config *cfg) {
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  ssd1683_write_data(cfg, 0xCF);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
-  wait_busy(cfg);
-  LOG_INF("4G display update completed");
-}
-
 void ssd1683_update_partial(const struct ssd1683_config *cfg) {
   ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
   ssd1683_write_data(cfg, 0xFF);
@@ -221,39 +213,6 @@ void ssd1683_write_ram_bw(const struct ssd1683_config *cfg, const uint8_t *data,
 // Additional Initialization Functions
 // ============================================================================
 
-void ssd1683_hw_init_4g(const struct ssd1683_config *cfg) {
-  ssd1683_pin_init(cfg);
-  ssd1683_reset(cfg);
-  wait_busy(cfg);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
-  wait_busy(cfg);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
-  ssd1683_write_data(cfg, 0x05);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_WRITE);
-  ssd1683_write_data(cfg, 0x5A);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_LOAD);
-  ssd1683_write_data(cfg, 0x91);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
-  wait_busy(cfg);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
-  ssd1683_write_data(cfg, 0x01);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X);
-  ssd1683_write_data(cfg, 0x00);
-  ssd1683_write_data(cfg, cfg->width / 8 - 1);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y);
-  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
-  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
-  ssd1683_write_data(cfg, 0x00);
-  ssd1683_write_data(cfg, 0x00);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNT);
-  ssd1683_write_data(cfg, 0x00);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNT);
-  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
-  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
-  wait_busy(cfg);
-  LOG_INF("4G initialization completed");
-}
-
 void ssd1683_fillwhite(const struct ssd1683_config *cfg) {
   ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
   for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
@@ -274,19 +233,6 @@ void ssd1683_fillblack(const struct ssd1683_config *cfg) {
   ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
   for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
     ssd1683_write_data(cfg, 0x00);
-  }
-  ssd1683_update(cfg);
-}
-
-void ssd1683_SetRAMValue_BaseMap(const struct ssd1683_config *cfg,
-                                 const uint8_t *data, uint16_t length) {
-  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
-  for (uint16_t i = 0; i < length; i++) {
-    ssd1683_write_data(cfg, data[i]);
-  }
-  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
-  for (uint16_t i = 0; i < length; i++) {
-    ssd1683_write_data(cfg, data[i]);
   }
   ssd1683_update(cfg);
 }

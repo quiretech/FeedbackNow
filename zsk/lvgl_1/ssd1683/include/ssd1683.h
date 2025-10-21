@@ -47,13 +47,11 @@ void ssd1683_deep_sleep(const struct ssd1683_config *cfg);
 // Initialization functions
 void ssd1683_hw_init(const struct ssd1683_config *cfg);
 void ssd1683_hw_init_fast(const struct ssd1683_config *cfg);
-void ssd1683_hw_init_4g(const struct ssd1683_config *cfg);
 void ssd1683_hw_init_partial(const struct ssd1683_config *cfg);
 
 // Update functions
 void ssd1683_update(const struct ssd1683_config *cfg);
 void ssd1683_update_fast(const struct ssd1683_config *cfg);
-void ssd1683_update_4g(const struct ssd1683_config *cfg);
 void ssd1683_update_partial(const struct ssd1683_config *cfg);
 
 // Display functions
@@ -61,8 +59,6 @@ void ssd1683_write_ram_bw(const struct ssd1683_config *cfg, const uint8_t *data,
                           uint16_t length);
 void ssd1683_fillwhite(const struct ssd1683_config *cfg);
 void ssd1683_fillblack(const struct ssd1683_config *cfg);
-void ssd1683_SetRAMValue_BaseMap(const struct ssd1683_config *cfg,
-                                 const uint8_t *data, uint16_t length);
 
 // Partial refresh functions
 void ssd1683_set_base_map(const struct ssd1683_config *cfg, const uint8_t *data,
