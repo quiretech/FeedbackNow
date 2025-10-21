@@ -6,28 +6,22 @@
 #include <zephyr/drivers/spi.h>
 #include <zephyr/kernel.h>
 
-// SSD1683 Command Definitions
-#define SSD1683_CMD_SOFT_RESET 0x12
-#define SSD1683_CMD_DEEP_SLEEP 0x10
-#define SSD1683_CMD_DATA_ENTRY_MODE 0x11
-#define SSD1683_CMD_DISPLAY_UPDATE_CTRL 0x21
-#define SSD1683_CMD_DISPLAY_UPDATE 0x20
-#define SSD1683_CMD_DISPLAY_UPDATE_SEQ 0x22
-#define SSD1683_CMD_WRITE_RAM_BW 0x24
-#define SSD1683_CMD_WRITE_RAM_RED 0x26
-#define SSD1683_CMD_WRITE_VCOM 0x2C
-#define SSD1683_CMD_WRITE_LUT 0x32
+// Command definitions (matching reference driver)
+#define SSD1683_CMD_SWRESET 0x12
+#define SSD1683_CMD_DRIVER_OUTPUT 0x01
+#define SSD1683_CMD_DISPLAY_UPDATE 0x21
 #define SSD1683_CMD_BORDER_WAVEFORM 0x3C
-#define SSD1683_CMD_SET_RAM_X_ADDR 0x44
-#define SSD1683_CMD_SET_RAM_Y_ADDR 0x45
-#define SSD1683_CMD_SET_RAM_X_COUNTER 0x4E
-#define SSD1683_CMD_SET_RAM_Y_COUNTER 0x4F
-#define SSD1683_CMD_WRITE_TEMP 0x1A
-
-// Color defines (for future use)
-#define SSD1683_COLOR_WHITE 0
-#define SSD1683_COLOR_BLACK 1
-#define SSD1683_COLOR_RED 2
+#define SSD1683_CMD_DATA_ENTRY_MODE 0x11
+#define SSD1683_CMD_SET_RAM_X 0x44
+#define SSD1683_CMD_SET_RAM_Y 0x45
+#define SSD1683_CMD_SET_RAM_X_COUNT 0x4E
+#define SSD1683_CMD_SET_RAM_Y_COUNT 0x4F
+#define SSD1683_CMD_WRITE_RAM 0x24
+#define SSD1683_CMD_WRITE_RAM2 0x26
+#define SSD1683_CMD_MASTER_ACTIVATION 0x20
+#define SSD1683_CMD_DEEP_SLEEP 0x10
+#define SSD1683_CMD_TEMP_WRITE 0x1A
+#define SSD1683_CMD_TEMP_LOAD 0x22
 
 struct ssd1683_config {
   struct spi_dt_spec bus; // Modern Zephyr: combines device + config
@@ -38,50 +32,45 @@ struct ssd1683_config {
   uint16_t height;
 };
 
-// === Initialization Functions ===
-int ssd1683_init(const struct ssd1683_config *cfg);
-int ssd1683_init_fast(const struct ssd1683_config *cfg);
+// ============================================================================
+// Function Declarations
+// ============================================================================
 
-// === Low-level Hardware Control ===
-void ssd1683_reset(const struct ssd1683_config *cfg);
+// Low-level SPI functions
 void ssd1683_write_cmd(const struct ssd1683_config *cfg, uint8_t cmd);
 void ssd1683_write_data(const struct ssd1683_config *cfg, uint8_t data);
+
+// Hardware control functions
+void ssd1683_reset(const struct ssd1683_config *cfg);
 void ssd1683_deep_sleep(const struct ssd1683_config *cfg);
 
-// === Display Control ===
-void ssd1683_clear(const struct ssd1683_config *cfg);
-void ssd1683_refresh(const struct ssd1683_config *cfg);
-void ssd1683_refresh_fast(const struct ssd1683_config *cfg);
-void ssd1683_refresh_partial(const struct ssd1683_config *cfg);
+// Initialization functions
+void ssd1683_hw_init(const struct ssd1683_config *cfg);
+void ssd1683_hw_init_fast(const struct ssd1683_config *cfg);
+void ssd1683_hw_init_4g(const struct ssd1683_config *cfg);
+void ssd1683_hw_init_partial(const struct ssd1683_config *cfg);
 
-// === Buffer Operations ===
-// NOTE: This driver operates in MONOCHROME mode only.
-// All functions write to BW RAM only. RED RAM is cleared once during init/clear
-// to ensure no red pixels interfere with the black/white display.
+// Update functions
+void ssd1683_update(const struct ssd1683_config *cfg);
+void ssd1683_update_fast(const struct ssd1683_config *cfg);
+void ssd1683_update_4g(const struct ssd1683_config *cfg);
+void ssd1683_update_partial(const struct ssd1683_config *cfg);
 
-// Flush framebuffer to display and refresh
-void ssd1683_flush(const struct ssd1683_config *cfg, uint8_t *image_buffer);
+// Display functions
+void ssd1683_write_ram_bw(const struct ssd1683_config *cfg, const uint8_t *data,
+                          uint16_t length);
+void ssd1683_fillwhite(const struct ssd1683_config *cfg);
+void ssd1683_fillblack(const struct ssd1683_config *cfg);
+void ssd1683_SetRAMValue_BaseMap(const struct ssd1683_config *cfg,
+                                 const uint8_t *data, uint16_t length);
 
-// === Advanced Display Functions ===
-// Fast display update (reduced quality, faster refresh)
-void ssd1683_display_fast(const struct ssd1683_config *cfg, uint8_t *image);
-
-// Partial screen update
-void ssd1683_partial_display(const struct ssd1683_config *cfg, uint16_t x,
-                             uint16_t y, uint16_t w, uint16_t l,
-                             uint8_t *image);
-
-// Write to display buffer without refreshing
-void ssd1683_write_display(const struct ssd1683_config *cfg, uint16_t x,
-                           uint16_t y, uint16_t w, uint16_t l, uint8_t *image);
-
-// === Drawing Helper Functions ===
-// Draw vertical line on buffer (application-level helper)
-void ssd1683_draw_vline(uint8_t *image, int x, int y_start, int y_end,
-                        int width, int height);
-
-// Draw horizontal line on buffer (application-level helper)
-void ssd1683_draw_hline(uint8_t *image, int x_start, int x_end, int y,
-                        int width, int height);
+// Partial refresh functions
+void ssd1683_set_base_map(const struct ssd1683_config *cfg, const uint8_t *data,
+                          uint16_t length);
+void ssd1683_partial_refresh(const struct ssd1683_config *cfg, uint16_t x_start,
+                             uint16_t y_start, const uint8_t *data,
+                             uint16_t width, uint16_t height);
+void ssd1683_partial_refresh_full(const struct ssd1683_config *cfg,
+                                  const uint8_t *data, uint16_t length);
 
 #endif // SSD1683_H

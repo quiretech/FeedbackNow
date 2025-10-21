@@ -1,10 +1,13 @@
 menuconfig SSD1683
 	bool "SSD1683 EPD Display Driver"
-	depends on DISPLAY
 	depends on SPI
 	depends on GPIO
 	help
 	  Enable driver for SSD1683 EPD display controller.
+	  
+	  The SSD1683 is a tri-color (black/white/red) EPD controller supporting
+	  displays up to 400x300 pixels. This driver provides both low-level
+	  control functions and a high-level device API.
 
 if SSD1683
 
@@ -19,5 +22,34 @@ config SSD1683_LOG_LEVEL
 	default 3
 	help
 	  SSD1683 driver log level.
+
+config SSD1683_DEFAULT_FAST_MODE
+	bool "Enable fast mode by default"
+	default n
+	help
+	  Enable fast refresh mode by default for all SSD1683 displays.
+	  Fast mode provides quicker updates but may have slightly reduced
+	  image quality. Can be overridden per-device in device tree.
+
+config SSD1683_SUPPORT_PARTIAL_REFRESH
+	bool "Enable partial refresh support"
+	default y
+	help
+	  Enable support for partial screen updates. This allows more
+	  efficient updates when only part of the screen needs to change.
+
+config SSD1683_SUPPORT_4GRAY_MODE
+	bool "Enable 4-gray mode support"
+	default y
+	help
+	  Enable support for 4-level grayscale display mode. This provides
+	  better image quality but requires more complex image processing.
+
+config SSD1683_SUPPORT_ROTATION
+	bool "Enable display rotation support"
+	default y
+	help
+	  Enable support for 180-degree display rotation. Useful for
+	  displays that are mounted upside down.
 
 endif # SSD1683

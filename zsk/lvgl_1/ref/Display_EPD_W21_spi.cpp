@@ -1,19 +1,6 @@
 #include "Display_EPD_W21_spi.h"
 #include <SPI.h>
 
-#ifdef ESP8266
-void Sys_run(void)
-{
-   ESP.wdtFeed(); //Feed dog to prevent system reset
-  }
-void LED_run(void)
-{
-  digitalWrite(LED_BUILTIN, LOW);   // Turn the LED on (Note that LOW is the voltage level
-  delay(500);
-  digitalWrite(LED_BUILTIN, HIGH);   // Turn the LED on (Note that LOW is the voltage level
-  delay(500);
-  } 
-#endif 
 //SPI write byte
 void SPI_Write(unsigned char value)
 {				   			 

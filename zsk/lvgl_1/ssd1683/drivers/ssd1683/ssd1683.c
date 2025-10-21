@@ -2,38 +2,6 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(ssd1683, LOG_LEVEL_INF);
 
-// ============================================================================
-// Forward Declarations
-// ============================================================================
-static void ssd1683_set_window(const struct ssd1683_config *cfg,
-                               uint16_t x_start, uint16_t y_start,
-                               uint16_t x_end, uint16_t y_end);
-static void ssd1683_set_cursor(const struct ssd1683_config *cfg, uint16_t x,
-                               uint16_t y);
-static int ssd1683_init_common(const struct ssd1683_config *cfg);
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-// Calculate width in bytes for bitmap (aligned to 8 pixels)
-static inline int ssd1683_calc_width_bytes(int width) {
-  return (width + 7) / 8;
-}
-
-// Write image buffer to display RAM (BW or RED)
-static void ssd1683_write_buffer_to_ram(const struct ssd1683_config *cfg,
-                                        uint8_t cmd, const uint8_t *buffer,
-                                        int width, int height) {
-  int width_bytes = ssd1683_calc_width_bytes(width);
-  ssd1683_write_cmd(cfg, cmd);
-  for (int j = 0; j < height; j++) {
-    for (int i = 0; i < width_bytes; i++) {
-      ssd1683_write_data(cfg, buffer[i + j * width_bytes]);
-    }
-  }
-}
-
 // Wait for BUSY pin to go LOW
 static void wait_busy(const struct ssd1683_config *cfg) {
   LOG_DBG("Waiting for BUSY pin...");
@@ -90,7 +58,7 @@ void ssd1683_deep_sleep(const struct ssd1683_config *cfg) {
 // ============================================================================
 
 // Common initialization code shared by all init functions
-static int ssd1683_init_common(const struct ssd1683_config *cfg) {
+static int ssd1683_pin_init(const struct ssd1683_config *cfg) {
   // Check if all devices are ready
   if (!spi_is_ready_dt(&cfg->bus)) {
     LOG_ERR("SPI bus not ready");
@@ -127,291 +95,317 @@ static int ssd1683_init_common(const struct ssd1683_config *cfg) {
     return ret;
   }
 
-  // Perform hardware reset
+  return 0;
+}
+
+void ssd1683_hw_init(const struct ssd1683_config *cfg) {
+  ssd1683_pin_init(cfg);
+  ssd1683_reset(cfg);
+
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
+  wait_busy(cfg);
+
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DRIVER_OUTPUT);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0x40);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
+  ssd1683_write_data(cfg, 0x05);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
+  ssd1683_write_data(cfg, 0x01);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, cfg->width / 8 - 1);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNT);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNT);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+
+  wait_busy(cfg);
+  LOG_INF("Standard initialization completed");
+}
+
+void ssd1683_hw_init_fast(const struct ssd1683_config *cfg) {
+  ssd1683_pin_init(cfg);
+  ssd1683_reset(cfg);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0x40);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
+  ssd1683_write_data(cfg, 0x05);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_WRITE);
+  ssd1683_write_data(cfg, 0x6E);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_LOAD);
+  ssd1683_write_data(cfg, 0x91);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
+  ssd1683_write_data(cfg, 0x01);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, cfg->width / 8 - 1);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNT);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNT);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  wait_busy(cfg);
+  LOG_INF("Fast initialization completed");
+}
+
+void ssd1683_update(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0xF7);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  LOG_INF("Display update completed");
+}
+
+void ssd1683_update_fast(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0xC7);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  LOG_INF("Fast display update completed");
+}
+
+void ssd1683_update_4g(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0xCF);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  LOG_INF("4G display update completed");
+}
+
+void ssd1683_update_partial(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0xFF);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  LOG_INF("Partial display update completed");
+}
+
+void ssd1683_write_ram_bw(const struct ssd1683_config *cfg, const uint8_t *data,
+                          uint16_t length) {
+  ssd1683_write_cmd(cfg,
+                    SSD1683_CMD_WRITE_RAM); // Write RAM for black(0)/white (1)
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+  ssd1683_write_cmd(cfg,
+                    SSD1683_CMD_WRITE_RAM2); // Write RAM for black(0)/white (1)
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+}
+
+// ============================================================================
+// Additional Initialization Functions
+// ============================================================================
+
+void ssd1683_hw_init_4g(const struct ssd1683_config *cfg) {
+  ssd1683_pin_init(cfg);
+  ssd1683_reset(cfg);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
+  ssd1683_write_data(cfg, 0x05);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_WRITE);
+  ssd1683_write_data(cfg, 0x5A);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_TEMP_LOAD);
+  ssd1683_write_data(cfg, 0x91);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_MASTER_ACTIVATION);
+  wait_busy(cfg);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
+  ssd1683_write_data(cfg, 0x01);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, cfg->width / 8 - 1);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNT);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNT);
+  ssd1683_write_data(cfg, (cfg->height - 1) % 256);
+  ssd1683_write_data(cfg, (cfg->height - 1) / 256);
+  wait_busy(cfg);
+  LOG_INF("4G initialization completed");
+}
+
+void ssd1683_fillwhite(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
+    ssd1683_write_data(cfg, 0xFF);
+  }
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
+  for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
+    ssd1683_write_data(cfg, 0xFF);
+  }
+  ssd1683_update(cfg);
+}
+
+void ssd1683_fillblack(const struct ssd1683_config *cfg) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
+    ssd1683_write_data(cfg, 0x00);
+  }
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
+  for (uint16_t i = 0; i < cfg->width * cfg->height / 8; i++) {
+    ssd1683_write_data(cfg, 0x00);
+  }
+  ssd1683_update(cfg);
+}
+
+void ssd1683_SetRAMValue_BaseMap(const struct ssd1683_config *cfg,
+                                 const uint8_t *data, uint16_t length) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+  ssd1683_update(cfg);
+}
+
+// ============================================================================
+// Partial Refresh Functions
+// ============================================================================
+
+// Partial refresh initialization - different from full refresh
+void ssd1683_hw_init_partial(const struct ssd1683_config *cfg) {
+  ssd1683_pin_init(cfg);
   ssd1683_reset(cfg);
   wait_busy(cfg);
 
-  // Soft reset
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SOFT_RESET);
-  wait_busy(cfg);
-
-  // Set window to full display
-  ssd1683_set_window(cfg, 0, 0, cfg->width - 1, cfg->height - 1);
-
-  // Set cursor to origin
-  ssd1683_set_cursor(cfg, 0, 0);
-  wait_busy(cfg);
-
-  return 0;
-}
-
-// Standard initialization (full quality)
-int ssd1683_init(const struct ssd1683_config *cfg) {
-  int ret = ssd1683_init_common(cfg);
-  if (ret < 0) {
-    return ret;
-  }
-
-  // Display update control
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL);
-  ssd1683_write_data(cfg, 0x40);
-  ssd1683_write_data(cfg, 0x00);
-
-  // Border waveform
-  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
-  ssd1683_write_data(cfg, 0x10);
-
-  // Data entry mode (increment X and Y)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
-  ssd1683_write_data(cfg, 0x03);
-
-  LOG_INF("SSD1683 initialized (standard mode)");
-  return 0;
-}
-
-// Fast initialization (reduced quality, faster refresh)
-int ssd1683_init_fast(const struct ssd1683_config *cfg) {
-  int ret = ssd1683_init_common(cfg);
-  if (ret < 0) {
-    return ret;
-  }
-
-  // Display update control
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL);
-  ssd1683_write_data(cfg, 0x40);
-  ssd1683_write_data(cfg, 0x00);
-
-  // Border waveform (fast mode)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
-  ssd1683_write_data(cfg, 0x05);
-
-  // Write temperature value
-  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_TEMP);
-  ssd1683_write_data(cfg, 0x5A); // 25 degrees C
-
-  // Load temperature value
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_SEQ);
-  ssd1683_write_data(cfg, 0x91);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  wait_busy(cfg);
-
-  // Data entry mode (increment X and Y)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DATA_ENTRY_MODE);
-  ssd1683_write_data(cfg, 0x03);
-
-  LOG_INF("SSD1683 initialized (fast mode)");
-  return 0;
-}
-
-// ============================================================================
-// Display Control Functions
-// ============================================================================
-
-// Clear display to white (set all pixels to 1)
-void ssd1683_clear(const struct ssd1683_config *cfg) {
-  int width_bytes = ssd1683_calc_width_bytes(cfg->width);
-  int total_bytes = width_bytes * cfg->height;
-
-  // Clear BW RAM (0xFF = white)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM_BW);
-  for (int i = 0; i < total_bytes; i++) {
-    ssd1683_write_data(cfg, 0xFF);
-  }
-
-  // Clear RED RAM (0xFF = no red) - only done here to disable red channel
-  // This ensures monochrome operation for all subsequent operations
-  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM_RED);
-  for (int i = 0; i < total_bytes; i++) {
-    ssd1683_write_data(cfg, 0xFF);
-  }
-
-  LOG_INF("Display cleared (monochrome mode)");
-}
-
-// Standard refresh (full update, high quality)
-void ssd1683_refresh(const struct ssd1683_config *cfg) {
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_SEQ);
-  ssd1683_write_data(cfg, 0xF7);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  wait_busy(cfg);
-  LOG_DBG("Display refreshed (standard)");
-}
-
-// Fast refresh (partial waveform, lower quality)
-void ssd1683_refresh_fast(const struct ssd1683_config *cfg) {
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_SEQ);
-  ssd1683_write_data(cfg, 0xC7);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  wait_busy(cfg);
-  LOG_DBG("Display refreshed (fast)");
-}
-
-// Partial refresh (for partial screen updates)
-void ssd1683_refresh_partial(const struct ssd1683_config *cfg) {
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_SEQ);
-  ssd1683_write_data(cfg, 0xFF);
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  wait_busy(cfg);
-  LOG_DBG("Display refreshed (partial)");
-}
-
-// ============================================================================
-// Buffer Operations (Monochrome Mode)
-// ============================================================================
-// NOTE: This driver operates in MONOCHROME mode only.
-// All buffer operations write to BW RAM only. RED RAM is cleared during
-// initialization/clear to ensure no red pixels interfere.
-
-// Flush framebuffer to BW RAM and refresh display
-void ssd1683_flush(const struct ssd1683_config *cfg, uint8_t *image_buffer) {
-  // Set window to full screen
-  ssd1683_set_window(cfg, 0, 0, cfg->width - 1, cfg->height - 1);
-  ssd1683_set_cursor(cfg, 0, 0);
-
-  // Write buffer to BW RAM only
-  ssd1683_write_buffer_to_ram(cfg, SSD1683_CMD_WRITE_RAM_BW, image_buffer,
-                              cfg->width, cfg->height);
-
-  // Auto-refresh after flush
-  ssd1683_refresh(cfg);
-  LOG_DBG("Flushed framebuffer to display");
-}
-
-// ============================================================================
-// Advanced Display Functions (Monochrome Mode)
-// ============================================================================
-
-// Fast display (write and refresh with fast mode)
-void ssd1683_display_fast(const struct ssd1683_config *cfg, uint8_t *image) {
-  ssd1683_set_window(cfg, 0, 0, cfg->width - 1, cfg->height - 1);
-
-  // Write buffer to BW RAM only
-  ssd1683_write_buffer_to_ram(cfg, SSD1683_CMD_WRITE_RAM_BW, image, cfg->width,
-                              cfg->height);
-
-  ssd1683_refresh_fast(cfg);
-  LOG_DBG("Fast display completed");
-}
-
-// Partial display update (update only a region)
-void ssd1683_partial_display(const struct ssd1683_config *cfg, uint16_t x,
-                             uint16_t y, uint16_t w, uint16_t l,
-                             uint8_t *image) {
-  // Configure border waveform for partial update
+  // Set border waveform for partial refresh (0x80 instead of 0x05)
   ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
   ssd1683_write_data(cfg, 0x80);
 
-  // Display update control for partial
-  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL);
+  // Display update control for partial refresh
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
   ssd1683_write_data(cfg, 0x00);
   ssd1683_write_data(cfg, 0x00);
 
+  wait_busy(cfg);
+  LOG_INF("Partial refresh initialization completed");
+}
+
+// Set base/background image for partial refresh (CRITICAL for stable display)
+void ssd1683_set_base_map(const struct ssd1683_config *cfg, const uint8_t *data,
+                          uint16_t length) {
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM2);
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
+  }
+  ssd1683_update_partial(cfg);
+  LOG_INF("Base map set for partial refresh");
+}
+
+// Core partial refresh function - update specific rectangular region
+void ssd1683_partial_refresh(const struct ssd1683_config *cfg, uint16_t x_start,
+                             uint16_t y_start, const uint8_t *data,
+                             uint16_t width, uint16_t height) {
+  uint16_t x_end, y_end;
+
+  // Calculate byte-aligned coordinates
+  x_start = x_start / 8;             // Convert to byte address
+  x_end = x_start + (width / 8) - 1; // Calculate end byte address
+  y_start = y_start;                 // Y coordinates as-is
+  y_end = y_start + height - 1;      // Calculate end Y address
+
+  // Reset for partial refresh
+  ssd1683_reset(cfg);
+
+  // Set border waveform for partial refresh
   ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
   ssd1683_write_data(cfg, 0x80);
 
-  // Set window and cursor to target region
-  ssd1683_set_window(cfg, x, y, x + w - 1, y + l - 1);
-  ssd1683_set_cursor(cfg, x, y);
+  // Display update control for partial refresh
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, 0x00);
 
-  // Write buffer to BW RAM only
-  ssd1683_write_buffer_to_ram(cfg, SSD1683_CMD_WRITE_RAM_BW, image, w, l);
+  // Set RAM X address window
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X);
+  ssd1683_write_data(cfg, x_start);
+  ssd1683_write_data(cfg, x_end);
 
-  ssd1683_refresh_partial(cfg);
-  LOG_DBG("Partial display update completed");
-}
+  // Set RAM Y address window
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y);
+  ssd1683_write_data(cfg, y_start % 256);
+  ssd1683_write_data(cfg, y_start / 256);
+  ssd1683_write_data(cfg, y_end % 256);
+  ssd1683_write_data(cfg, y_end / 256);
 
-// Write display without refreshing (prepare buffer for later refresh)
-void ssd1683_write_display(const struct ssd1683_config *cfg, uint16_t x,
-                           uint16_t y, uint16_t w, uint16_t l, uint8_t *image) {
-  ssd1683_set_window(cfg, x, y, x + w - 1, y + l - 1);
-  ssd1683_set_cursor(cfg, x, y);
+  // Set RAM address counters
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNT);
+  ssd1683_write_data(cfg, x_start);
+  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNT);
+  ssd1683_write_data(cfg, y_start % 256);
+  ssd1683_write_data(cfg, y_start / 256);
 
-  // Write to BW RAM only
-  ssd1683_write_buffer_to_ram(cfg, SSD1683_CMD_WRITE_RAM_BW, image, w, l);
-
-  LOG_DBG("Write display buffer completed (no refresh)");
-}
-
-// ============================================================================
-// Internal Window/Cursor Management
-// ============================================================================
-
-// Set drawing window (defines active area)
-static void ssd1683_set_window(const struct ssd1683_config *cfg,
-                               uint16_t x_start, uint16_t y_start,
-                               uint16_t x_end, uint16_t y_end) {
-  // Set RAM X address start/end (in bytes, divide by 8)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_ADDR);
-  ssd1683_write_data(cfg, (x_start >> 3) & 0xFF);
-  ssd1683_write_data(cfg, (x_end >> 3) & 0xFF);
-
-  // Set RAM Y address start/end (in pixels)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_ADDR);
-  ssd1683_write_data(cfg, y_start & 0xFF);
-  ssd1683_write_data(cfg, (y_start >> 8) & 0xFF);
-  ssd1683_write_data(cfg, y_end & 0xFF);
-  ssd1683_write_data(cfg, (y_end >> 8) & 0xFF);
-}
-
-// Set cursor position (starting point for writes)
-static void ssd1683_set_cursor(const struct ssd1683_config *cfg, uint16_t x,
-                               uint16_t y) {
-  // Set RAM X address counter (in bytes, divide by 8)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_X_COUNTER);
-  ssd1683_write_data(cfg, (x >> 3) & 0xFF);
-
-  // Set RAM Y address counter (in pixels)
-  ssd1683_write_cmd(cfg, SSD1683_CMD_SET_RAM_Y_COUNTER);
-  ssd1683_write_data(cfg, y & 0xFF);
-  ssd1683_write_data(cfg, (y >> 8) & 0xFF);
-}
-
-// ============================================================================
-// Drawing Helper Functions (Application-level)
-// ============================================================================
-
-// Draw vertical line on buffer
-void ssd1683_draw_vline(uint8_t *image, int x, int y_start, int y_end,
-                        int width, int height) {
-  // Validate X coordinate
-  if (x < 0 || x >= width) {
-    return;
+  // Write image data to RAM
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < (height * width / 8); i++) {
+    ssd1683_write_data(cfg, data[i]);
   }
 
-  // Clamp Y coordinates
-  if (y_start < 0)
-    y_start = 0;
-  if (y_end >= height)
-    y_end = height - 1;
-
-  int width_bytes = ssd1683_calc_width_bytes(width);
-
-  for (int y = y_start; y <= y_end; y++) {
-    int byte_index = (x / 8) + y * width_bytes;
-    uint8_t mask = 1 << (7 - (x % 8));
-    image[byte_index] &= ~mask; // Clear bit = black pixel
-  }
+  // Trigger partial update
+  ssd1683_update_partial(cfg);
+  LOG_INF("Partial refresh completed: %dx%d at (%d,%d)", width, height,
+          x_start * 8, y_start);
 }
 
-// Draw horizontal line on buffer
-void ssd1683_draw_hline(uint8_t *image, int x_start, int x_end, int y,
-                        int width, int height) {
-  // Validate Y coordinate
-  if (y < 0 || y >= height) {
-    return;
+// Full screen partial refresh (faster than full refresh, no flickering)
+void ssd1683_partial_refresh_full(const struct ssd1683_config *cfg,
+                                  const uint8_t *data, uint16_t length) {
+  // Reset for partial refresh
+  ssd1683_reset(cfg);
+
+  // Set border waveform for partial refresh
+  ssd1683_write_cmd(cfg, SSD1683_CMD_BORDER_WAVEFORM);
+  ssd1683_write_data(cfg, 0x80);
+
+  // Display update control for partial refresh
+  ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
+  ssd1683_write_data(cfg, 0x00);
+  ssd1683_write_data(cfg, 0x00);
+
+  // Write image data to RAM
+  ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM);
+  for (uint16_t i = 0; i < length; i++) {
+    ssd1683_write_data(cfg, data[i]);
   }
 
-  // Clamp X coordinates
-  if (x_start < 0)
-    x_start = 0;
-  if (x_end >= width)
-    x_end = width - 1;
-
-  int width_bytes = ssd1683_calc_width_bytes(width);
-
-  for (int x = x_start; x <= x_end; x++) {
-    int byte_index = (x / 8) + y * width_bytes;
-    uint8_t mask = 1 << (7 - (x % 8));
-    image[byte_index] &= ~mask; // Clear bit = black pixel
-  }
+  // Trigger partial update
+  ssd1683_update_partial(cfg);
+  LOG_INF("Full screen partial refresh completed");
 }

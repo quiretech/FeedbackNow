@@ -5,18 +5,10 @@
 #include "Ap_29demo.h"  
 
 void setup() {
-#ifdef ESP8266
-   pinMode(D0, INPUT);  //BUSY
-   pinMode(D1, OUTPUT); //RES 
-   pinMode(D2, OUTPUT); //DC   
-   pinMode(D4, OUTPUT); //CS     
-#endif 
-#ifdef Arduino_UNO
-   pinMode(4, INPUT);  //BUSY
-   pinMode(5, OUTPUT); //RES 
-   pinMode(6, OUTPUT); //DC   
-   pinMode(7, OUTPUT); //CS   
-#endif 
+   pinMode(A14, INPUT);  //BUSY
+   pinMode(A15, OUTPUT); //RES 
+   pinMode(A16, OUTPUT); //DC   
+   pinMode(A17, OUTPUT); //CS   
    //SPI
    SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0)); 
    SPI.begin ();  
@@ -32,9 +24,9 @@ void setup() {
 6.When porting the program, set the BUSY pin to input mode and other pins to output mode.
 */
 void loop() {
-   unsigned char i;
+    unsigned char i;
+ 
 #if 1 //Full screen refresh, fast refresh, and partial refresh demostration.
-
       EPD_HW_Init(); //Full screen refresh initialization.
       EPD_WhiteScreen_White(); //Clear screen function.
       EPD_DeepSleep(); //Enter the sleep mode and please do not delete it, otherwise it will reduce the lifespan of the screen.
@@ -44,6 +36,7 @@ void loop() {
       EPD_WhiteScreen_ALL(gImage_1); //To Display one image using full screen refresh.
       EPD_DeepSleep(); //Enter the sleep mode and please do not delete it, otherwise it will reduce the lifespan of the screen.
       delay(2000); //Delay for 2s. 
+            
 			/************Fast refresh mode(1.5s)*******************/
 			EPD_HW_Init_Fast(); //Fast refresh initialization.
 			EPD_WhiteScreen_ALL_Fast(gImage_2); //To display the second image using fast refresh.
@@ -84,10 +77,13 @@ void loop() {
   //After 5 partial refreshes, implement a full screen refresh to clear the ghosting caused by partial refreshes.
   //////////////////////Partial refresh time demo/////////////////////////////////////
       EPD_HW_Init(); //E-paper initialization 
-      EPD_SetRAMValue_BaseMap(gImage_1); //Please do not delete the background color function, otherwise it will cause an unstable display during partial refresh.
+      EPD_SetRAMValue_BaseMap(gImage_p1); //Please do not delete the background color function, otherwise it will cause an unstable display during partial refresh.
       EPD_Dis_PartAll(gImage_p1); //Image 1
+      EPD_Dis_PartAll(gImage_p2); //Image 2
+      EPD_Dis_PartAll(gImage_p3); //Image 3
+      EPD_Dis_PartAll(gImage_p4); //Image 4
       EPD_DeepSleep();//Enter the sleep mode and please do not delete it, otherwise it will reduce the lifespan of the screen.
-      delay(2000); //Delay for 2s. 
+       delay(2000); //Delay for 2s. 
       EPD_HW_Init(); //Full screen refresh initialization.
       EPD_WhiteScreen_White(); //Clear screen function.
       EPD_DeepSleep(); //Enter the sleep mode and please do not delete it, otherwise it will reduce the lifespan of the screen.
@@ -99,23 +95,10 @@ void loop() {
       EPD_HW_Init_180(); //Full screen refresh initialization.
       EPD_WhiteScreen_ALL(gImage_1); //To Display one image using full screen refresh.
       EPD_DeepSleep(); //Enter the sleep mode and please do not delete it, otherwise it will reduce the lifespan of the screen.
-      delay(2000); //Delay for 2s.
+      delay(2000);//Delay for 2s.
   #endif        
+  
 #endif
-
-#ifdef ESP8266
-  while(1) 
-    {
-     Sys_run();//System run
-     LED_run();//Breathing lamp
-    }
-#endif
-#ifdef Arduino_UNO
- while(1);  // The program stops here   
-#endif
-}
-
-
-
-
-//////////////////////////////////END//////////////////////////////////////////////////
+  while(1); // The program stops here
+  
+} 

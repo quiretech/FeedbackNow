@@ -3,7 +3,7 @@
 
 #define EPD_WIDTH   400 
 #define EPD_HEIGHT  300
-#define EPD_ARRAY  15000
+#define EPD_ARRAY  EPD_WIDTH*EPD_HEIGHT/8  
 
 //Full screen refresh display
 void EPD_HW_Init(void); 

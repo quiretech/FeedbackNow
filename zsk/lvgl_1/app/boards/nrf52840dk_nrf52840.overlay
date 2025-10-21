@@ -62,15 +62,17 @@
 		reg = <0>;
 		spi-max-frequency = <4000000>;
 		
-		/* Display dimensions */
+		/* Display dimensions (400x300 pixels) */
 		width = <400>;
 		height = <300>;
 		
 		/* Control GPIOs */
-		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
-		// fast-mode;
+		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;    /* Data/Command control */
+		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;   /* Hardware reset */
+		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;   /* Busy status input */
+		
+		/* Display configuration */
+		fast-mode;  /* Enable fast refresh mode for quicker updates */
 	};
 };
 
