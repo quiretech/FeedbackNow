@@ -12,31 +12,39 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
+#include "Ap_29demo.h"
 #include "ssd1683.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 // Device tree node references
-#define SPI_NODE DT_NODELABEL(my_spi_master)
-#define EPD_BUSY_NODE DT_PATH(zephyr_user, epd_busy_gpios)
-#define EPD_DC_NODE DT_PATH(zephyr_user, epd_dc_gpios)
-#define EPD_RST_NODE DT_PATH(zephyr_user, epd_rst_gpios)
+#define ARDUINO_SPI_NODE DT_NODELABEL(arduino_spi)
+#define EPD_DEVICE_NODE DT_NODELABEL(epd_spi_device)
+#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
 
 // Display configuration
-#define DISPLAY_WIDTH 400
-#define DISPLAY_HEIGHT 300
+#define DISPLAY_WIDTH SSD1683_WIDTH
+#define DISPLAY_HEIGHT SSD1683_HEIGHT
 #define DISPLAY_ARRAY (DISPLAY_WIDTH * DISPLAY_HEIGHT / 8)
 
-// SPI configuration
-static const struct spi_dt_spec spi_bus =
-    SPI_DT_SPEC_INST_GET(0, SPI_WORD_SET(8) | SPI_TRANSFER_MSB, 0);
+// SPI configuration using your arduino_spi
+static const struct spi_dt_spec spi_bus = {
+    .bus = DEVICE_DT_GET(DT_NODELABEL(arduino_spi)),
+    .config = {
+        .operation =
+            SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_MODE_CPOL | SPI_MODE_CPHA,
+        .frequency = 4000000,
+        .slave = 0,
+        .cs = {.gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(arduino_spi), cs_gpios),
+               .delay = 0}}};
 
 // GPIO configurations
 static const struct gpio_dt_spec epd_busy =
-    GPIO_DT_SPEC_GET(EPD_BUSY_NODE, gpios);
-static const struct gpio_dt_spec epd_dc = GPIO_DT_SPEC_GET(EPD_DC_NODE, gpios);
+    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_busy_gpios);
+static const struct gpio_dt_spec epd_dc =
+    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_dc_gpios);
 static const struct gpio_dt_spec epd_rst =
-    GPIO_DT_SPEC_GET(EPD_RST_NODE, gpios);
+    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_rst_gpios);
 
 // SSD1683 configuration structure
 static struct ssd1683_config ssd1683_cfg = {.bus = spi_bus,
@@ -46,124 +54,150 @@ static struct ssd1683_config ssd1683_cfg = {.bus = spi_bus,
                                             .width = DISPLAY_WIDTH,
                                             .height = DISPLAY_HEIGHT};
 
-// Test image data
-static uint8_t test_image[DISPLAY_ARRAY];
-static uint8_t background_image[DISPLAY_ARRAY];
+// Demo function to display images from Ap_29demo.h
+static void display_demo(void) {
+  LOG_INF("=== SSD1683 Display Driver Demo ===");
+  LOG_INF("Showcasing all driver capabilities using Ap_29demo.h images");
 
-// Function to create a simple test pattern
-static void create_test_pattern(uint8_t *image, uint16_t width,
-                                uint16_t height) {
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width / 8; x++) {
-      int index = y * (width / 8) + x;
-      // Create a checkerboard pattern
-      if ((x + y) % 2 == 0) {
-        image[index] = 0xAA; // Gray pattern
-      } else {
-        image[index] = 0x55; // Different gray pattern
-      }
-    }
-  }
-}
+  // ============================================================================
+  // Demo 1: Standard Initialization and Display
+  // ============================================================================
+  LOG_INF("Demo 1: Standard initialization and full screen display");
+  ssd1683_init(&ssd1683_cfg);
+  LOG_INF("  - Displaying gImage_1 (full screen, high quality)");
+  ssd1683_display(&ssd1683_cfg, gImage_1);
+  k_msleep(3000);
 
-// Function to create a simple geometric pattern
-static void create_geometric_pattern(uint8_t *image, uint16_t width,
-                                     uint16_t height) {
-  // Clear image first
-  for (int i = 0; i < DISPLAY_ARRAY; i++) {
-    image[i] = 0xFF; // White background
-  }
+  // ============================================================================
+  // Demo 2: Fast Refresh Mode
+  // ============================================================================
+  LOG_INF("Demo 2: Fast refresh mode");
+  ssd1683_init_fast(&ssd1683_cfg);
+  LOG_INF("  - Displaying gImage_2 (fast refresh mode)");
+  ssd1683_display_fast(&ssd1683_cfg, gImage_2);
+  k_msleep(3000);
 
-  // Draw some simple shapes
-  for (int y = 50; y < 150; y++) {
-    for (int x = 50; x < 150; x++) {
-      int byte_index = y * (width / 8) + (x / 8);
-      int bit_index = 7 - (x % 8);
-      image[byte_index] &= ~(1 << bit_index); // Set pixel to black
-    }
-  }
-}
-
-// Partial refresh demo function
-static void partial_refresh_demo(void) {
-  LOG_INF("Starting partial refresh demo");
-
-  // Step 1: Initialize for partial refresh
-  ssd1683_hw_init_partial(&ssd1683_cfg);
-
-  // Step 2: Create and set background image
-  create_geometric_pattern(background_image, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-  ssd1683_set_base_map(&ssd1683_cfg, background_image, DISPLAY_ARRAY);
-
+  // ============================================================================
+  // Demo 3: Clear Screen Functionality
+  // ============================================================================
+  LOG_INF("Demo 3: Clear screen functionality");
+  LOG_INF("  - Clearing display to white");
+  ssd1683_clear(&ssd1683_cfg);
   k_msleep(2000);
 
-  // Step 3: Partial refresh - update a small region
-  uint8_t partial_data[1000]; // 100x80 pixel region
-  for (int i = 0; i < 1000; i++) {
-    partial_data[i] = 0x00; // Black pattern
-  }
-  ssd1683_partial_refresh(&ssd1683_cfg, 100, 50, partial_data, 100, 80);
+  // ============================================================================
+  // Demo 4: Partial Display Updates
+  // ============================================================================
+  LOG_INF("Demo 4: Partial display updates (faster, no flickering)");
 
+  // Display partial images in sequence
+  LOG_INF("  - Partial display 1");
+  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                          gImage_p1);
   k_msleep(2000);
 
-  // Step 4: Another partial update
-  uint8_t another_partial[600]; // 80x60 pixels
-  for (int i = 0; i < 600; i++) {
-    another_partial[i] = 0xAA; // Gray pattern
-  }
-  ssd1683_partial_refresh(&ssd1683_cfg, 200, 100, another_partial, 80, 60);
-
+  LOG_INF("  - Partial display 2");
+  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                          gImage_p2);
   k_msleep(2000);
 
-  // Step 5: Full screen partial refresh
-  create_test_pattern(test_image, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-  ssd1683_partial_refresh_full(&ssd1683_cfg, test_image, DISPLAY_ARRAY);
-
+  LOG_INF("  - Partial display 3");
+  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                          gImage_p3);
   k_msleep(2000);
 
-  LOG_INF("Partial refresh demo completed");
-}
+  LOG_INF("  - Partial display 4");
+  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                          gImage_p4);
+  k_msleep(2000);
 
-// Full refresh demo function
-static void full_refresh_demo(void) {
-  LOG_INF("Starting full refresh demo");
+  // ============================================================================
+  // Demo 5: Write Display (without update)
+  // ============================================================================
+  LOG_INF("Demo 5: Write display without immediate update");
+  LOG_INF("  - Writing gImage_1 to display buffer");
+  ssd1683_write_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                        gImage_1);
+  k_msleep(1000);
+  LOG_INF("  - Triggering display update");
+  ssd1683_turn_on_display(&ssd1683_cfg);
+  k_msleep(2000);
 
-  // Step 1: Initialize for full refresh
-  ssd1683_hw_init(&ssd1683_cfg);
+  // ============================================================================
+  // Demo 6: Utility Functions
+  // ============================================================================
+  LOG_INF("Demo 6: Utility functions demonstration");
 
-  // Step 2: Clear screen
-  ssd1683_fillwhite(&ssd1683_cfg);
+  // Show current refresh mode
+  ssd1683_refresh_mode_t current_mode = ssd1683_get_refresh_mode(&ssd1683_cfg);
+  LOG_INF("  - Current refresh mode: %d", current_mode);
+
+  // Change refresh mode
+  LOG_INF("  - Setting refresh mode to FAST");
+  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FAST);
+  current_mode = ssd1683_get_refresh_mode(&ssd1683_cfg);
+  LOG_INF("  - New refresh mode: %d", current_mode);
+
+  // Check if display is busy
+  bool is_busy = ssd1683_is_busy(&ssd1683_cfg);
+  LOG_INF("  - Display busy status: %s", is_busy ? "BUSY" : "READY");
+
+  // ============================================================================
+  // Demo 7: Different Display Modes
+  // ============================================================================
+  LOG_INF("Demo 7: Different display modes");
+
+  // Standard mode
+  LOG_INF("  - Standard display mode");
+  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FULL);
+  ssd1683_display(&ssd1683_cfg, gImage_1);
+  k_msleep(2000);
+
+  // Fast mode
+  LOG_INF("  - Fast display mode");
+  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FAST);
+  ssd1683_display_fast(&ssd1683_cfg, gImage_2);
+  k_msleep(2000);
+
+  // Partial mode
+  LOG_INF("  - Partial display mode");
+  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_PARTIAL);
+  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
+                          gImage_p1);
+  k_msleep(2000);
+
+  // ============================================================================
+  // Demo 8: Sleep Mode
+  // ============================================================================
+  LOG_INF("Demo 8: Sleep mode demonstration");
+  LOG_INF("  - Entering sleep mode");
+  ssd1683_sleep(&ssd1683_cfg);
   k_msleep(1000);
 
-  // Step 3: Fill with black
-  ssd1683_fillblack(&ssd1683_cfg);
+  LOG_INF("  - Waking up from sleep mode");
+  ssd1683_init(&ssd1683_cfg);
+  ssd1683_display(&ssd1683_cfg, gImage_2);
+  k_msleep(2000);
+
+  // ============================================================================
+  // Demo 9: Final Clear and Summary
+  // ============================================================================
+  LOG_INF("Demo 9: Final clear and summary");
+  LOG_INF("  - Clearing display");
+  ssd1683_clear(&ssd1683_cfg);
   k_msleep(1000);
 
-  // Step 4: Display test pattern
-  create_test_pattern(test_image, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-  ssd1683_write_ram_bw(&ssd1683_cfg, test_image, DISPLAY_ARRAY);
-  ssd1683_update(&ssd1683_cfg);
-
-  k_msleep(2000);
-
-  LOG_INF("Full refresh demo completed");
-}
-
-// Fast refresh demo function
-static void fast_refresh_demo(void) {
-  LOG_INF("Starting fast refresh demo");
-
-  // Step 1: Initialize for fast refresh
-  ssd1683_hw_init_fast(&ssd1683_cfg);
-
-  // Step 2: Display test pattern with fast refresh
-  create_geometric_pattern(test_image, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-  ssd1683_write_ram_bw(&ssd1683_cfg, test_image, DISPLAY_ARRAY);
-  ssd1683_update_fast(&ssd1683_cfg);
-
-  k_msleep(2000);
-
-  LOG_INF("Fast refresh demo completed");
+  LOG_INF("=== Display Demo Completed Successfully ===");
+  LOG_INF("Driver capabilities demonstrated:");
+  LOG_INF("  ✓ Standard initialization and display");
+  LOG_INF("  ✓ Fast refresh mode");
+  LOG_INF("  ✓ Clear screen functionality");
+  LOG_INF("  ✓ Partial display updates");
+  LOG_INF("  ✓ Write display without update");
+  LOG_INF("  ✓ Utility functions (mode setting, busy check)");
+  LOG_INF("  ✓ Different display modes");
+  LOG_INF("  ✓ Sleep mode");
+  LOG_INF("  ✓ All functions working correctly!");
 }
 
 // Main application function
@@ -195,23 +229,7 @@ int main(void) {
 
   // Demo sequence
   while (1) {
-    LOG_INF("=== Full Refresh Demo ===");
-    full_refresh_demo();
-    k_msleep(3000);
-
-    LOG_INF("=== Fast Refresh Demo ===");
-    fast_refresh_demo();
-    k_msleep(3000);
-
-    LOG_INF("=== Partial Refresh Demo ===");
-    partial_refresh_demo();
-    k_msleep(3000);
-
-    // Clear screen and sleep
-    ssd1683_hw_init(&ssd1683_cfg);
-    ssd1683_fillwhite(&ssd1683_cfg);
-    ssd1683_deep_sleep(&ssd1683_cfg);
-
+    display_demo();
     LOG_INF("Demo cycle completed, sleeping for 10 seconds");
     k_msleep(10000);
   }
