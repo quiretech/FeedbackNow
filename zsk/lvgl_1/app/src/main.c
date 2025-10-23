@@ -1,31 +1,28 @@
 /*
- * SSD1683 E-Paper Display Demo
+ * SSD1683 E-Paper Display Hello World Demo
  *
- * This application demonstrates the use of the SSD1683 raw driver
- * with device tree configuration for partial refresh functionality.
+ * Minimal hello world application using the refactored SSD1683 driver.
+ * Shows simple patterns and demonstrates basic display functionality.
  */
 
-// #include <zephyr/device.h>
+#include "AP_29demo.h"
+#include "ssd1683.h"
+#include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
-#include "Ap_29demo.h"
-#include "ssd1683.h"
-
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 // Device tree node references
 #define ARDUINO_SPI_NODE DT_NODELABEL(arduino_spi)
-#define EPD_DEVICE_NODE DT_NODELABEL(epd_spi_device)
 #define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
 
 // Display configuration
 #define DISPLAY_WIDTH SSD1683_WIDTH
 #define DISPLAY_HEIGHT SSD1683_HEIGHT
-#define DISPLAY_ARRAY (DISPLAY_WIDTH * DISPLAY_HEIGHT / 8)
 
 // SPI configuration using your arduino_spi
 static const struct spi_dt_spec spi_bus = {
@@ -47,162 +44,66 @@ static const struct gpio_dt_spec epd_rst =
     GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_rst_gpios);
 
 // SSD1683 configuration structure
-static struct ssd1683_config ssd1683_cfg = {.bus = spi_bus,
-                                            .dc = epd_dc,
-                                            .rst = epd_rst,
-                                            .busy = epd_busy,
-                                            .width = DISPLAY_WIDTH,
-                                            .height = DISPLAY_HEIGHT};
+static const struct ssd1683_config ssd1683_cfg = {.bus = spi_bus,
+                                                  .dc = epd_dc,
+                                                  .rst = epd_rst,
+                                                  .busy = epd_busy,
+                                                  .width = DISPLAY_WIDTH,
+                                                  .height = DISPLAY_HEIGHT};
 
-// Demo function to display images from Ap_29demo.h
-static void display_demo(void) {
-  LOG_INF("=== SSD1683 Display Driver Demo ===");
-  LOG_INF("Showcasing all driver capabilities using Ap_29demo.h images");
+// SSD1683 device data
+static struct ssd1683_data ssd1683_data;
+// SSD1683 device structure
+static const struct device ssd1683_dev = {
+    .config = &ssd1683_cfg,
+    .data = &ssd1683_data,
+};
 
-  // ============================================================================
-  // Demo 1: Standard Initialization and Display
-  // ============================================================================
-  LOG_INF("Demo 1: Standard initialization and full screen display");
-  ssd1683_init(&ssd1683_cfg);
-  LOG_INF("  - Displaying gImage_1 (full screen, high quality)");
-  ssd1683_display(&ssd1683_cfg, gImage_1);
-  k_msleep(3000);
+static int epd_hello_world_demo(void) {
+  int ret;
 
-  // ============================================================================
-  // Demo 2: Fast Refresh Mode
-  // ============================================================================
-  LOG_INF("Demo 2: Fast refresh mode");
-  ssd1683_init_fast(&ssd1683_cfg);
-  LOG_INF("  - Displaying gImage_2 (fast refresh mode)");
-  ssd1683_display_fast(&ssd1683_cfg, gImage_2);
-  k_msleep(3000);
+  LOG_INF("Starting SSD1683 Hello World Demo");
 
-  // ============================================================================
-  // Demo 3: Clear Screen Functionality
-  // ============================================================================
-  LOG_INF("Demo 3: Clear screen functionality");
-  LOG_INF("  - Clearing display to white");
-  ssd1683_clear(&ssd1683_cfg);
+  // Initialize the driver
+  ret = ssd1683_init(&ssd1683_dev, &ssd1683_cfg);
+  if (ret < 0) {
+    LOG_ERR("Failed to initialize SSD1683: %d", ret);
+    return ret;
+  }
+  LOG_INF("SSD1683 initialized successfully");
+
+  // Power on the display
+  ret = ssd1683_power_on(&ssd1683_dev);
+  if (ret < 0) {
+    LOG_ERR("Failed to power on SSD1683: %d", ret);
+    return ret;
+  }
+  LOG_INF("Display powered on");
+
+  ret = ssd1683_set_fast_update(&ssd1683_dev, false);
+  if (ret < 0) {
+    LOG_ERR("Failed to set fast update: %d", ret);
+    return ret;
+  }
+  LOG_INF("Fast update set to false");
+
+  // Clear screen to black first (more visible)
+  ret = ssd1683_clear_screen(&ssd1683_dev, 0xFF);
+  if (ret < 0) {
+    LOG_ERR("Failed to clear screen: %d", ret);
+    return ret;
+  }
+  LOG_INF("Screen cleared to black");
+
+  // Wait a bit to see if anything appears
   k_msleep(2000);
-
-  // ============================================================================
-  // Demo 4: Partial Display Updates
-  // ============================================================================
-  LOG_INF("Demo 4: Partial display updates (faster, no flickering)");
-
-  // Display partial images in sequence
-  LOG_INF("  - Partial display 1");
-  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                          gImage_p1);
-  k_msleep(2000);
-
-  LOG_INF("  - Partial display 2");
-  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                          gImage_p2);
-  k_msleep(2000);
-
-  LOG_INF("  - Partial display 3");
-  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                          gImage_p3);
-  k_msleep(2000);
-
-  LOG_INF("  - Partial display 4");
-  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                          gImage_p4);
-  k_msleep(2000);
-
-  // ============================================================================
-  // Demo 5: Write Display (without update)
-  // ============================================================================
-  LOG_INF("Demo 5: Write display without immediate update");
-  LOG_INF("  - Writing gImage_1 to display buffer");
-  ssd1683_write_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                        gImage_1);
-  k_msleep(1000);
-  LOG_INF("  - Triggering display update");
-  ssd1683_turn_on_display(&ssd1683_cfg);
-  k_msleep(2000);
-
-  // ============================================================================
-  // Demo 6: Utility Functions
-  // ============================================================================
-  LOG_INF("Demo 6: Utility functions demonstration");
-
-  // Show current refresh mode
-  ssd1683_refresh_mode_t current_mode = ssd1683_get_refresh_mode(&ssd1683_cfg);
-  LOG_INF("  - Current refresh mode: %d", current_mode);
-
-  // Change refresh mode
-  LOG_INF("  - Setting refresh mode to FAST");
-  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FAST);
-  current_mode = ssd1683_get_refresh_mode(&ssd1683_cfg);
-  LOG_INF("  - New refresh mode: %d", current_mode);
-
-  // Check if display is busy
-  bool is_busy = ssd1683_is_busy(&ssd1683_cfg);
-  LOG_INF("  - Display busy status: %s", is_busy ? "BUSY" : "READY");
-
-  // ============================================================================
-  // Demo 7: Different Display Modes
-  // ============================================================================
-  LOG_INF("Demo 7: Different display modes");
-
-  // Standard mode
-  LOG_INF("  - Standard display mode");
-  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FULL);
-  ssd1683_display(&ssd1683_cfg, gImage_1);
-  k_msleep(2000);
-
-  // Fast mode
-  LOG_INF("  - Fast display mode");
-  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_FAST);
-  ssd1683_display_fast(&ssd1683_cfg, gImage_2);
-  k_msleep(2000);
-
-  // Partial mode
-  LOG_INF("  - Partial display mode");
-  ssd1683_set_refresh_mode(&ssd1683_cfg, SSD1683_REFRESH_PARTIAL);
-  ssd1683_partial_display(&ssd1683_cfg, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-                          gImage_p1);
-  k_msleep(2000);
-
-  // ============================================================================
-  // Demo 8: Sleep Mode
-  // ============================================================================
-  LOG_INF("Demo 8: Sleep mode demonstration");
-  LOG_INF("  - Entering sleep mode");
-  ssd1683_sleep(&ssd1683_cfg);
-  k_msleep(1000);
-
-  LOG_INF("  - Waking up from sleep mode");
-  ssd1683_init(&ssd1683_cfg);
-  ssd1683_display(&ssd1683_cfg, gImage_2);
-  k_msleep(2000);
-
-  // ============================================================================
-  // Demo 9: Final Clear and Summary
-  // ============================================================================
-  LOG_INF("Demo 9: Final clear and summary");
-  LOG_INF("  - Clearing display");
-  ssd1683_clear(&ssd1683_cfg);
-  k_msleep(1000);
-
-  LOG_INF("=== Display Demo Completed Successfully ===");
-  LOG_INF("Driver capabilities demonstrated:");
-  LOG_INF("  ✓ Standard initialization and display");
-  LOG_INF("  ✓ Fast refresh mode");
-  LOG_INF("  ✓ Clear screen functionality");
-  LOG_INF("  ✓ Partial display updates");
-  LOG_INF("  ✓ Write display without update");
-  LOG_INF("  ✓ Utility functions (mode setting, busy check)");
-  LOG_INF("  ✓ Different display modes");
-  LOG_INF("  ✓ Sleep mode");
-  LOG_INF("  ✓ All functions working correctly!");
 }
 
 // Main application function
 int main(void) {
-  LOG_INF("SSD1683 E-Paper Display Demo Starting");
+  int ret;
+
+  LOG_INF("SSD1683 E-Paper Display Hello World Demo Starting");
 
   // Check if all devices are ready
   if (!spi_is_ready_dt(&spi_bus)) {
@@ -225,14 +126,33 @@ int main(void) {
     return -ENODEV;
   }
 
-  LOG_INF("All devices ready, starting demo sequence");
+  LOG_INF("All hardware devices ready");
 
-  // Demo sequence
-  while (1) {
-    display_demo();
-    LOG_INF("Demo cycle completed, sleeping for 10 seconds");
-    k_msleep(10000);
+  // First run hardware diagnostic test
+
+  // Run the hello world demo
+  ret = epd_hello_world_demo();
+  if (ret < 0) {
+    LOG_ERR("Hello world demo failed: %d", ret);
+    return ret;
   }
 
-  return 0;
+  // Wait a bit to see the result
+  k_msleep(5000);
+
+  // Power off to save energy
+  ret = ssd1683_power_off(&ssd1683_dev);
+  if (ret < 0) {
+    LOG_ERR("Failed to power off: %d", ret);
+  } else {
+    LOG_INF("Display powered off");
+  }
+
+  LOG_INF("Hello World demo completed successfully!");
+
+  // Main loop - just keep the system running
+  while (1) {
+    k_msleep(10000);
+    LOG_INF("System running...");
+  }
 }
