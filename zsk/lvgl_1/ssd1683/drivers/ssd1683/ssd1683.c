@@ -551,6 +551,12 @@ int ssd1683_init(const struct device *dev, const struct ssd1683_config *cfg) {
   data->is_hibernating = false;  // like _hibernating
   data->last_update_time = 0;
 
+  ret = ssd1683_clear_screen(dev, 0xFF);
+  if (ret < 0) {
+    LOG_ERR("Failed to clear screen: %d", ret);
+    return ret;
+  }
+
   LOG_INF("SSD1683 driver initialized");
   return 0;
 }

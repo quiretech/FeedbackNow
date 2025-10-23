@@ -1,158 +1,106 @@
-/*
- * SSD1683 E-Paper Display Hello World Demo
- *
- * Minimal hello world application using the refactored SSD1683 driver.
- * Shows simple patterns and demonstrates basic display functionality.
- */
-
-#include "AP_29demo.h"
 #include "ssd1683.h"
+#include <lvgl.h>
 #include <zephyr/device.h>
-#include <zephyr/drivers/gpio.h>
-#include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/printk.h>
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-// Device tree node references
-#define ARDUINO_SPI_NODE DT_NODELABEL(arduino_spi)
-#define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
+LV_FONT_DECLARE(roboto_36);
 
-// Display configuration
-#define DISPLAY_WIDTH SSD1683_WIDTH
-#define DISPLAY_HEIGHT SSD1683_HEIGHT
+static lv_obj_t *counter_label;
 
-// SPI configuration using your arduino_spi
-static const struct spi_dt_spec spi_bus = {
-    .bus = DEVICE_DT_GET(DT_NODELABEL(arduino_spi)),
-    .config = {
-        .operation =
-            SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_MODE_CPOL | SPI_MODE_CPHA,
-        .frequency = 4000000,
-        .slave = 0,
-        .cs = {.gpio = GPIO_DT_SPEC_GET(DT_NODELABEL(arduino_spi), cs_gpios),
-               .delay = 0}}};
+// Display buffer for LVGL - allocate ~10% of screen (400x30 pixels = 1500
+// bytes)
+#define BUFFER_HEIGHT 30
+static uint8_t draw_buf[SSD1683_WIDTH * BUFFER_HEIGHT / 8];
 
-// GPIO configurations
-static const struct gpio_dt_spec epd_busy =
-    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_busy_gpios);
-static const struct gpio_dt_spec epd_dc =
-    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_dc_gpios);
-static const struct gpio_dt_spec epd_rst =
-    GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, epd_rst_gpios);
+// Tick timer for LVGL
+static void lv_tick_cb(struct k_timer *dummy) { lv_tick_inc(1); }
+K_TIMER_DEFINE(lv_tick_timer, lv_tick_cb, NULL);
 
-// SSD1683 configuration structure
-static const struct ssd1683_config ssd1683_cfg = {.bus = spi_bus,
-                                                  .dc = epd_dc,
-                                                  .rst = epd_rst,
-                                                  .busy = epd_busy,
-                                                  .width = DISPLAY_WIDTH,
-                                                  .height = DISPLAY_HEIGHT};
+// Flush callback for LVGL 9 + Zephyr
+static void lv_flush_cb(lv_display_t *disp, const lv_area_t *area,
+                        unsigned char *color_map) {
+  const struct device *dev =
+      (const struct device *)lv_display_get_user_data(disp);
 
-// SSD1683 device data
-static struct ssd1683_data ssd1683_data;
-// SSD1683 device structure
-static const struct device ssd1683_dev = {
-    .config = &ssd1683_cfg,
-    .data = &ssd1683_data,
-};
+  uint16_t w = area->x2 - area->x1 + 1;
+  uint16_t h = area->y2 - area->y1 + 1;
 
-static int epd_hello_world_demo(void) {
-  int ret;
+  struct display_buffer_descriptor desc = {
+      .buf_size = ((w + 7) / 8) * h, // width in bytes * height
+      .width = w,
+      .height = h,
+      .pitch = (w + 7) / 8, // bytes per row
+  };
 
-  LOG_INF("Starting SSD1683 Hello World Demo");
+  display_write(dev, area->x1, area->y1, &desc, color_map);
 
-  // Initialize the driver
-  ret = ssd1683_init(&ssd1683_dev, &ssd1683_cfg);
-  if (ret < 0) {
-    LOG_ERR("Failed to initialize SSD1683: %d", ret);
-    return ret;
-  }
-  LOG_INF("SSD1683 initialized successfully");
-
-  // Power on the display
-  ret = ssd1683_power_on(&ssd1683_dev);
-  if (ret < 0) {
-    LOG_ERR("Failed to power on SSD1683: %d", ret);
-    return ret;
-  }
-  LOG_INF("Display powered on");
-
-  ret = ssd1683_set_fast_update(&ssd1683_dev, false);
-  if (ret < 0) {
-    LOG_ERR("Failed to set fast update: %d", ret);
-    return ret;
-  }
-  LOG_INF("Fast update set to false");
-
-  // Clear screen to black first (more visible)
-  ret = ssd1683_clear_screen(&ssd1683_dev, 0xFF);
-  if (ret < 0) {
-    LOG_ERR("Failed to clear screen: %d", ret);
-    return ret;
-  }
-  LOG_INF("Screen cleared to black");
-
-  // Wait a bit to see if anything appears
-  k_msleep(2000);
+  lv_display_flush_ready(disp);
 }
 
-// Main application function
 int main(void) {
-  int ret;
+  LOG_INF("=== INITIALIZING LVGL DISPLAY ===");
 
-  LOG_INF("SSD1683 E-Paper Display Hello World Demo Starting");
-
-  // Check if all devices are ready
-  if (!spi_is_ready_dt(&spi_bus)) {
-    LOG_ERR("SPI bus not ready");
+  const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+  if (!device_is_ready(display_dev)) {
+    LOG_ERR("Display device not ready");
     return -ENODEV;
   }
 
-  if (!gpio_is_ready_dt(&epd_busy)) {
-    LOG_ERR("BUSY GPIO not ready");
-    return -ENODEV;
+  LOG_INF("Display device ready: %s", display_dev->name);
+
+  // Initialize LVGL
+  lv_init();
+
+  // Create LVGL display object for SSD1683 size (400x300 monochrome)
+  lv_display_t *disp = lv_display_create(SSD1683_WIDTH, SSD1683_HEIGHT);
+  if (disp == NULL) {
+    LOG_ERR("Failed to create LVGL display");
+    return -ENOMEM;
   }
 
-  if (!gpio_is_ready_dt(&epd_dc)) {
-    LOG_ERR("DC GPIO not ready");
-    return -ENODEV;
-  }
+  // Set display buffer
+  lv_display_set_buffers(disp, draw_buf, NULL, sizeof(draw_buf),
+                         LV_DISPLAY_RENDER_MODE_PARTIAL);
 
-  if (!gpio_is_ready_dt(&epd_rst)) {
-    LOG_ERR("RST GPIO not ready");
-    return -ENODEV;
-  }
+  // Set color format to 1-bit monochrome
+  lv_display_set_color_format(disp, LV_COLOR_FORMAT_I1);
 
-  LOG_INF("All hardware devices ready");
+  // Set flush callback and user data
+  lv_display_set_flush_cb(disp, lv_flush_cb);
+  lv_display_set_user_data(disp, (void *)display_dev);
 
-  // First run hardware diagnostic test
+  // Start LVGL tick timer (1ms tick)
+  // k_timer_start(&lv_tick_timer, K_MSEC(1), K_MSEC(1));
 
-  // Run the hello world demo
-  ret = epd_hello_world_demo();
-  if (ret < 0) {
-    LOG_ERR("Hello world demo failed: %d", ret);
-    return ret;
-  }
+  LOG_INF("LVGL initialized successfully");
 
-  // Wait a bit to see the result
-  k_msleep(5000);
+  // Create UI
+  lv_obj_t *scr = lv_scr_act();
 
-  // Power off to save energy
-  ret = ssd1683_power_off(&ssd1683_dev);
-  if (ret < 0) {
-    LOG_ERR("Failed to power off: %d", ret);
-  } else {
-    LOG_INF("Display powered off");
-  }
+  // Set background to white for e-paper
+  lv_obj_set_style_bg_color(scr, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-  LOG_INF("Hello World demo completed successfully!");
+  // Create counter label
+  counter_label = lv_label_create(scr);
+  lv_label_set_text(counter_label, "Counter: 0");
+  lv_obj_set_style_text_font(counter_label, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_color(counter_label, lv_color_white(), LV_PART_MAIN);
+  lv_obj_align(counter_label, LV_ALIGN_CENTER, 0, 0);
 
-  // Main loop - just keep the system running
+  LOG_INF("UI created, starting counter");
+
+  int counter = 0;
   while (1) {
-    k_msleep(10000);
-    LOG_INF("System running...");
+    char buf[32];
+    snprintf(buf, sizeof(buf), "Counter: %d", counter++);
+    lv_label_set_text(counter_label, buf);
+
+    lv_task_handler(); // process LVGL tasks and flush buffer
+    k_sleep(K_SECONDS(100));
   }
 }

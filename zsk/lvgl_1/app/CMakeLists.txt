@@ -11,11 +11,14 @@ project(lvgl_1)
 # Keep source files in src/ and list them below.
 target_sources(app PRIVATE
     src/main.c
+    fonts/roboto_28.c
+    fonts/roboto_36.c
+    fonts/roboto_bold_42.c
 )
 
 # Include directories
 target_include_directories(app PRIVATE
     ../ssd1683/include
     ${gen_dir}
+    fonts
 )
-

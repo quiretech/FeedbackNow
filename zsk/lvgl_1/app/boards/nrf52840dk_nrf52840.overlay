@@ -1,55 +1,55 @@
-/* Arduino SPI configuration for EPD and NFC sharing */
-&arduino_spi {
-	status = "okay";
-	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>; /* EPD CS */
+// /* Arduino SPI configuration for EPD and NFC sharing */
+// &arduino_spi {
+// 	status = "okay";
+// 	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>; /* EPD CS */
 
-	/* EPD device on arduino_spi */
-	epd_spi_device:
-		spi-dev-epd@0
-		{
-			compatible = "spi-device";
-			reg = <0>;
-			spi-max-frequency = <4000000>;
-		};
-};
+// 	/* EPD device on arduino_spi */
+// 	epd_spi_device:
+// 		spi-dev-epd@0
+// 		{
+// 			compatible = "spi-device";
+// 			reg = <0>;
+// 			spi-max-frequency = <4000000>;
+// 		};
+// };
 
-/{
-	zephyr,user
-	{
-		epd_busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
-		epd_dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-		epd_rst-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+// /{
+// 	zephyr,user
+// 	{
+// 		epd_busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
+// 		epd_dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+// 		epd_rst-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
+// 	};
+// };
+
+/ {
+	chosen {
+		zephyr,display = &ssd1683;
 	};
 };
 
-// / {
-// 	chosen {
-// 		zephyr,display = &ssd1683;
-// 	};
-// };
 
-
-// &arduino_spi {
-// 	status = "okay";
-// 	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;  /* EPD CS */
+&arduino_spi {
+	status = "okay";
+	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>;  /* EPD CS */
 	
-// 	/* SSD1683 E-Paper Display - Zephyr Display Driver */
-// 	ssd1683: ssd1683@0 {
-// 		compatible = "solomon,ssd1683";
-// 		reg = <0>;
-// 		spi-max-frequency = <4000000>;
+	/* SSD1683 E-Paper Display - Zephyr Display Driver */
+	ssd1683: ssd1683@0 {
+		compatible = "solomon,ssd1683";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
 		
-// 		/* Display dimensions (400x300 pixels) */
-// 		width = <400>;
-// 		height = <300>;
+		/* Display dimensions (400x300 pixels) */
+		width = <400>;
+		height = <300>;
 		
-// 		/* Control GPIOs */
-// 		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;    /* Data/Command control */
-// 		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;   /* Hardware reset */
-// 		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;   /* Busy status input */
+		/* Control GPIOs */
+		dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;    /* Data/Command control */
+		reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;   /* Hardware reset */
+		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;   /* Busy status input */
 		
-// 		/* Display configuration */
-// 		fast-mode;  /* Enable fast refresh mode for quicker updates */
-// 	};
-// };
+		/* Display configuration */
+		fast-mode;  /* Enable fast refresh mode for quicker updates */
+	};
+};
 
