@@ -20,6 +20,6 @@ cmake:
   sysbuild: ON
 version: 0.1.0
 west:
-  command: C:\ncs\toolchains\c1a76fddb2\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --pristine
+  command: C:\ncs\toolchains\c1a76fddb2\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --pristine -t menuconfig
   topdir: c:\ncs\v3.0.2
   version: 1.4.0

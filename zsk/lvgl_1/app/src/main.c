@@ -1,106 +1,82 @@
-#include "ssd1683.h"
 #include <lvgl.h>
-#include <zephyr/device.h>
+#include <string.h>
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
-#include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
-
-LV_FONT_DECLARE(roboto_36);
-
-static lv_obj_t *counter_label;
-
-// Display buffer for LVGL - allocate ~10% of screen (400x30 pixels = 1500
-// bytes)
-#define BUFFER_HEIGHT 30
-static uint8_t draw_buf[SSD1683_WIDTH * BUFFER_HEIGHT / 8];
-
-// Tick timer for LVGL
-static void lv_tick_cb(struct k_timer *dummy) { lv_tick_inc(1); }
-K_TIMER_DEFINE(lv_tick_timer, lv_tick_cb, NULL);
-
-// Flush callback for LVGL 9 + Zephyr
-static void lv_flush_cb(lv_display_t *disp, const lv_area_t *area,
-                        unsigned char *color_map) {
-  const struct device *dev =
-      (const struct device *)lv_display_get_user_data(disp);
-
-  uint16_t w = area->x2 - area->x1 + 1;
-  uint16_t h = area->y2 - area->y1 + 1;
-
-  struct display_buffer_descriptor desc = {
-      .buf_size = ((w + 7) / 8) * h, // width in bytes * height
-      .width = w,
-      .height = h,
-      .pitch = (w + 7) / 8, // bytes per row
-  };
-
-  display_write(dev, area->x1, area->y1, &desc, color_map);
-
-  lv_display_flush_ready(disp);
-}
+// Settings
+static const int32_t sleep_time_ms = 50; // Target 20 FPS
 
 int main(void) {
-  LOG_INF("=== INITIALIZING LVGL DISPLAY ===");
+  uint32_t count = 0;
+  char buf[11] = {0};
+  const struct device *display;
+  lv_obj_t *hello_label;
+  lv_obj_t *counter_label;
+  lv_obj_t *rect;
+  lv_obj_t *circle;
+  lv_style_t rect_style;
+  lv_style_t circle_style;
+  lv_point_t rect_points[5] = {{0, 0}, {120, 0}, {120, 20}, {0, 20}, {0, 0}};
+  const uint32_t circle_radius = 15;
 
-  const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
-  if (!device_is_ready(display_dev)) {
-    LOG_ERR("Display device not ready");
-    return -ENODEV;
+  // Initialize the display
+  display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
+  if (!device_is_ready(display)) {
+    printk("Error: display not ready\r\n");
+    return 0;
   }
 
-  LOG_INF("Display device ready: %s", display_dev->name);
+  // Create a static label widget
+  hello_label = lv_label_create(lv_scr_act());
+  lv_label_set_text(hello_label, "Hello, World!");
+  lv_obj_align(hello_label, LV_ALIGN_TOP_MID, 0, 5);
 
-  // Initialize LVGL
-  lv_init();
+  // Create a dynamic label widget
+  counter_label = lv_label_create(lv_scr_act());
+  lv_obj_align(counter_label, LV_ALIGN_BOTTOM_MID, 0, 0);
 
-  // Create LVGL display object for SSD1683 size (400x300 monochrome)
-  lv_display_t *disp = lv_display_create(SSD1683_WIDTH, SSD1683_HEIGHT);
-  if (disp == NULL) {
-    LOG_ERR("Failed to create LVGL display");
-    return -ENOMEM;
-  }
+  // Set line style
+  lv_style_init(&rect_style);
+  lv_style_set_line_color(&rect_style, lv_color_hex(0x0000FF));
+  lv_style_set_line_width(&rect_style, 3);
 
-  // Set display buffer
-  lv_display_set_buffers(disp, draw_buf, NULL, sizeof(draw_buf),
-                         LV_DISPLAY_RENDER_MODE_PARTIAL);
+  // Create a rectangle out of lines
+  rect = lv_line_create(lv_scr_act());
+  lv_obj_add_style(rect, &rect_style, 0);
+  lv_line_set_points(rect, rect_points,
+                     sizeof(rect_points) / sizeof(rect_points[0]));
+  lv_obj_align(rect, LV_ALIGN_TOP_MID, 0, 0);
 
-  // Set color format to 1-bit monochrome
-  lv_display_set_color_format(disp, LV_COLOR_FORMAT_I1);
+  // Set circle style
+  lv_style_init(&circle_style);
+  lv_style_set_radius(&circle_style, circle_radius);
+  lv_style_set_bg_opa(&circle_style, LV_OPA_100);
+  lv_style_set_bg_color(&circle_style, lv_color_hex(0xFF0000));
 
-  // Set flush callback and user data
-  lv_display_set_flush_cb(disp, lv_flush_cb);
-  lv_display_set_user_data(disp, (void *)display_dev);
+  // Create an object with the new style
+  circle = lv_obj_create(lv_scr_act());
+  lv_obj_set_size(circle, circle_radius * 2, circle_radius * 2);
+  lv_obj_add_style(circle, &circle_style, 0);
+  lv_obj_align(circle, LV_ALIGN_CENTER, 0, 5);
 
-  // Start LVGL tick timer (1ms tick)
-  // k_timer_start(&lv_tick_timer, K_MSEC(1), K_MSEC(1));
+  // Disable display blanking
+  display_blanking_off(display);
+  // lv_task_handler();
 
-  LOG_INF("LVGL initialized successfully");
-
-  // Create UI
-  lv_obj_t *scr = lv_scr_act();
-
-  // Set background to white for e-paper
-  lv_obj_set_style_bg_color(scr, lv_color_black(), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
-
-  // Create counter label
-  counter_label = lv_label_create(scr);
-  lv_label_set_text(counter_label, "Counter: 0");
-  lv_obj_set_style_text_font(counter_label, &roboto_36, LV_PART_MAIN);
-  lv_obj_set_style_text_color(counter_label, lv_color_white(), LV_PART_MAIN);
-  lv_obj_align(counter_label, LV_ALIGN_CENTER, 0, 0);
-
-  LOG_INF("UI created, starting counter");
-
-  int counter = 0;
+  // Do forever
   while (1) {
-    char buf[32];
-    snprintf(buf, sizeof(buf), "Counter: %d", counter++);
-    lv_label_set_text(counter_label, buf);
 
-    lv_task_handler(); // process LVGL tasks and flush buffer
-    k_sleep(K_SECONDS(100));
+    // Update counter label every second
+    count++;
+    if ((count % (1000 / sleep_time_ms)) == 0) {
+      sprintf(buf, "%d", count / (1000 / sleep_time_ms));
+      lv_label_set_text(counter_label, buf);
+    }
+
+    // Must be called periodically
+    lv_task_handler();
+
+    // Sleep
+    k_msleep(sleep_time_ms);
   }
 }
