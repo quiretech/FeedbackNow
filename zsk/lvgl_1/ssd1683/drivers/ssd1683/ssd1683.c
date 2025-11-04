@@ -673,30 +673,18 @@ int ssd1683_write_screen_buffer_again(const struct device *dev, uint8_t value) {
   return 0;
 }
 
-int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
-                        int16_t x, int16_t y, int16_t w, int16_t h, bool invert,
-                        bool mirror_y) {
+/**
+ * @brief Internal helper: Write image data to a specific RAM buffer
+ *
+ * This is the core image writing logic that can write to either
+ * CURRENT (0x24) or PREVIOUS (0x26) buffer.
+ */
+static int _ssd1683_write_image_buffer(const struct device *dev,
+                                       uint8_t command, const uint8_t *bitmap,
+                                       int16_t x, int16_t y, int16_t w,
+                                       int16_t h, bool invert, bool mirror_y) {
   const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
   int ret;
-
-  if (!dev || !bitmap) {
-    return -EINVAL;
-  }
-
-  if (!data->is_initialized) {
-    ret = _ssd1683_init_display(dev);
-    if (ret < 0)
-      return ret;
-  }
-
-  if (data->is_first_write) {
-    ret =
-        _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT,
-                                     0xFF); // initial full screen buffer clean
-    if (ret < 0)
-      return ret;
-  }
 
   int16_t wb = (w + 7) / 8;   // width bytes, bitmaps are padded
   x -= x % 8;                 // byte boundary
@@ -721,7 +709,7 @@ int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
   if (ret < 0)
     return ret;
 
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_WRITE_RAM_CURRENT);
+  ret = _ssd1683_write_cmd(cfg, command);
   if (ret < 0)
     return ret;
 
@@ -742,6 +730,78 @@ int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
     }
   }
 
+  return 0;
+}
+
+int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
+                        int16_t x, int16_t y, int16_t w, int16_t h, bool invert,
+                        bool mirror_y) {
+  struct ssd1683_data *data = dev->data;
+  int ret;
+
+  if (!dev || !bitmap) {
+    return -EINVAL;
+  }
+
+  if (!data->is_initialized) {
+    ret = _ssd1683_init_display(dev);
+    if (ret < 0)
+      return ret;
+  }
+
+  if (data->is_first_write) {
+    ret =
+        _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT,
+                                     0xFF); // initial full screen buffer clean
+    if (ret < 0)
+      return ret;
+  }
+
+  // Write to CURRENT buffer only (0x24)
+  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, bitmap,
+                                    x, y, w, h, invert, mirror_y);
+  if (ret < 0) {
+    LOG_ERR("Failed to write image to CURRENT buffer");
+    return ret;
+  }
+
+  LOG_DBG("Image written to CURRENT buffer");
+  return 0;
+}
+
+int ssd1683_write_image_again(const struct device *dev, const uint8_t *bitmap,
+                              int16_t x, int16_t y, int16_t w, int16_t h,
+                              bool invert, bool mirror_y) {
+  struct ssd1683_data *data = dev->data;
+  int ret;
+
+  if (!dev || !bitmap) {
+    return -EINVAL;
+  }
+
+  if (!data->is_initialized) {
+    LOG_ERR("Display not initialized");
+    return -EINVAL;
+  }
+
+  // Write to PREVIOUS buffer first (0x26) - this syncs it with what will be
+  // displayed
+  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_PREVIOUS, bitmap,
+                                    x, y, w, h, invert, mirror_y);
+  if (ret < 0) {
+    LOG_ERR("Failed to write image to PREVIOUS buffer");
+    return ret;
+  }
+
+  // Then write to CURRENT buffer (0x24)
+  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, bitmap,
+                                    x, y, w, h, invert, mirror_y);
+  if (ret < 0) {
+    LOG_ERR("Failed to write image to CURRENT buffer");
+    return ret;
+  }
+
+  LOG_DBG("Image written to BOTH buffers (synchronized)");
   return 0;
 }
 

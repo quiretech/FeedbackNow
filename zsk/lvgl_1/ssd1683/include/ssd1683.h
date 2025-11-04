@@ -137,7 +137,11 @@ int ssd1683_write_screen_buffer(const struct device *dev, uint8_t value);
 int ssd1683_write_screen_buffer_again(const struct device *dev, uint8_t value);
 
 /**
- * @brief Write image data to display memory
+ * @brief Write image data to display memory (CURRENT buffer only)
+ *
+ * This writes the image to the CURRENT buffer (0x24). After a partial refresh,
+ * you should call ssd1683_write_image_again() to synchronize the PREVIOUS
+ * buffer.
  *
  * @param dev Device pointer
  * @param bitmap Image data buffer
@@ -152,6 +156,30 @@ int ssd1683_write_screen_buffer_again(const struct device *dev, uint8_t value);
 int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
                         int16_t x, int16_t y, int16_t w, int16_t h, bool invert,
                         bool mirror_y);
+
+/**
+ * @brief Write image data to BOTH display buffers (for differential updates)
+ *
+ * This is critical for partial refresh to work correctly. After a partial
+ * refresh, call this function to synchronize the PREVIOUS buffer (0x26) with
+ * the CURRENT buffer (0x24). This ensures the next partial refresh compares
+ * against the correct previous state.
+ *
+ * Like the reference GxEPD2 library's writeImageAgain() function.
+ *
+ * @param dev Device pointer
+ * @param bitmap Image data buffer
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param w Width in pixels
+ * @param h Height in pixels
+ * @param invert Invert image data
+ * @param mirror_y Mirror image vertically
+ * @return 0 on success, negative error code on failure
+ */
+int ssd1683_write_image_again(const struct device *dev, const uint8_t *bitmap,
+                              int16_t x, int16_t y, int16_t w, int16_t h,
+                              bool invert, bool mirror_y);
 
 /**
  * @brief Refresh the display

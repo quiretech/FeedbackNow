@@ -132,7 +132,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
 
   LOG_DBG("Update type: %s", partial_update ? "partial" : "full");
 
-  // Write image data to display
+  // STEP 1: Write image data to CURRENT buffer (0x24)
   ret = ssd1683_write_image(dev, (const uint8_t *)buf, x, y, desc->width,
                             desc->height, false, false);
   if (ret < 0) {
@@ -140,8 +140,17 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
     return ret;
   }
 
-  // Refresh the display
-  ret = ssd1683_refresh(dev, partial_update);
+  // STEP 2: Sync PREVIOUS buffer (0x26) with CURRENT buffer
+  // CRITICAL for partial refresh - syncs both buffers to prevent ghosting
+  ret = ssd1683_write_image_again(dev, (const uint8_t *)buf, x, y, desc->width,
+                                  desc->height, false, false);
+  if (ret < 0) {
+    LOG_ERR("Failed to sync buffers: %d", ret);
+    // Continue anyway - current buffer already written
+  }
+
+  // STEP 3: Refresh the display (partial or full)
+  ret = ssd1683_refresh(dev, false);
   if (ret < 0) {
     LOG_ERR("Failed to refresh display: %d", ret);
     return ret;

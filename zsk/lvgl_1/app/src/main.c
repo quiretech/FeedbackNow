@@ -61,7 +61,6 @@ int main(void) {
 
   // Disable display blanking
   display_blanking_off(display);
-  // lv_task_handler();
 
   // Do forever
   while (1) {
