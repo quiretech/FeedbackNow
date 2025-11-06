@@ -9,184 +9,204 @@
  * graphics frameworks.
  */
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/pm/device.h>
 
 #include "ssd1683.h"
 
 LOG_MODULE_REGISTER(ssd1683_display, CONFIG_DISPLAY_LOG_LEVEL);
 
 #define DT_DRV_COMPAT solomon_ssd1683
+
 // ============================================================================
-// Driver Data Structures
+// Display Driver Data Structures
 // ============================================================================
 
 /**
- * Per-instance runtime data (RAM)
- * Currently minimal, can be extended for framebuffer caching if needed
+ * @brief SSD1683 display driver data structure
  */
 struct ssd1683_display_data {
-  bool blanking_on; // Track blanking state
+  bool is_initialized;
+  bool is_blanked;
 };
 
 /**
- * Per-instance configuration (ROM) - populated from device tree
- * This wraps our existing ssd1683_config structure
+ * @brief SSD1683 display driver configuration structure
  */
 struct ssd1683_display_config {
-  struct ssd1683_config epd_config; // Embed low-level config
-  bool fast_mode;                   // Use fast init/refresh
+  struct ssd1683_config epd_config;
+  bool fast_mode;
 };
 
 // ============================================================================
-// Helper Functions
+// Display Driver API Implementation
 // ============================================================================
 
 /**
- * Get the low-level EPD config from device
- */
-static inline const struct ssd1683_config *
-get_epd_config(const struct device *dev) {
-  const struct ssd1683_display_config *cfg = dev->config;
-  return &cfg->epd_config;
-}
-
-// ============================================================================
-// Zephyr Display API Implementation
-// ============================================================================
-
-/**
- * Turn display blanking on (enter deep sleep mode)
+ * @brief Turn display blanking on (power off)
  */
 static int ssd1683_display_blanking_on(const struct device *dev) {
   struct ssd1683_display_data *data = dev->data;
-  const struct ssd1683_config *epd_cfg = get_epd_config(dev);
+  int ret;
 
-  LOG_INF("Blanking ON (deep sleep)");
-  ssd1683_deep_sleep(epd_cfg);
-  data->blanking_on = true;
+  LOG_DBG("Turning display blanking on");
 
+  ret = ssd1683_power_off(dev);
+  if (ret < 0) {
+    LOG_ERR("Failed to power off display: %d", ret);
+    return ret;
+  }
+
+  data->is_blanked = true;
   return 0;
 }
 
 /**
- * Turn display blanking off (wake from deep sleep and re-initialize)
+ * @brief Turn display blanking off (power on)
  */
 static int ssd1683_display_blanking_off(const struct device *dev) {
   struct ssd1683_display_data *data = dev->data;
-  const struct ssd1683_display_config *cfg = dev->config;
   int ret;
 
-  LOG_INF("Blanking OFF (wake up)");
+  LOG_DBG("Turning display blanking off");
 
-  // Re-initialize display after waking from deep sleep
-  if (cfg->fast_mode) {
-    ret = ssd1683_init_fast(&cfg->epd_config);
-  } else {
-    ret = ssd1683_init(&cfg->epd_config);
+  ret = ssd1683_power_on(dev);
+  if (ret < 0) {
+    LOG_ERR("Failed to power on display: %d", ret);
+    return ret;
   }
 
-  if (ret == 0) {
-    data->blanking_on = false;
-  }
-
-  return ret;
+  data->is_blanked = false;
+  return 0;
 }
 
 /**
- * Write framebuffer data to display
- *
- * This is the core function that LVGL and other graphics libraries will call.
+ * @brief Write image data to display
  */
 static int ssd1683_display_write(const struct device *dev, const uint16_t x,
                                  const uint16_t y,
                                  const struct display_buffer_descriptor *desc,
                                  const void *buf) {
-  const struct ssd1683_config *epd_cfg = get_epd_config(dev);
+  struct ssd1683_display_data *data = dev->data;
+  int ret;
+  bool partial_update;
 
-  LOG_DBG("Write: x=%d, y=%d, w=%d, h=%d, pitch=%d, buf_size=%d", x, y,
-          desc->width, desc->height, desc->pitch, desc->buf_size);
+  LOG_DBG("Writing to display: x=%d, y=%d, w=%d, h=%d", x, y, desc->width,
+          desc->height);
 
-  // Full screen update (most common case)
-  if (x == 0 && y == 0 && desc->width == epd_cfg->width &&
-      desc->height == epd_cfg->height) {
-
-    LOG_DBG("Full screen flush");
-    ssd1683_flush(epd_cfg, (uint8_t *)buf);
-    return 0;
+  // Validate parameters
+  if (desc == NULL || buf == NULL) {
+    LOG_ERR("Invalid parameters: desc=%p, buf=%p", desc, buf);
+    return -EINVAL;
   }
 
-  // Partial screen update
-  LOG_DBG("Partial screen update");
-  ssd1683_write_display(epd_cfg, x, y, desc->width, desc->height,
-                        (uint8_t *)buf);
-  ssd1683_refresh_partial(epd_cfg);
+  if (desc->width == 0 || desc->height == 0) {
+    LOG_ERR("Invalid dimensions: w=%d, h=%d", desc->width, desc->height);
+    return -EINVAL;
+  }
 
+  if (x + desc->width > SSD1683_WIDTH || y + desc->height > SSD1683_HEIGHT) {
+    LOG_ERR("Write area exceeds display bounds: x=%d, y=%d, w=%d, h=%d", x, y,
+            desc->width, desc->height);
+    return -EINVAL;
+  }
+
+  // Ensure display is powered on
+  if (data->is_blanked) {
+    ret = ssd1683_display_blanking_off(dev);
+    if (ret < 0) {
+      return ret;
+    }
+  }
+
+  // Determine if this is a partial or full update
+  // Partial update if the write area is smaller than the full screen
+  partial_update =
+      (desc->width < SSD1683_WIDTH) || (desc->height < SSD1683_HEIGHT);
+
+  LOG_DBG("Update type: %s", partial_update ? "partial" : "full");
+
+  // STEP 1: Write image data to CURRENT buffer (0x24)
+  ret = ssd1683_write_image(dev, (const uint8_t *)buf, x, y, desc->width,
+                            desc->height, false, false);
+  if (ret < 0) {
+    LOG_ERR("Failed to write image data: %d", ret);
+    return ret;
+  }
+
+  // STEP 2: Sync PREVIOUS buffer (0x26) with CURRENT buffer
+  // CRITICAL for partial refresh - syncs both buffers to prevent ghosting
+  ret = ssd1683_write_image_again(dev, (const uint8_t *)buf, x, y, desc->width,
+                                  desc->height, false, false);
+  if (ret < 0) {
+    LOG_ERR("Failed to sync buffers: %d", ret);
+    // Continue anyway - current buffer already written
+  }
+
+  // STEP 3: Refresh the display (partial or full)
+  ret = ssd1683_refresh(dev, false);
+  if (ret < 0) {
+    LOG_ERR("Failed to refresh display: %d", ret);
+    return ret;
+  }
+
+  LOG_DBG("Display write completed successfully");
   return 0;
 }
 
 /**
- * Clear the display (set all pixels to white)
- *
- * Uses the low-level clear function from the driver
- */
-static int ssd1683_display_clear(const struct device *dev) {
-  const struct ssd1683_config *epd_cfg = get_epd_config(dev);
-
-  LOG_INF("Clearing display");
-
-  // Use low-level clear function
-  ssd1683_clear(epd_cfg);
-  ssd1683_refresh(epd_cfg);
-
-  return 0;
-}
-
-/**
- * Get display capabilities
- *
- * Reports display specifications to the graphics framework
+ * @brief Get display capabilities
  */
 static void
 ssd1683_display_get_capabilities(const struct device *dev,
-                                 struct display_capabilities *caps) {
-  const struct ssd1683_config *epd_cfg = get_epd_config(dev);
+                                 struct display_capabilities *capabilities) {
+  if (capabilities == NULL) {
+    return;
+  }
 
-  memset(caps, 0, sizeof(struct display_capabilities));
+  LOG_DBG("Getting display capabilities");
 
-  caps->x_resolution = epd_cfg->width;
-  caps->y_resolution = epd_cfg->height;
-
-  // Pixel format: MONO10 = 1 bit/pixel, 1=white, 0=black
-  caps->supported_pixel_formats = PIXEL_FORMAT_MONO10;
-  caps->current_pixel_format = PIXEL_FORMAT_MONO10;
-
-  // Screen info:
-  // - MONO_MSB_FIRST: MSB is leftmost pixel
-  // - EPD: Electrophoretic Display
-  caps->screen_info = SCREEN_INFO_MONO_MSB_FIRST | SCREEN_INFO_EPD;
-
-  caps->current_orientation = DISPLAY_ORIENTATION_NORMAL;
-
-  LOG_DBG("Capabilities: %dx%d, MONO10, MSB_FIRST, EPD", caps->x_resolution,
-          caps->y_resolution);
+  capabilities->x_resolution = SSD1683_WIDTH;
+  capabilities->y_resolution = SSD1683_HEIGHT;
+  capabilities->supported_pixel_formats = PIXEL_FORMAT_MONO01;
+  capabilities->current_pixel_format = PIXEL_FORMAT_MONO01;
+  capabilities->screen_info = SCREEN_INFO_MONO_MSB_FIRST | SCREEN_INFO_EPD;
 }
 
 /**
- * Set pixel format (not supported - format is fixed)
+ * @brief Set pixel format (not supported for e-paper displays)
  */
 static int
 ssd1683_display_set_pixel_format(const struct device *dev,
-                                 const enum display_pixel_format pf) {
-  if (pf == PIXEL_FORMAT_MONO10) {
-    return 0; // Already in correct format
+                                 const enum display_pixel_format pixel_format) {
+  LOG_DBG("Set pixel format requested: %d", pixel_format);
+
+  // E-paper displays only support MONO01 format
+  if (pixel_format != PIXEL_FORMAT_MONO01) {
+    LOG_WRN("Pixel format %d not supported, only MONO01 is supported",
+            pixel_format);
+    return -ENOTSUP;
   }
 
-  LOG_ERR("Unsupported pixel format: %d", pf);
+  return 0;
+}
+
+/**
+ * @brief Set display orientation (not supported for e-paper displays)
+ */
+static int
+ssd1683_display_set_orientation(const struct device *dev,
+                                const enum display_orientation orientation) {
+  LOG_DBG("Set orientation requested: %d", orientation);
+
+  // E-paper displays have fixed orientation
+  LOG_WRN("Orientation change not supported for e-paper displays");
   return -ENOTSUP;
 }
 
@@ -200,77 +220,43 @@ static const struct display_driver_api ssd1683_display_api = {
     .write = ssd1683_display_write,
     .get_capabilities = ssd1683_display_get_capabilities,
     .set_pixel_format = ssd1683_display_set_pixel_format,
+    .set_orientation = ssd1683_display_set_orientation,
+    // .clear = ssd1683_display_clear,
     // Not implemented (return -ENOTSUP by default):
     // .read = NULL,
     // .get_framebuffer = NULL,
     // .set_brightness = NULL,
     // .set_contrast = NULL,
-    // .set_orientation = NULL,
 };
 
 // ============================================================================
-// Device Initialization
+// Display Driver Initialization
 // ============================================================================
 
 /**
- * Initialize the display driver
- *
- * Called by Zephyr during boot (POST_KERNEL phase)
+ * @brief Initialize the SSD1683 display driver
  */
 static int ssd1683_display_init(const struct device *dev) {
-  const struct ssd1683_display_config *cfg = dev->config;
+  const struct ssd1683_display_config *config = dev->config;
   struct ssd1683_display_data *data = dev->data;
   int ret;
 
   LOG_INF("Initializing SSD1683 display driver");
 
-  // Check if SPI bus is ready
-  if (!spi_is_ready_dt(&cfg->epd_config.bus)) {
-    LOG_ERR("SPI bus not ready");
-    return -ENODEV;
-  }
-
-  // Check if GPIO devices are ready
-  if (!gpio_is_ready_dt(&cfg->epd_config.dc)) {
-    LOG_ERR("DC GPIO not ready");
-    return -ENODEV;
-  }
-  if (!gpio_is_ready_dt(&cfg->epd_config.rst)) {
-    LOG_ERR("RST GPIO not ready");
-    return -ENODEV;
-  }
-  if (!gpio_is_ready_dt(&cfg->epd_config.busy)) {
-    LOG_ERR("BUSY GPIO not ready");
-    return -ENODEV;
-  }
-
-  // Initialize the low-level EPD driver
-  if (cfg->fast_mode) {
-    LOG_INF("Using fast mode initialization");
-    ret = ssd1683_init_fast(&cfg->epd_config);
-  } else {
-    LOG_INF("Using standard mode initialization");
-    ret = ssd1683_init(&cfg->epd_config);
-  }
-
+  // Initialize the low-level SSD1683 driver
+  ret = ssd1683_init(dev, &config->epd_config);
   if (ret < 0) {
-    LOG_ERR("EPD initialization failed: %d", ret);
+    LOG_ERR("Failed to initialize SSD1683 driver: %d", ret);
     return ret;
   }
 
-  // Clear display on startup
-  ssd1683_clear(&cfg->epd_config);
-  ssd1683_refresh(&cfg->epd_config);
-
-  data->blanking_on = false;
+  // Set initial state
+  data->is_initialized = true;
+  data->is_blanked = false;
 
   LOG_INF("SSD1683 display driver initialized successfully");
   return 0;
 }
-
-// ============================================================================
-// Device Instantiation Macro
-// ============================================================================
 
 /**
  * Macro to instantiate the driver for each device tree node

@@ -1,10 +1,13 @@
 menuconfig SSD1683
 	bool "SSD1683 EPD Display Driver"
-	depends on DISPLAY
 	depends on SPI
 	depends on GPIO
 	help
 	  Enable driver for SSD1683 EPD display controller.
+	  
+	  The SSD1683 is a tri-color (black/white/red) EPD controller supporting
+	  displays up to 400x300 pixels. This driver provides both low-level
+	  control functions and a high-level device API.
 
 if SSD1683
 

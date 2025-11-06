@@ -1,8 +1,10 @@
+#include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
 
+extern struct k_msgq lora_downlink_msgq;
 #include "lora_app.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -52,8 +54,22 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
           flags & LORAWAN_DATA_PENDING, rssi, snr,
           !!(flags & LORAWAN_TIME_UPDATED));
 
-  if (hex_data && len > 0) {
-    LOG_HEXDUMP_INF(hex_data, len, "Payload: ");
+  if (!hex_data || len == 0) {
+    return;
+  }
+
+  LOG_HEXDUMP_INF(hex_data, len, "Payload:");
+
+  // Convert binary bytes -> hex string
+  char hex_str[2 * len + 1];
+  for (uint8_t i = 0; i < len; i++) {
+    sprintf(&hex_str[i * 2], "%02X", hex_data[i]);
+  }
+  hex_str[2 * len] = '\0';
+
+  // Enqueue the hex string for decoding/display
+  if (k_msgq_put(&lora_downlink_msgq, hex_str, K_NO_WAIT) != 0) {
+    LOG_WRN("Downlink message queue full, dropping payload");
   }
 }
 

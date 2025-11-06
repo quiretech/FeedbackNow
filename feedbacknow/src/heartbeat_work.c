@@ -15,9 +15,9 @@ static void heartbeat_work_handler(struct k_work *work) {
   hb_msg.port = HEARTBEAT_PORT;
   hb_msg.len = 4;
   hb_msg.data[0] = 0x00;
-  hb_msg.data[1] = 0x11;
-  hb_msg.data[2] = 0x22;
-  hb_msg.data[3] = 0x33;
+  hb_msg.data[1] = 0x00;
+  hb_msg.data[2] = 0x00;
+  hb_msg.data[3] = 0x00;
 
   hb_msg.confirmed = HEARTBEAT_CONFIRM_BOOL;
 

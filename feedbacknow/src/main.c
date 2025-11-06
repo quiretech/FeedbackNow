@@ -1,216 +1,199 @@
+// #include "heartbeat_work.h"
+// #include "led_manager.h"
+// #include "lora_app.h"
+// #include "lora_manager.h"
+// #include "nfc_manager.h"
+// #include "state_manager.h"
+// #include "sys_config.h"
+// #include "system_init.h"
+// #include "system_monitor.h"
 
-// // #include "buttons.h"
-// // #include "leds.h"
-// // #include "nvs.h"
-// // #include "system_init.h"
-// // #include <zephyr/kernel.h>
-// // #include <zephyr/logging/log.h>
-
-// // LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
-
-// // int main(void) {
-// //   system_init();
-
-// //   while (1) {
-// //     k_sleep(K_SECONDS(1));
-// //   }
-// // }
-
+// #include <lvgl.h>
 // #include <zephyr/device.h>
+// #include <zephyr/drivers/display.h>
 // #include <zephyr/kernel.h>
 // #include <zephyr/logging/log.h>
 
-// #include <zephyr/drivers/flash.h>
-// #include <zephyr/fs/nvs.h>
-// #include <zephyr/lorawan/lorawan.h>
-// #include <zephyr/storage/flash_map.h>
+// LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-// #include <zephyr/drivers/gpio.h>
+// // External font declarations
+// LV_FONT_DECLARE(roboto_28);
+// LV_FONT_DECLARE(roboto_36);
+// LV_FONT_DECLARE(roboto_bold_42);
 
-// #include "buttons.h"
-// #include "lora_app.h"
-// #include "nvs.h"
-
-// #define DELAY K_MSEC(10000)
-// #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
-
-// // #define NVS_LORAWAN_KEYS
-
-// LOG_MODULE_REGISTER(main);
-
-// char data[] = {'h', 'e', 'l', 'l', 'o', 'w', 'o', 'r', 'l', 'd'};
-
-// static void dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t
-// snr,
-//                         uint8_t len, const uint8_t *hex_data) {
-//   LOG_INF("Port %d, Pending %d, RSSI %ddB, SNR %ddBm, Time %d", port,
-//           flags & LORAWAN_DATA_PENDING, rssi, snr,
-//           !!(flags & LORAWAN_TIME_UPDATED));
-//   if (hex_data) {
-//     LOG_HEXDUMP_INF(hex_data, len, "Payload: ");
-//   }
-// }
-
-// static void lorwan_datarate_changed(enum lorawan_datarate dr) {
-//   uint8_t unused, max_size;
-
-//   lorawan_get_payload_sizes(&unused, &max_size);
-//   LOG_INF("New Datarate: DR_%d, Max Payload %d", dr, max_size);
-// }
+// lv_obj_t *downlink_label; // Global label pointer
+// K_MSGQ_DEFINE(lora_downlink_msgq, 64, 4,
+//               4); // holds text payloads (64 bytes max, 4 slots)
 
 // int main(void) {
-//   system_init();
-//   int ret;
-//   uint16_t dev_nonce = 0;
-//   ssize_t bytes_written;
+//   LOG_INF("FeedbackNow System Starting...");
 
-// #ifdef NVS_LORAWAN_KEYS
-//   uint8_t dev_eui[8];
-//   uint8_t join_eui[8];
-//   uint8_t app_key[16];
-// #else
-//   uint8_t dev_eui[] = LORAWAN_DEV_EUI;
-//   uint8_t join_eui[] = LORAWAN_JOIN_EUI;
-//   uint8_t app_key[] = LORAWAN_APP_KEY;
-// #endif
-
-// #ifdef NVS_LORAWAN_KEYS
-//   nvs_manager_read_or_generate(NVS_LORAWAN_DEV_EUI_ID, dev_eui,
-//                                sizeof(dev_eui));
-//   nvs_manager_read_or_generate(NVS_LORAWAN_JOIN_EUI_ID, join_eui,
-//                                sizeof(join_eui));
-//   nvs_manager_read_or_generate(NVS_LORAWAN_APP_KEY_ID, app_key,
-//                                sizeof(app_key));
-// #endif
-
-//   // Init Lorawan Device & Functions
-
-//   const struct device *lora_dev;
-//   struct lorawan_join_config join_cfg;
-//   struct lorawan_downlink_cb downlink_cb = {.port = LW_RECV_PORT_ANY,
-//                                             .cb = dl_callback};
-//   lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
-//   if (!device_is_ready(lora_dev)) {
-//     LOG_ERR("%s: device not ready.", lora_dev->name);
-//     return 0;
-//   } else {
-//     LOG_INF("%s: device ready.", lora_dev->name);
+//   // Initialize all subsystems
+//   int ret = system_init();
+//   if (ret != 0) {
+//     LOG_ERR("System initialization failed: %d", ret);
+//     return ret;
 //   }
 
-// #if defined(CONFIG_LORAMAC_REGION_EU868)
-//   ret = lorawan_set_region(LORAWAN_REGION_EU868);
-//   if (ret < 0) {
-//     LOG_ERR("lorawan_set_region failed: %d", ret);
-//     return 0;
-//   }
-// #endif
-
-//   ret = lorawan_start();
-//   if (ret < 0) {
-//     LOG_ERR("lorawan_start failed: %d", ret);
-//     return 0;
+//   // Initialize new architecture components
+//   ret = state_manager_init();
+//   if (ret != 0) {
+//     LOG_ERR("State manager initialization failed: %d", ret);
+//     return ret;
 //   }
 
-//   lorawan_register_downlink_callback(&downlink_cb);
-//   lorawan_register_dr_changed_callback(lorwan_datarate_changed);
-
-//   // Read keys and dev_nonce from NVS using nvs_manager_read
-//   ret = nvs_manager_read(NVS_DEVNONCE_ID, &dev_nonce, sizeof(dev_nonce));
-//   if (ret >= 0) {
-//     LOG_INF("Read dev_nonce from NVS: %d", dev_nonce);
-//   } else {
-//     LOG_INF("Dev nonce not found in NVS, using 0");
-//     dev_nonce = 0;
+//   ret = led_manager_init();
+//   if (ret != 0) {
+//     LOG_ERR("LED manager initialization failed: %d", ret);
+//     return ret;
 //   }
 
-// #ifdef NVS_LORAWAN_KEYS
-//   ret = nvs_manager_read(NVS_LORAWAN_DEV_EUI_ID, dev_eui, sizeof(dev_eui));
-//   if (ret >= 0) {
-//     LOG_INF("Read Dev EUI from NVS");
-//     // print_bytes("Dev EUI", dev_eui, sizeof(dev_eui));
-//   } else {
-//     LOG_WRN("Dev EUI not found or incomplete in NVS. Generating...");
+//   ret = lora_manager_init();
+//   if (ret != 0) {
+//     LOG_ERR("LoRa manager initialization failed: %d", ret);
+//     return ret;
 //   }
 
-//   ret = nvs_manager_read(NVS_LORAWAN_JOIN_EUI_ID, join_eui,
-//   sizeof(join_eui)); if (ret >= 0) {
-//     LOG_INF("Read Join EUI from NVS");
-//     // print_bytes("Join EUI", join_eui, sizeof(join_eui));
-//   } else {
-//     LOG_WRN("Join EUI not found or incomplete in NVS, Generating...");
+//   ret = system_monitor_init();
+//   if (ret != 0) {
+//     LOG_ERR("System monitor initialization failed: %d", ret);
+//     return ret;
 //   }
 
-//   ret = nvs_manager_read(NVS_LORAWAN_APP_KEY_ID, app_key, sizeof(app_key));
-//   if (ret >= 0) {
-//     LOG_INF("Read App Key from NVS");
-//     // print_bytes("App Key", app_key, sizeof(app_key));
-//   } else {
-//     LOG_WRN("App Key not found or incomplete in NVS, Generating...");
+//   // Initialize NFC manager (now done here, not delayed)
+//   // ret = nfc_manager_init();
+//   // if (ret != 0) {
+//   //   LOG_ERR("NFC manager initialization failed: %d", ret);
+//   //   return ret;
+//   // }
+
+//   // Initialize heartbeat
+//   heartbeat_init();
+
+//   // Start the state manager thread
+//   LOG_INF("Starting state manager thread...");
+//   k_thread_start(state_manager_thread_id);
+//   LOG_INF("State manager thread start command issued");
+
+//   // Start the LoRa thread (after LoRaWAN stack is initialized)
+//   // Small delay to ensure LoRaWAN stack is fully ready
+//   k_sleep(K_MSEC(100));
+//   LOG_INF("Starting LoRa thread...");
+//   k_thread_start(lora_thread_id);
+//   LOG_INF("LoRa thread start command issued");
+
+//   // Start NFC manager thread
+//   // k_thread_start(nfc_manager_thread_id);
+//   // LOG_INF("NFC manager thread start command issued");
+
+//   const struct device *display_dev =
+//   DEVICE_DT_GET(DT_CHOSEN(zephyr_display)); if
+//   (!device_is_ready(display_dev)) {
+//     LOG_ERR("Display device not ready");
+//     return -ENODEV;
 //   }
-// #endif
+//   LOG_INF("Display device ready: %s", display_dev->name);
 
-//   join_cfg.mode = LORAWAN_ACT_OTAA;
-//   join_cfg.dev_eui = dev_eui;
-//   join_cfg.otaa.join_eui = join_eui;
-//   join_cfg.otaa.app_key = app_key;
-//   join_cfg.otaa.nwk_key = app_key;
-//   join_cfg.otaa.dev_nonce = dev_nonce;
+//   // Display info
+//   struct display_capabilities caps;
+//   display_get_capabilities(display_dev, &caps);
+//   LOG_INF("Display: %dx%d, format=%d", caps.x_resolution, caps.y_resolution,
+//           caps.current_pixel_format);
 
-//   LOG_INF("Dev Nonce: %d", dev_nonce);
+//   // Get the active screen (don't create a new one)
+//   lv_obj_t *scr = lv_scr_act();
 
-//   int i = 0;
-//   do {
-//     LOG_INF("Joining network using OTAA, devNonce: %d; attempt: %d",
-//             join_cfg.otaa.dev_nonce, i++);
-//     int join_ret = lorawan_join(&join_cfg);
-//     if (join_ret < 0) {
-//       if (join_ret == -ETIMEDOUT) {
-//         LOG_WRN("Timed-out waiting for response.");
-//       } else {
-//         LOG_ERR("Join failed (%d)", join_ret);
-//       }
-//     } else {
-//       LOG_INF("Join successful.");
-//     }
-//     dev_nonce++;
-//     join_cfg.otaa.dev_nonce = dev_nonce;
+//   // IMPORTANT: For monochrome EPD, set background to WHITE (1)
+//   lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
+//   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-//     // Save updated dev_nonce to NVS using nvs_manager_write
-//     int write_ret =
-//         nvs_manager_write(NVS_DEVNONCE_ID, &dev_nonce, sizeof(dev_nonce));
-//     if (write_ret < 0) {
-//       LOG_ERR("NVS: Failed to write id %d (%d)", NVS_DEVNONCE_ID, ret);
-//       k_sleep(K_MSEC(5000));
-//     }
-//     ret = join_ret;
+//   // Heading - Using roboto_28 (closest to 24 we have)
+//   lv_obj_t *heading = lv_label_create(scr);
+//   lv_label_set_text(heading, "last cleaned at:");
+//   lv_obj_set_style_text_font(heading, &roboto_bold_42,
+//                              LV_PART_MAIN | LV_STATE_DEFAULT);
+//   lv_obj_set_style_text_color(heading, lv_color_black(), LV_PART_MAIN);
+//   lv_obj_align(heading, LV_ALIGN_TOP_MID, 0, 20);
+//   // Add a horizontal line below the heading using LVGL
+//   lv_obj_t *line = lv_line_create(scr);
+//   static lv_point_t line_points[] = {{-80, 0}, {80, 0}}; // 160px wide
+//   centered lv_line_set_points(line, line_points, 2);
+//   lv_obj_set_style_line_width(line, 2,
+//                               LV_PART_MAIN); // adjust thickness as needed
+//   lv_obj_set_style_line_color(line, lv_color_black(), LV_PART_MAIN);
+//   lv_obj_align_to(line, heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
-//   } while (ret != 0);
+//   // Line 1 - roboto_36
+//   lv_obj_t *line1 = lv_label_create(scr);
+//   lv_label_set_text(line1, "2025-10-12 13:25:22");
+//   lv_obj_set_style_text_font(line1, &roboto_36,
+//                              LV_PART_MAIN | LV_STATE_DEFAULT);
+//   lv_obj_set_style_text_color(line1, lv_color_black(), LV_PART_MAIN);
+//   lv_obj_align(line1, LV_ALIGN_CENTER, 0, -30);
 
-//   LOG_INF("Sending data...");
+//   // // Line 2 - roboto_36
+//   // lv_obj_t *line2 = lv_label_create(scr);
+//   // lv_label_set_text(line2, "2025-10-12 18:35:47");
+//   // lv_obj_set_style_text_font(line2, &roboto_36,
+//   //                            LV_PART_MAIN | LV_STATE_DEFAULT);
+//   // lv_obj_set_style_text_color(line2, lv_color_black(), LV_PART_MAIN);
+//   // lv_obj_align(line2, LV_ALIGN_CENTER, 0, 30);
+
+//   // // Line 3 - roboto_36
+//   // lv_obj_t *line3 = lv_label_create(scr);
+//   // lv_label_set_text(line3, "2025-10-12 19:25:37");
+//   // lv_obj_set_style_text_font(line3, &roboto_36,
+//   //                            LV_PART_MAIN | LV_STATE_DEFAULT);
+//   // lv_obj_set_style_text_color(line3, lv_color_black(), LV_PART_MAIN);
+//   // lv_obj_align(line3, LV_ALIGN_CENTER, 0, 90);
+//   // Downlink data label
+//   downlink_label = lv_label_create(scr);
+//   lv_label_set_text(downlink_label, "awaiting downlink...");
+//   lv_obj_set_style_text_font(downlink_label, &roboto_36,
+//                              LV_PART_MAIN | LV_STATE_DEFAULT);
+//   lv_obj_set_style_text_color(downlink_label, lv_color_black(),
+//   LV_PART_MAIN); lv_obj_align(downlink_label, LV_ALIGN_CENTER, 0, 60);
+//   // ========================================================================
+
+//   // Send system ready event
+//   system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
+//   state_manager_send_event(&ready_event);
+
+//   LOG_INF("System initialization complete. All threads started.");
+//   LOG_INF("System ready for user input.");
+
+//   // Log thread status
+//   LOG_INF("=== THREAD STATUS CHECK ===");
+//   LOG_INF("Main thread ID: %p", k_current_get());
+//   LOG_INF("State manager thread ID: %p", state_manager_thread_id);
+//   LOG_INF("LoRa thread ID: %p", lora_thread_id);
+//   LOG_INF("NFC manager thread ID: %p", nfc_manager_thread_id);
+
+//   // Thread status logged above
+
+//   // Main loop - monitor system health and update LVGL
+//   int loop_count = 0;
+//   char rx_buf[64];
 //   while (1) {
-//     ret = lorawan_send(5, data, sizeof(data), LORAWAN_MSG_CONFIRMED);
-
-//     /*
-//      * Note: The stack may return -EAGAIN if the provided data
-//      * length exceeds the maximum possible one for the region and
-//      * datarate. But since we are just sending the same data here,
-//      * we'll just continue.
-//      */
-//     if (ret == -EAGAIN) {
-//       LOG_ERR("lorawan_send failed: %d. Continuing...", ret);
-//       k_sleep(DELAY);
-//       continue;
+//     if (k_msgq_get(&lora_downlink_msgq, rx_buf, K_NO_WAIT) == 0) {
+//       LOG_INF("Received LoRa downlink text: %s", rx_buf);
+//       lv_label_set_text(downlink_label, rx_buf);
 //     }
+//     // Update LVGL periodically
+//     lv_task_handler();
 
-//     if (ret < 0) {
-//       LOG_ERR("lorawan_send failed: %d", ret);
-//       return 0;
+//     // Small sleep to prevent tight loop
+//     k_sleep(K_MSEC(100));
+
+//     // Periodic thread health check
+//     if (loop_count % 100 == 0) { // Every ~10 seconds
+//       LOG_INF("Uptime: %llu ms", k_uptime_get());
 //     }
-
-//     LOG_INF("Data sent!");
-//     k_sleep(DELAY);
+//     loop_count++;
 //   }
 // }
+
+/// TEST ////
 #include "heartbeat_work.h"
 #include "led_manager.h"
 #include "lora_app.h"
@@ -229,172 +212,219 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
-// External font declarations
+// External fonts
 LV_FONT_DECLARE(roboto_28);
 LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
 
-int main(void) {
-  LOG_INF("FeedbackNow System Starting...");
+// LoRa downlink message queue
+K_MSGQ_DEFINE(lora_downlink_msgq, 64, 4, 4);
 
-  // Initialize all subsystems
-  int ret = system_init();
-  if (ret != 0) {
-    LOG_ERR("System initialization failed: %d", ret);
-    return ret;
+// Global pointers to static UI elements
+static lv_obj_t *heading = NULL;
+static lv_obj_t *line1 = NULL;
+static lv_obj_t *timestamp1 = NULL;
+static lv_obj_t *timestamp2 = NULL;
+static lv_obj_t *line2 = NULL;
+static lv_obj_t *date_label = NULL;
+
+// Downlink UI elements
+lv_obj_t *downlink_label = NULL; // Global pointer for downlink message
+static lv_timer_t *downlink_reset_timer = NULL; // Timer handle
+
+#define DOWNLINK_RESET_DELAY_MS 3000
+
+// ================= Callback: Restore static display =================
+static void restore_static_display_cb(lv_timer_t *timer) {
+  LV_UNUSED(timer);
+
+  // Make all changes atomically
+  // 1. Delete downlink label first
+  if (downlink_label) {
+    lv_obj_del(downlink_label);
+    downlink_label = NULL;
   }
 
-  // Initialize new architecture components
-  ret = state_manager_init();
-  if (ret != 0) {
-    LOG_ERR("State manager initialization failed: %d", ret);
-    return ret;
-  }
+  // 2. Show all static elements
+  lv_obj_clear_flag(heading, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(line1, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(timestamp1, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(timestamp2, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(line2, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_clear_flag(date_label, LV_OBJ_FLAG_HIDDEN);
 
-  ret = led_manager_init();
-  if (ret != 0) {
-    LOG_ERR("LED manager initialization failed: %d", ret);
-    return ret;
-  }
+  // Force complete screen refresh
+  lv_obj_t *scr = lv_scr_act();
+  lv_obj_invalidate(scr);
 
-  ret = lora_manager_init();
-  if (ret != 0) {
-    LOG_ERR("LoRa manager initialization failed: %d", ret);
-    return ret;
-  }
+  LOG_INF("Static display restored");
+}
 
-  ret = system_monitor_init();
-  if (ret != 0) {
-    LOG_ERR("System monitor initialization failed: %d", ret);
-    return ret;
-  }
-
-  // Initialize NFC manager (now done here, not delayed)
-  // ret = nfc_manager_init();
-  // if (ret != 0) {
-  //   LOG_ERR("NFC manager initialization failed: %d", ret);
-  //   return ret;
-  // }
-
-  // Initialize heartbeat
-  heartbeat_init();
-
-  // Start the state manager thread
-  LOG_INF("Starting state manager thread...");
-  k_thread_start(state_manager_thread_id);
-  LOG_INF("State manager thread start command issued");
-
-  // Start the LoRa thread (after LoRaWAN stack is initialized)
-  // Small delay to ensure LoRaWAN stack is fully ready
-  k_sleep(K_MSEC(100));
-  LOG_INF("Starting LoRa thread...");
-  k_thread_start(lora_thread_id);
-  LOG_INF("LoRa thread start command issued");
-
-  // Start NFC manager thread
-  // k_thread_start(nfc_manager_thread_id);
-  // LOG_INF("NFC manager thread start command issued");
-
-  // LOG_INF("LoRa thread started after LoRaWAN stack initialization");
-
-  // ========================================================================
-  // LVGL DISPLAY DEMO - Simple initialization
-  // ========================================================================
-  LOG_INF("=== INITIALIZING LVGL DISPLAY ===");
+void lvgl_init_display(void) {
+  lv_init();
 
   const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
   if (!device_is_ready(display_dev)) {
     LOG_ERR("Display device not ready");
-    return -ENODEV;
+    return;
   }
   LOG_INF("Display device ready: %s", display_dev->name);
 
-  // Display info
-  struct display_capabilities caps;
-  display_get_capabilities(display_dev, &caps);
-  LOG_INF("Display: %dx%d, format=%d", caps.x_resolution, caps.y_resolution,
-          caps.current_pixel_format);
-
-  // Get the active screen (don't create a new one)
+  // Get active screen
   lv_obj_t *scr = lv_scr_act();
+  if (!scr) {
+    LOG_ERR("LVGL screen creation failed!");
+    return;
+  }
 
-  // IMPORTANT: For monochrome EPD, set background to WHITE (1)
+  // Set background
   lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
-  // Heading - Using roboto_28 (closest to 24 we have)
-  lv_obj_t *heading = lv_label_create(scr);
+  // Heading - "last cleaned at:" in Roboto Bold 42, centered at top
+  heading = lv_label_create(scr);
   lv_label_set_text(heading, "last cleaned at:");
   lv_obj_set_style_text_font(heading, &roboto_bold_42,
                              LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_text_color(heading, lv_color_black(), LV_PART_MAIN);
   lv_obj_align(heading, LV_ALIGN_TOP_MID, 0, 20);
-  // Add a horizontal line below the heading using LVGL
-  lv_obj_t *line = lv_line_create(scr);
-  static lv_point_t line_points[] = {{-80, 0}, {80, 0}}; // 160px wide centered
-  lv_line_set_points(line, line_points, 2);
-  lv_obj_set_style_line_width(line, 2,
-                              LV_PART_MAIN); // adjust thickness as needed
-  lv_obj_set_style_line_color(line, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align_to(line, heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
-  // Line 1 - roboto_36
-  lv_obj_t *line1 = lv_label_create(scr);
-  lv_label_set_text(line1, "2025-10-12 13:25:65");
-  lv_obj_set_style_text_font(line1, &roboto_36,
+  // First horizontal line below heading
+  line1 = lv_line_create(scr);
+  static lv_point_t line1_points[] = {{-80, 0}, {80, 0}};
+  lv_line_set_points(line1, line1_points, 2);
+  lv_obj_set_style_line_width(line1, 1, LV_PART_MAIN);
+  lv_obj_set_style_line_color(line1, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(line1, heading, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+  // First timestamp line in Roboto 36
+  timestamp1 = lv_label_create(scr);
+  lv_label_set_text(timestamp1, "2025-10-12 13:25:22");
+  lv_obj_set_style_text_font(timestamp1, &roboto_36,
                              LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_text_color(line1, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(line1, LV_ALIGN_CENTER, 0, -30);
+  lv_obj_set_style_text_color(timestamp1, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(timestamp1, line1, LV_ALIGN_OUT_BOTTOM_MID, 0, 15);
 
-  // Line 2 - roboto_36
-  lv_obj_t *line2 = lv_label_create(scr);
-  lv_label_set_text(line2, "2025-10-12 18:35:47");
-  lv_obj_set_style_text_font(line2, &roboto_36,
+  // Second timestamp line in Roboto 36
+  timestamp2 = lv_label_create(scr);
+  lv_label_set_text(timestamp2, "2025-10-12 18:35:47");
+  lv_obj_set_style_text_font(timestamp2, &roboto_36,
                              LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_text_color(line2, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(line2, LV_ALIGN_CENTER, 0, 30);
+  lv_obj_set_style_text_color(timestamp2, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(timestamp2, timestamp1, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
-  // Line 3 - roboto_36
-  lv_obj_t *line3 = lv_label_create(scr);
-  lv_label_set_text(line3, "2025-10-12 19:25:37");
-  lv_obj_set_style_text_font(line3, &roboto_36,
+  // Second horizontal line to separate timestamps from date
+  line2 = lv_line_create(scr);
+  static lv_point_t line2_points[] = {{-80, 0}, {80, 0}};
+  lv_line_set_points(line2, line2_points, 2);
+  lv_obj_set_style_line_width(line2, 1, LV_PART_MAIN);
+  lv_obj_set_style_line_color(line2, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(line2, timestamp2, LV_ALIGN_OUT_BOTTOM_MID, 0, 15);
+
+  // Date in Roboto 28
+  date_label = lv_label_create(scr);
+  lv_label_set_text(date_label, "2025/11/06");
+  lv_obj_set_style_text_font(date_label, &roboto_28,
                              LV_PART_MAIN | LV_STATE_DEFAULT);
-  lv_obj_set_style_text_color(line3, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(line3, LV_ALIGN_CENTER, 0, 90);
+  lv_obj_set_style_text_color(date_label, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(date_label, line2, LV_ALIGN_OUT_BOTTOM_MID, 0, 15);
 
-  LOG_INF("LVGL widgets created");
-  LOG_INF("=== LVGL DISPLAY DEMO COMPLETE ===");
-  // ========================================================================
+  LOG_INF("LVGL display initialized successfully.");
+}
+
+// ================= Main Application =================
+int main(void) {
+  LOG_INF("FeedbackNow System Starting...");
+
+  // ===== System Initialization =====
+  if (system_init() != 0) {
+    LOG_ERR("System initialization failed");
+    return -1;
+  }
+
+  state_manager_init();
+  led_manager_init();
+  lora_manager_init();
+  system_monitor_init();
+  heartbeat_init();
+
+  // Start threads safely
+  k_thread_start(state_manager_thread_id);
+  k_sleep(K_MSEC(100)); // Small delay for LoRa stack
+  k_thread_start(lora_thread_id);
+
+  // Initialize LVGL display after system init
+  lvgl_init_display();
 
   // Send system ready event
   system_event_msg_t ready_event = {.event_type = EVENT_SYSTEM_READY};
   state_manager_send_event(&ready_event);
 
-  LOG_INF("System initialization complete. All threads started.");
-  LOG_INF("System ready for user input.");
+  LOG_INF("System ready. Entering main loop...");
 
-  // Log thread status
-  LOG_INF("=== THREAD STATUS CHECK ===");
-  LOG_INF("Main thread ID: %p", k_current_get());
-  LOG_INF("State manager thread ID: %p", state_manager_thread_id);
-  LOG_INF("LoRa thread ID: %p", lora_thread_id);
-  LOG_INF("NFC manager thread ID: %p", nfc_manager_thread_id);
+  // ===== Main Loop =====
+  char rx_buf[64];
+#define LORA_MSG_MAX 63 // leave 1 byte for null terminator
 
-  // Thread status logged above
-
-  // Main loop - monitor system health and update LVGL
-  int loop_count = 0;
   while (1) {
-    // Update LVGL periodically
+    if (k_msgq_get(&lora_downlink_msgq, rx_buf, K_NO_WAIT) == 0) {
+      size_t len = strlen(rx_buf);
+
+      // Sanity check
+      if (len < 2) {
+        LOG_WRN("Downlink too short to decode");
+        continue;
+      }
+
+      if (len % 2 != 0) {
+        LOG_WRN("Odd-length hex string, trimming last nibble");
+        len--;
+      }
+
+      char ascii_str[len / 2 + 1];
+      for (size_t i = 0; i < len; i += 2) {
+        char byte_str[3] = {rx_buf[i], rx_buf[i + 1], '\0'};
+        ascii_str[i / 2] = (char)strtol(byte_str, NULL, 16);
+      }
+      ascii_str[len / 2] = '\0';
+
+      LOG_INF("Received downlink: %s", ascii_str);
+
+      // Make all UI changes atomically
+      lv_obj_t *scr = lv_scr_act();
+
+      // 1. Hide all static UI elements first
+      lv_obj_add_flag(heading, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(line1, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(timestamp1, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(timestamp2, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(line2, LV_OBJ_FLAG_HIDDEN);
+      lv_obj_add_flag(date_label, LV_OBJ_FLAG_HIDDEN);
+
+      // 2. Create and show fullscreen downlink message
+      downlink_label = lv_label_create(scr);
+      lv_label_set_text(downlink_label, ascii_str);
+      lv_obj_set_style_text_font(downlink_label, &roboto_bold_42,
+                                 LV_PART_MAIN | LV_STATE_DEFAULT);
+      lv_obj_set_style_text_color(downlink_label, lv_color_black(),
+                                  LV_PART_MAIN);
+      lv_obj_align(downlink_label, LV_ALIGN_CENTER, 0, 0);
+
+      // Force complete screen refresh
+      lv_obj_invalidate(scr);
+
+      LOG_INF("Displayed downlink message fullscreen");
+
+      // Create a one-shot timer to restore static display after delay
+      downlink_reset_timer = lv_timer_create(restore_static_display_cb,
+                                             DOWNLINK_RESET_DELAY_MS, NULL);
+      lv_timer_set_repeat_count(downlink_reset_timer, 1);
+    }
+
+    // Handle LVGL tasks
     lv_task_handler();
 
-    // Small sleep to prevent tight loop
+    // Sleep to prevent tight loop
     k_sleep(K_MSEC(100));
-
-    // Periodic thread health check
-    if (loop_count % 100 == 0) { // Every ~10 seconds
-      LOG_INF("Uptime: %llu ms", k_uptime_get());
-    }
-    loop_count++;
   }
 }
