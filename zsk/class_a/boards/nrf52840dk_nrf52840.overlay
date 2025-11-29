@@ -1,0 +1,122 @@
+/ {
+    aliases {
+        sw0 = &button0;
+        sw1 = &button1;
+        sw2 = &button2;
+        sw3 = &button3;
+        sw4 = &button4;
+        sw5 = &button5;
+        sw6 = &button6;
+        led0 = &led0;
+        led1 = &led1;
+        led2 = &led2;
+        led3 = &led3;
+        led4 = &led4;
+        led5 = &led5;
+        led6 = &led6;
+        lora0 = &lora_semtech_sx1262mb2das;
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+
+        button4: button_4 {
+            label = "Button 4";
+            gpios = <&gpio1 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+        button5: button_5 {
+            label = "Button 5";
+            gpios = <&gpio0 28 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+        button6: button_6 {
+            label = "Button 6";
+            gpios = <&gpio0 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+    };
+
+leds {
+        compatible = "gpio-leds";
+
+		led4: led_4 {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 0";
+		};
+
+		led3: led_3 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 1";
+		};
+
+		led2: led_2 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 2";
+		};
+
+		led1: led_1 {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "Green LED 3";
+		};
+
+        led0: led_0 {
+            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;  // P1.02
+			label = "EXT LED 4";
+
+        };
+
+        led5: led_5 {
+            gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;  // P1.07 // 9/24 changed from 1,7 - 1,9 (led 5,6)
+			label = "EXT LED 5";
+
+        };
+
+        led6: led_6 {
+            gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;  // P1.09 //  9/24 changed from 1,9 - 1,7 (led 5,6)
+			label = "EXT LED 6";
+
+        };
+    };
+};
+
+&uart0 {	
+	status="disabled";
+};	
+
+&uart1 {	
+	status="disabled";
+};	
+	
+&spi1 {	
+	status="disabled";
+};	
+	
+&qspi {	
+	status="disabled";
+};	
+	
+&pwm0 {	
+	status="disabled";
+};	
+
+&arduino_spi {
+	status = "okay";
+
+	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=NFC */
+	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>; /* LoRa CS - P1.08 */
+	       
+	
+	lora_semtech_sx1262mb2das: sx1262@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <1000000>;
+		label = "SX1262";
+		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
+		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
+		dio2-tx-enable;
+		tcxo-power-startup-delay-ms = <10>;
+	};
+
+};

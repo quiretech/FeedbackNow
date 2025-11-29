@@ -1,13 +1,11 @@
-#define LORAWAN_DEV_EUI                                                                            \
-	{                                                                                          \
-		0x5f, 0x0a, 0xbf, 0x0c, 0xc4, 0x9f, 0xf2, 0x51                                     \
-	}
-#define LORAWAN_JOIN_EUI                                                                           \
-	{                                                                                          \
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00                                     \
-	}
-#define LORAWAN_APP_KEY                                                                            \
-	{                                                                                          \
-		0xf5, 0x66, 0xbd, 0xe4, 0xa5, 0xdf, 0x95, 0x88, 0xba, 0x3d, 0xa4, 0xe6, 0xd1,      \
-			0xc2, 0x43, 0x27                                                           \
-	}
+#define LORAWAN_DEV_EUI                                                        \
+  { 0x2b, 0xfc, 0x1f, 0xce, 0x71, 0x8e, 0x9f, 0xc4 }
+
+#define LORAWAN_JOIN_EUI                                                       \
+  { 0xca, 0x83, 0xaf, 0x8f, 0xb6, 0xda, 0xc7, 0x32 }
+
+#define LORAWAN_APP_KEY                                                        \
+  {                                                                            \
+    0x23, 0xc5, 0x66, 0xff, 0xb5, 0xa4, 0x0a, 0x7f, 0xea, 0xdf, 0x0b, 0x8c,    \
+        0x97, 0x2b, 0x84, 0x5c                                                 \
+  }

@@ -1,7 +1,7 @@
 default: class_a
-build_dir: C:/ncs/v3.0.2/zephyr/samples/subsys/lorawan/class_a/build
+build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/class_a/build
 domains:
   - name: class_a
-    build_dir: C:/ncs/v3.0.2/zephyr/samples/subsys/lorawan/class_a/build/class_a
+    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/class_a/build/class_a
 flash_order:
   - class_a
