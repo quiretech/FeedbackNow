@@ -1,0 +1,22 @@
+menuconfig PN5180
+	bool "NXP PN5180 NFC Reader"
+	depends on SPI
+	depends on GPIO
+	help
+	  Enable driver for NXP PN5180 NFC reader IC.
+
+if PN5180
+
+config PN5180_INIT_PRIORITY
+	int "PN5180 init priority"
+	default 80
+	help
+	  PN5180 device driver initialization priority.
+
+config PN5180_LOG_LEVEL
+	int "PN5180 log level"
+	default 3
+	help
+	  PN5180 driver log level.
+
+endif # PN5180

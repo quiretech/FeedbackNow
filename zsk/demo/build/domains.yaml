@@ -1,0 +1,7 @@
+default: demo
+build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/demo/build
+domains:
+  - name: demo
+    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/demo/build/demo
+flash_order:
+  - demo
