@@ -1,7 +1,0 @@
-default: feedbacknow
-build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build
-domains:
-  - name: feedbacknow
-    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/feedbacknow/build/feedbacknow
-flash_order:
-  - feedbacknow
