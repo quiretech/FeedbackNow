@@ -9,17 +9,17 @@ cmake:
     revision: 
   images:
    - name: button
-     source-dir: C:/ncs/v3.0.2/zephyr/samples/basic/button
+     source-dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button
      type: MAIN
   kconfig:
     files:
-     - C:/ncs/v3.0.2/zephyr/samples/basic/button/build/_sysbuild/empty.conf
-     - C:/ncs/v3.0.2/zephyr/samples/basic/button/build/_sysbuild/empty.conf
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build/_sysbuild/empty.conf
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build/_sysbuild/empty.conf
     user-files:
-     - C:/ncs/v3.0.2/zephyr/samples/basic/button/build/_sysbuild/empty.conf
+     - C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build/_sysbuild/empty.conf
   sysbuild: true
 version: 0.1.0
 west:
-  command: C:\ncs\toolchains\0b393f9e1b\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --p always
-  topdir: C:\ncs\v3.0.2
-  version: 1.2.0
+  command: C:\ncs\toolchains\c1a76fddb2\opt\bin\Scripts\west build -b nrf52840dk/nrf52840 --pristine
+  topdir: c:\ncs\v3.0.2
+  version: 1.4.0

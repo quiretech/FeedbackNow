@@ -1,0 +1,7 @@
+default: app
+build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/ssd1683_epd/app/build
+domains:
+  - name: app
+    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/ssd1683_epd/app/build/app
+flash_order:
+  - app

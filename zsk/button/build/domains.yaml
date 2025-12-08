@@ -1,7 +1,7 @@
 default: button
-build_dir: C:/ncs/v3.0.2/zephyr/samples/basic/button/build
+build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build
 domains:
   - name: button
-    build_dir: C:/ncs/v3.0.2/zephyr/samples/basic/button/build/button
+    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build/button
 flash_order:
   - button
