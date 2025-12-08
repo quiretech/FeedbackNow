@@ -7,6 +7,12 @@
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 
+#define CLEAR_SCREEN
+
+#ifdef CLEAR_SCREEN
+#include "ssd1683.h"
+#endif
+
 /* Font declaration */
 LV_FONT_DECLARE(roboto_36);
 
@@ -36,8 +42,9 @@ int main(void) {
   lv_obj_center(uptime_label);
 
   display_blanking_off(display);
-
-  /* Main loop - update every 5 seconds */
+#ifdef CLEAR_SCREEN
+  ssd1683_clear_screen(display, 0xFF);
+#else
   while (1) {
     snprintf(buf, sizeof(buf), "Counter: %u", seconds);
     lv_label_set_text(uptime_label, buf);
@@ -46,6 +53,6 @@ int main(void) {
     k_msleep(1000);
     seconds += 1;
   }
-
+#endif
   return 0;
 }
