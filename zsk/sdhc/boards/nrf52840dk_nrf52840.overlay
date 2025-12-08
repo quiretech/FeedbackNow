@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) 2025
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* Overlay for nRF52840 DK with Adafruit SD card breakout board on SPI3
+ * 
+ * Pin connections:
+ * - CS:  P1.12 (GPIO)
+ * - DI:  P1.13 (MOSI)
+ * - DO:  P1.14 (MISO)
+ * - CLK: P1.15 (SCK)
+ * - GND: GND
+ * - 3V:  VDD (3.3V)
+ */
+
+&pinctrl {
+	spi3_default: spi3_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+		};
+	};
+
+	spi3_sleep: spi3_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 1, 15)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 13)>,
+				<NRF_PSEL(SPIM_MISO, 1, 14)>;
+			low-power-enable;
+		};
+	};
+};
+
+&spi3 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	pinctrl-0 = <&spi3_default>;
+	pinctrl-1 = <&spi3_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio0 22 GPIO_ACTIVE_LOW>;
+
+	sdhc0: sdhc@0 {
+		compatible = "zephyr,sdhc-spi-slot";
+		reg = <0>;
+		status = "okay";
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "SD";
+			status = "okay";
+		};
+		spi-max-frequency = <8000000>;
+	};
+};
+
+&qspi {
+	status = "disabled";
+};
