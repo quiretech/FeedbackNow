@@ -1,22 +1,47 @@
-# Ignore build directory
-/build/
+# Build directories (anywhere in repo)
+**/build/
 
-# Ignore user configuration files
-*.user
+# Zephyr/CMake build artifacts
+**/zephyr/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+**/*.ninja
+**/compile_commands.json
+
+# Compiled binaries
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.a
+*.lib
+
+# IDE/Editor files
+.vscode/
+.idea/
 *.swp
 *.swo
-*.log
+*.user
 
-# Ignore generated files
-zephyr/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-
-# VS Code settings
-.vscode/
+# OS files
+.DS_Store
+Thumbs.db
 
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+
+# Archives (optional - remove if you want to track these)
+*.zip
+
+# AWS automation generated configs
+aws-iot-core-lorawan/automation/batchregistration/lorawan_configs/

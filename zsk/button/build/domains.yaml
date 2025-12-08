@@ -1,7 +1,0 @@
-default: button
-build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build
-domains:
-  - name: button
-    build_dir: C:/Users/jatan/Desktop/githubrepo/fb_now/zsk/button/build/button
-flash_order:
-  - button
