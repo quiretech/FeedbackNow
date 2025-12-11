@@ -19,7 +19,7 @@
 // // External font declarations
 // LV_FONT_DECLARE(roboto_28);
 // LV_FONT_DECLARE(roboto_36);
-// LV_FONT_DECLARE(roboto_bold_42);
+// LV_FONT_DECLARE(roboto_42_multilang);
 
 // lv_obj_t *downlink_label; // Global label pointer
 // K_MSGQ_DEFINE(lora_downlink_msgq, 64, 4,
@@ -110,7 +110,7 @@
 //   // Heading - Using roboto_28 (closest to 24 we have)
 //   lv_obj_t *heading = lv_label_create(scr);
 //   lv_label_set_text(heading, "last cleaned at:");
-//   lv_obj_set_style_text_font(heading, &roboto_bold_42,
+//   lv_obj_set_style_text_font(heading, &roboto_42_multilang,
 //                              LV_PART_MAIN | LV_STATE_DEFAULT);
 //   lv_obj_set_style_text_color(heading, lv_color_black(), LV_PART_MAIN);
 //   lv_obj_align(heading, LV_ALIGN_TOP_MID, 0, 20);
@@ -216,6 +216,7 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 LV_FONT_DECLARE(roboto_28);
 LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
+LV_FONT_DECLARE(notokufiarabic_32);
 
 // LoRa downlink message queue
 K_MSGQ_DEFINE(lora_downlink_msgq, 64, 4, 4);
@@ -404,7 +405,7 @@ int main(void) {
       // 2. Create and show fullscreen downlink message
       downlink_label = lv_label_create(scr);
       lv_label_set_text(downlink_label, ascii_str);
-      lv_obj_set_style_text_font(downlink_label, &roboto_bold_42,
+      lv_obj_set_style_text_font(downlink_label, &notokufiarabic_32,
                                  LV_PART_MAIN | LV_STATE_DEFAULT);
       lv_obj_set_style_text_color(downlink_label, lv_color_black(),
                                   LV_PART_MAIN);

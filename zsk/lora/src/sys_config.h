@@ -1,0 +1,19 @@
+#ifndef SYS_CONFIG_H
+#define SYS_CONFIG_H
+
+/* LoRa Configuration */
+#define LORA_MAX_PAYLOAD_SIZE 51
+#define LORA_MSGQ_SIZE 8
+#define LORA_MESSAGE_QUEUE_SIZE 8
+#define LORA_MESSAGE_ALIGNMENT 4
+#define LORA_THREAD_STACK_SIZE 2048
+#define LORA_THREAD_PRIORITY 5
+#define LORA_JOIN_RETRY_DELAY_SECONDS 10
+#define LORA_MAX_RETRIES 3
+#define LORA_SEND_BUSY_RETRY_MS 1000
+#define LORA_BUTTON_PORT 2
+
+/* Send interval in seconds */
+#define LORA_SEND_INTERVAL_SECONDS 5
+
+#endif /* SYS_CONFIG_H */
