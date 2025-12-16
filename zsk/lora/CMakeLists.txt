@@ -11,4 +11,5 @@ target_sources(app PRIVATE
   src/lora_app.c
   src/lora_thread.c
   src/payload_gen.c
+  src/power_ctrl.c
 )

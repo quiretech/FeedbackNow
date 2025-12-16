@@ -19,6 +19,8 @@ target_sources(app PRIVATE
     src/buttons.h
     src/leds.c
     src/leds.h
+    src/power_ctrl.c
+    src/power_ctrl.h
     assets/fonts/roboto_20.c
     assets/fonts/roboto_28.c
     assets/fonts/roboto_bold_42.c

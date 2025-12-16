@@ -107,31 +107,31 @@ leds {
 	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
 	       
 	
-	// lora_semtech_sx1262mb2das: sx1262@0 {
-	// 	compatible = "semtech,sx1262";
-	// 	reg = <0>;
-	// 	spi-max-frequency = <1000000>;
-	// 	label = "SX1262";
-	// 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
-	// 	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
-	// 	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-	// 	dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
-	// 	dio2-tx-enable;
-	// 	tcxo-power-startup-delay-ms = <10>;
-	// };
-
 	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
 		reg = <0>;
 		spi-max-frequency = <1000000>;
 		label = "SX1262";
-		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
-		busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
-		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
-		dio1-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
+		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
 		dio2-tx-enable;
-		tcxo-power-startup-delay-ms = <5>;
+		tcxo-power-startup-delay-ms = <10>;
 	};
+
+	// lora_semtech_sx1262mb2das: sx1262@0 {
+	// 	compatible = "semtech,sx1262";
+	// 	reg = <0>;
+	// 	spi-max-frequency = <1000000>;
+	// 	label = "SX1262";
+	// 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
+	// 	busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
+	// 	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
+	// 	dio1-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>;
+	// 	dio2-tx-enable;
+	// 	tcxo-power-startup-delay-ms = <5>;
+	// };
     
     	ssd1683: ssd1683@1 {
 		compatible = "solomon,ssd1683";

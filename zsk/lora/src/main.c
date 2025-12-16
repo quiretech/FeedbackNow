@@ -9,9 +9,11 @@
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/util.h>
 
 #include "lora_app.h"
 #include "payload_gen.h"
+#include "power_ctrl.h"
 #include "sys_config.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -22,6 +24,17 @@ int main(void) {
   int ret;
 
   LOG_INF("=== LoRaWAN Application Starting ===");
+
+  ret = power_ctrl_init();
+  if (ret < 0) {
+    LOG_ERR("Power control init failed: %d", ret);
+    return ret;
+  }
+
+  power_ctrl_set(POWER_EN_3V3, true);
+  power_ctrl_set(POWER_EN_1V8, true);
+  power_ctrl_set(POWER_EN_3V3A, true);
+  power_ctrl_set(POWER_EN_3V6, true);
 
   /* Initialize payload generator (stable NFC UID, counters) */
   payload_gen_init();

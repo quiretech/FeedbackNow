@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize generator state (stable NFC UID per boot, counters).
+ * @brief Initialize generator state (counters, epoch seed).
  */
 void payload_gen_init(void);
 

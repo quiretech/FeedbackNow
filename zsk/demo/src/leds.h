@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <zephyr/drivers/gpio.h>
 
-#define NUM_LEDS 7
+#define NUM_LEDS 1
 
 // LED GPIO specs - will be populated from device tree
 extern const struct gpio_dt_spec leds[NUM_LEDS];

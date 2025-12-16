@@ -1,4 +1,4 @@
-// #define ENABLE_NFC
+#define ENABLE_NFC
 
 #include <lvgl.h>
 #include <zephyr/drivers/display.h>
@@ -11,6 +11,7 @@
 
 #include "buttons.h"
 #include "leds.h"
+#include "power_ctrl.h"
 #ifdef ENABLE_NFC
 #include "pn5180.h"
 #endif
@@ -40,6 +41,8 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 /* System states */
 enum system_state { SYSTEM_IDLE, SYSTEM_NFC_SCANNING };
+
+#define STATUS_LED_ID 0
 
 #ifdef ENABLE_NFC
 /* Message structures */
@@ -142,6 +145,18 @@ int main(void) {
     LOG_ERR("LED initialization failed: %d", ret);
     return ret;
   }
+
+  // Initialize power enable GPIOs and enable rails by default
+  ret = power_ctrl_init();
+  if (ret < 0) {
+    LOG_ERR("Power control init failed: %d", ret);
+    return ret;
+  }
+
+  power_ctrl_set(POWER_EN_3V3, true);
+  power_ctrl_set(POWER_EN_1V8, true);
+  power_ctrl_set(POWER_EN_3V3A, true);
+  power_ctrl_set(POWER_EN_3V6, true);
 
   // Initialize Display
   if (!device_is_ready(display_dev)) {
@@ -249,8 +264,8 @@ int main(void) {
 static void handle_button_event(button_event_t *event) {
   if (event->type == BUTTON_EVENT_PRESS) {
     // IMMEDIATE: Turn on LED first for responsive feedback
-    current_led_id = 4;
-    led_set(4, true);
+    current_led_id = STATUS_LED_ID;
+    led_set(STATUS_LED_ID, true);
     k_timer_start(&led_off_timer, K_MSEC(500), K_NO_WAIT);
 
     // If splash screen is active, switch to demo and return

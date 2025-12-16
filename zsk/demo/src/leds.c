@@ -9,24 +9,12 @@
 
 LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
 
-/* Pull GPIO spec from DT aliases */
+/* Pull GPIO spec from DT alias */
 #define LED0_NODE DT_ALIAS(led0)
-#define LED1_NODE DT_ALIAS(led1)
-#define LED2_NODE DT_ALIAS(led2)
-#define LED3_NODE DT_ALIAS(led3)
-#define LED4_NODE DT_ALIAS(led4)
-#define LED5_NODE DT_ALIAS(led5)
-#define LED6_NODE DT_ALIAS(led6)
 
 /* Array of LED GPIO specs */
 const struct gpio_dt_spec leds[NUM_LEDS] = {
     GPIO_DT_SPEC_GET_OR(LED0_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED1_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED2_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED3_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED4_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED5_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LED6_NODE, gpios, {0}),
 };
 
 int leds_init(void) {

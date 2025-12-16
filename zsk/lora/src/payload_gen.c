@@ -44,7 +44,7 @@ void payload_gen_init(void) {
   k_mutex_init(&ctx.lock);
   k_mutex_lock(&ctx.lock, K_FOREVER);
 
-  /* Stable per-boot NFC UID */
+  /* Seed an initial NFC UID (will be randomized per NFC uplink) */
   sys_rand_get(ctx.nfc_uid, sizeof(ctx.nfc_uid));
 
   /* Seed a plausible UTC base (~2023-11-14 epoch 1700000000) + up to ~1 year */
@@ -85,6 +85,8 @@ static void build_button(uint8_t *b) {
 static void build_nfc(uint8_t *b) {
   write_be32(b, get_epoch_seconds());
   b[4] = EVT_NFC;
+  /* Randomize NFC UID on every uplink */
+  sys_rand_get(ctx.nfc_uid, sizeof(ctx.nfc_uid));
   for (int i = 0; i < 6; i++) {
     b[5 + i] = ctx.nfc_uid[i];
   }
