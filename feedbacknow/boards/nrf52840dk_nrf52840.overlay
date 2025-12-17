@@ -110,7 +110,7 @@ leds {
 	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
 		reg = <0>;
-		spi-max-frequency = <1000000>;
+		spi-max-frequency = <400000>;
 		label = "SX1262";
 		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
 		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
@@ -136,7 +136,7 @@ leds {
     	ssd1683: ssd1683@1 {
 		compatible = "solomon,ssd1683";
 		reg = <1>;
-		spi-max-frequency = <4000000>;
+		spi-max-frequency = <400000>;
 		/* Display dimensions */
 		width = <400>;
 		height = <300>;

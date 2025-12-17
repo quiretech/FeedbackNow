@@ -7,6 +7,8 @@
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 
+#include "power_ctrl.h"
+
 // #define CLEAR_SCREEN
 
 #ifdef CLEAR_SCREEN
@@ -22,6 +24,23 @@ int main(void) {
   lv_style_t style;
   uint32_t seconds = 0;
   char buf[32];
+  int ret;
+
+  /* Initialize power control */
+  ret = power_ctrl_init();
+  if (ret != 0) {
+    printk("Error: power_ctrl_init failed (%d)\n", ret);
+    return ret;
+  }
+
+  /* Enable all power rails */
+  power_ctrl_set(POWER_EN_3V3, true);
+  power_ctrl_set(POWER_EN_1V8, true);
+  power_ctrl_set(POWER_EN_3V3A, true);
+  power_ctrl_set(POWER_EN_3V6, true);
+
+  /* Allow power rails to stabilize */
+  k_msleep(10);
 
   /* Initialize display */
   display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));

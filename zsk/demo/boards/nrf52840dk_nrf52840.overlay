@@ -1,13 +1,13 @@
 /* Arduino SPI configuration for EPD and NFC sharing */
 &arduino_spi {
 	status = "okay";
-	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>, /* EPD CS */
-	           <&gpio0 29 GPIO_ACTIVE_LOW>; /* PN5180 CS */
+	cs-gpios = <&gpio1 12 GPIO_ACTIVE_LOW>; /* EPD CS */
+
 	
 	ssd1683: ssd1683@0 {
 		compatible = "solomon,ssd1683";
 		reg = <0>;
-		spi-max-frequency = <4000000>;
+		spi-max-frequency = <400000>;
 		/* Display dimensions */
 		width = <400>;
 		height = <300>;
@@ -17,7 +17,6 @@
 		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
 
 	};
-
 	
 	/* PN5180 NFC device on arduino_spi */
 	pn5180: pn5180@1 {
@@ -25,7 +24,7 @@
 		reg = <1>;
 		spi-max-frequency = <400000>;
 		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
-		rst-gpios = <&gpio0 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
 		nss-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
 		timeout-ms = <5000>;

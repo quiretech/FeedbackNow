@@ -2,6 +2,30 @@
 	chosen {
 		zephyr,display = &ssd1683;
 	};
+
+	enables {
+		compatible = "gpio-leds";
+
+		en3v3: en3v3 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3";
+		};
+
+		en1v8: en1v8 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "EN 1V8";
+		};
+
+		en3v3a: en3v3a {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3A";
+		};
+
+		en3v6: en3v6 {
+			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V6";
+		};
+	};
 };
 
 
@@ -12,7 +36,7 @@
 	ssd1683: ssd1683@0 {
 		compatible = "solomon,ssd1683";
 		reg = <0>;
-		spi-max-frequency = <4000000>;
+		spi-max-frequency = <400000>;
 		/* Display dimensions (400x300 pixels) */
 		width = <400>;
 		height = <300>;

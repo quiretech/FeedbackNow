@@ -10,6 +10,7 @@ project(pn5180_nfc_app)
 # Add source files
 target_sources(app PRIVATE
     src/main.c
+    src/power_ctrl.c
 )
 
 # Add include directories

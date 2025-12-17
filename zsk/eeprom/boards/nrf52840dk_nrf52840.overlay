@@ -36,14 +36,6 @@
     pinctrl-0 = <&i2c0_default>;
     pinctrl-1 = <&i2c0_sleep>;
     pinctrl-names = "default", "sleep";
-
-    /* PCF8523 Real-Time Clock */
-    pcf8523: pcf8523@68 {
-        compatible = "nxp,pcf8523";
-        reg = <0x68>;
-        quartz-load-femtofarads = <7000>;
-        battery-switch-over = "standard";
-    };
 };
 
 /* ---------- PINCTRL configuration ---------- */

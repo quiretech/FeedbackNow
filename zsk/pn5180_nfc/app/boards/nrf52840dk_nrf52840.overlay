@@ -6,7 +6,7 @@
 		reg = <0>;
 		spi-max-frequency = <400000>;
 		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
-		rst-gpios = <&gpio0 2 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
 		nss-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
 		timeout-ms = <5000>;
@@ -35,5 +35,34 @@
             label = "Button 6";
             gpios = <&gpio0 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
         };
+
+		// button6: button_6 {
+        //     label = "Button 0";
+        //     gpios = <&gpio0 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        // };
+	};
+
+	enables {
+		compatible = "gpio-leds";
+
+		en3v3: en3v3 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3";
+		};
+
+		en1v8: en1v8 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "EN 1V8";
+		};
+
+		en3v3a: en3v3a {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3A";
+		};
+
+		en3v6: en3v6 {
+			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V6";
+		};
 	};
 };

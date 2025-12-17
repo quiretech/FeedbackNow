@@ -1,4 +1,5 @@
 #include "pn5180.h"
+#include "power_ctrl.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -292,6 +293,46 @@ int main(void) {
   int ret;
 
   LOG_INF("PN5180 Power-Efficient RTOS Application Starting...");
+
+  /* Initialize power control and enable all rails */
+  ret = power_ctrl_init();
+  if (ret != 0) {
+    LOG_ERR("Failed to initialize power control: %d", ret);
+    return ret;
+  }
+
+  /* Enable all power rails with sequencing delays */
+  LOG_INF("Enabling power rails...");
+
+  ret = power_ctrl_set(POWER_EN_3V3, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V3 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  ret = power_ctrl_set(POWER_EN_1V8, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 1V8 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  ret = power_ctrl_set(POWER_EN_3V3A, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V3A rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  ret = power_ctrl_set(POWER_EN_3V6, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V6 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(50); /* Allow rails to stabilize */
+
+  LOG_INF("All power rails enabled");
 
   /* Check if devices are ready */
   if (!device_is_ready(pn5180_dev)) {

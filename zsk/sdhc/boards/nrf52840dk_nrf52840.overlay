@@ -15,6 +15,41 @@
  * - 3V:  VDD (3.3V)
  */
 
+/ {
+	leds {
+		compatible = "gpio-leds";
+
+		led1: led_1 {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "LED1 Status";
+		};
+	};
+
+	enables {
+		compatible = "gpio-leds";
+
+		en3v3: en3v3 {
+			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3";
+		};
+
+		en1v8: en1v8 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "EN 1V8";
+		};
+
+		en3v3a: en3v3a {
+			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V3A";
+		};
+
+		en3v6: en3v6 {
+			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+			label = "EN 3V6";
+		};
+	};
+};
+
 &pinctrl {
 	spi3_default: spi3_default {
 		group1 {

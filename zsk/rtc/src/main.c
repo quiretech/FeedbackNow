@@ -11,6 +11,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
+#include "power_ctrl.h"
+
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
 /* Get the RTC device from device tree */
@@ -28,11 +30,11 @@ static const struct device *rtc_dev = DEVICE_DT_GET(DT_NODELABEL(pcf8523));
  */
 #define SET_YEAR 2025 /* Full year (e.g., 2025) */
 #define SET_MONTH 12  /* Month 1-12 */
-#define SET_DAY 8     /* Day of month 1-31 */
-#define SET_HOUR 14   /* Hour 0-23 (24-hour format) */
-#define SET_MINUTE 35 /* Minute 0-59 */
+#define SET_DAY 17    /* Day of month 1-31 */
+#define SET_HOUR 13   /* Hour 0-23 (24-hour format) */
+#define SET_MINUTE 39 /* Minute 0-59 */
 #define SET_SECOND 0  /* Second 0-59 */
-#define SET_WEEKDAY 1 /* 0=Sunday, 1=Monday, ... 6=Saturday */
+#define SET_WEEKDAY 3 /* 0=Sunday, 1=Monday, ... 6=Saturday */
 
 /* Helper function to print RTC time */
 static void print_rtc_time(const struct rtc_time *tm) {
@@ -97,6 +99,49 @@ int main(void) {
   printk("\n========================================\n");
   printk("PCF8523 RTC Driver Example\n");
   printk("========================================\n\n");
+
+  /* Initialize and enable all power rails first */
+  printk("--- Initializing Power Rails ---\n");
+  ret = power_ctrl_init();
+  if (ret != 0) {
+    LOG_ERR("Failed to initialize power control: %d", ret);
+    return ret;
+  }
+
+  /* Enable all power rails in sequence with delays for stability */
+  printk("Enabling EN_3V3...\n");
+  ret = power_ctrl_set(POWER_EN_3V3, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V3 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  printk("Enabling EN_1V8...\n");
+  ret = power_ctrl_set(POWER_EN_1V8, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 1V8 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  printk("Enabling EN_3V3A...\n");
+  ret = power_ctrl_set(POWER_EN_3V3A, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V3A rail: %d", ret);
+    return ret;
+  }
+  k_msleep(10);
+
+  printk("Enabling EN_3V6...\n");
+  ret = power_ctrl_set(POWER_EN_3V6, true);
+  if (ret != 0) {
+    LOG_ERR("Failed to enable 3V6 rail: %d", ret);
+    return ret;
+  }
+  k_msleep(50); /* Extra settle time after all rails enabled */
+
+  printk("All power rails enabled!\n\n");
 
   /* Check if RTC device is ready */
   if (!device_is_ready(rtc_dev)) {

@@ -3,6 +3,8 @@
  * With optional erase/format on boot
  */
 
+#include "power_ctrl.h"
+
 #include <ff.h>
 #include <string.h>
 #include <zephyr/device.h>
@@ -148,10 +150,38 @@ static int create_test_directory(void) {
 
 /* ========== Main Program ========== */
 int main(void) {
+  int ret;
   uint32_t block_count = 0, block_size = 0;
   uint64_t memory_size_mb;
 
   printk("\n--- Initializing SD Card ---\n");
+
+  ret = power_ctrl_init();
+  if (ret != 0) {
+    printk("ERROR: Power control init failed (%d)\n", ret);
+    goto error;
+  }
+
+  ret = power_ctrl_set(POWER_EN_3V3, true);
+  if (ret != 0) {
+    printk("ERROR: Failed to enable 3V3 rail (%d)\n", ret);
+    goto error;
+  }
+  ret = power_ctrl_set(POWER_EN_1V8, true);
+  if (ret != 0) {
+    printk("ERROR: Failed to enable 1V8 rail (%d)\n", ret);
+    goto error;
+  }
+  ret = power_ctrl_set(POWER_EN_3V3A, true);
+  if (ret != 0) {
+    printk("ERROR: Failed to enable 3V3A rail (%d)\n", ret);
+    goto error;
+  }
+  ret = power_ctrl_set(POWER_EN_3V6, true);
+  if (ret != 0) {
+    printk("ERROR: Failed to enable 3V6 rail (%d)\n", ret);
+    goto error;
+  }
 
   if (disk_access_ioctl(DISK_DRIVE_NAME, DISK_IOCTL_CTRL_INIT, NULL) != 0) {
     printk("ERROR: SD card init failed!\n");
