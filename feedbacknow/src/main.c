@@ -199,6 +199,7 @@
 #include "lora_app.h"
 #include "lora_manager.h"
 #include "nfc_manager.h"
+#include "power_ctrl.h"
 #include "state_manager.h"
 #include "sys_config.h"
 #include "system_init.h"
@@ -342,6 +343,19 @@ int main(void) {
     LOG_ERR("System initialization failed");
     return -1;
   }
+
+  // Initialize power control and enable all rails
+  if (power_ctrl_init() != 0) {
+    LOG_ERR("Power control initialization failed");
+    return -1;
+  }
+
+  // Enable all power rails
+  power_ctrl_set(POWER_EN_3V3, true);
+  power_ctrl_set(POWER_EN_1V8, true);
+  power_ctrl_set(POWER_EN_3V3A, false);
+  power_ctrl_set(POWER_EN_3V6, true);
+  LOG_INF("All power rails enabled");
 
   state_manager_init();
   led_manager_init();

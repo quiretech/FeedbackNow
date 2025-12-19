@@ -8,8 +8,6 @@ enum power_domain {
   POWER_EN_1V8,
   POWER_EN_3V3A,
   POWER_EN_3V6,
-  POWER_LR_RESET,
-  POWER_LR_CS,
   POWER_DOMAIN_COUNT,
 };
 

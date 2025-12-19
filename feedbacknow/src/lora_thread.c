@@ -5,6 +5,8 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
 
+#include "power_ctrl.h"
+
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)

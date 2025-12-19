@@ -12,14 +12,33 @@ LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 // Ensure proper alignment for the message queue
 K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE, 4);
 
-/* Battery level callback for LoRaWAN MAC commands (0=external power, 1..254 level, 255=unknown).
- * We return a random 1..254 value to see if the LNS consumes it.
+/* Join status tracking */
+atomic_t lora_joined_flag = ATOMIC_INIT(0);
+K_SEM_DEFINE(lora_join_sem, 0, 1);
+
+/* Battery level callback for LoRaWAN MAC commands (0=external power, 1..254
+ * level, 255=unknown). We return a random 1..254 value to see if the LNS
+ * consumes it.
  */
-static uint8_t lora_battery_level_cb(void)
-{
+static uint8_t lora_battery_level_cb(void) {
   uint32_t r = 0;
   sys_rand_get(&r, sizeof(r));
   return (uint8_t)(1 + (r % 254U)); /* 1..254 */
+}
+
+int lora_wait_for_join(k_timeout_t timeout) {
+  /* If already joined, return immediately */
+  if (lora_is_joined()) {
+    return 0;
+  }
+
+  /* Wait for join semaphore */
+  int ret = k_sem_take(&lora_join_sem, timeout);
+  if (ret == 0) {
+    /* Give back the semaphore so other waiters can also proceed */
+    k_sem_give(&lora_join_sem);
+  }
+  return ret;
 }
 
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
@@ -42,6 +61,12 @@ int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (msg == NULL) {
     LOG_ERR("lora_put_event: NULL message pointer");
     return -EINVAL;
+  }
+
+  /* Reject messages if not joined to network */
+  if (!lora_is_joined()) {
+    LOG_WRN("lora_put_event: Cannot queue message - not joined to network");
+    return -ENOTCONN;
   }
 
   if (msg->len > LORA_MAX_PAYLOAD_SIZE) {

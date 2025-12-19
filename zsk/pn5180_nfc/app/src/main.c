@@ -334,6 +334,23 @@ int main(void) {
 
   LOG_INF("All power rails enabled");
 
+  /* Configure LR Reset and CS pins */
+  // ret = power_ctrl_set(POWER_LR_RESET, true); /* Hold in reset initially */
+  // if (ret != 0) {
+  //   LOG_ERR("Failed to set LR Reset: %d", ret);
+  //   return ret;
+  // }
+
+  // ret = power_ctrl_set(POWER_LR_CS,
+  //                      false); /* Deselect CS (active low typically) */
+
+  // if (ret != 0) {
+  //   LOG_ERR("Failed to set LR CS: %d", ret);
+  //   return ret;
+  // }
+
+  LOG_INF("LR Reset and CS pins configured");
+
   /* Check if devices are ready */
   if (!device_is_ready(pn5180_dev)) {
     LOG_ERR("PN5180 device not ready");

@@ -91,6 +91,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
               LORA_JOIN_RETRY_DELAY_SECONDS);
     } else {
       LOG_INF("=== LORA JOIN SUCCESSFUL ===");
+      /* Mark as joined and signal waiting threads */
+      atomic_set(&lora_joined_flag, 1);
+      k_sem_give(&lora_join_sem);
     }
 
     if (ret != 0) {

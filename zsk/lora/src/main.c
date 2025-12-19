@@ -33,7 +33,7 @@ int main(void) {
 
   power_ctrl_set(POWER_EN_3V3, true);
   power_ctrl_set(POWER_EN_1V8, true);
-  power_ctrl_set(POWER_EN_3V3A, true);
+  power_ctrl_set(POWER_EN_3V3A, false);
   power_ctrl_set(POWER_EN_3V6, true);
 
   /* Initialize payload generator (stable NFC UID, counters) */
@@ -50,9 +50,15 @@ int main(void) {
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started");
 
-  /* Wait a bit for the join to complete before sending data */
+  /* Wait for actual join completion (timeout after 2 minutes) */
   LOG_INF("Waiting for LoRa join to complete...");
-  k_sleep(K_SECONDS(30)); // Give time for join process
+  ret = lora_wait_for_join(K_SECONDS(120));
+  if (ret != 0) {
+    LOG_ERR("LoRa join did not complete within timeout!");
+    /* Continue anyway - the thread will keep trying to join */
+  } else {
+    LOG_INF("LoRa join confirmed!");
+  }
 
   LOG_INF("Starting periodic data transmission every %d seconds",
           LORA_SEND_INTERVAL_SECONDS);
@@ -81,7 +87,9 @@ int main(void) {
 
     /* Queue the message for sending */
     ret = lora_put_event(&msg, K_NO_WAIT);
-    if (ret != 0) {
+    if (ret == -ENOTCONN) {
+      LOG_WRN("Not joined to network yet, skipping message");
+    } else if (ret != 0) {
       LOG_ERR("Failed to queue LoRa message: %d", ret);
     } else {
       LOG_INF("Message queued successfully");

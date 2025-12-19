@@ -13,16 +13,12 @@ LOG_MODULE_REGISTER(power_ctrl, LOG_LEVEL_INF);
 #define EN1V8_NODE DT_NODELABEL(en1v8)
 #define EN3V3A_NODE DT_NODELABEL(en3v3a)
 #define EN3V6_NODE DT_NODELABEL(en3v6)
-#define LR_RESET_NODE DT_NODELABEL(lrreset)
-#define LR_CS_NODE DT_NODELABEL(lrcs)
 
 static const struct gpio_dt_spec power_gpios[POWER_DOMAIN_COUNT] = {
     GPIO_DT_SPEC_GET_OR(EN3V3_NODE, gpios, {0}),
     GPIO_DT_SPEC_GET_OR(EN1V8_NODE, gpios, {0}),
     GPIO_DT_SPEC_GET_OR(EN3V3A_NODE, gpios, {0}),
     GPIO_DT_SPEC_GET_OR(EN3V6_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LR_RESET_NODE, gpios, {0}),
-    GPIO_DT_SPEC_GET_OR(LR_CS_NODE, gpios, {0}),
 };
 
 int power_ctrl_init(void) {

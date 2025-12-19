@@ -1,4 +1,28 @@
 / {
+    enables {
+        compatible = "gpio-leds";
+
+        en3v3: en3v3 {
+            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V3";
+        };
+
+        en1v8: en1v8 {
+            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            label = "EN 1V8";
+        };
+
+        en3v3a: en3v3a {
+            gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V3A";
+        };
+
+        en3v6: en3v6 {
+            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V6";
+        };
+    };
+
     aliases {
         sw0 = &button0;
         sw1 = &button1;
@@ -7,13 +31,7 @@
         sw4 = &button4;
         sw5 = &button5;
         sw6 = &button6;
-        led0 = &led0;
-        led1 = &led1;
-        led2 = &led2;
-        led3 = &led3;
-        led4 = &led4;
-        led5 = &led5;
-        led6 = &led6;
+        led0 = &led1;
         lora0 = &lora_semtech_sx1262mb2das;
     };
 
@@ -37,46 +55,13 @@
     };
 
 leds {
-        compatible = "gpio-leds";
-
-		led4: led_4 {
-			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
-			label = "Green LED 0";
-		};
-
-		led3: led_3 {
-			gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
-			label = "Green LED 1";
-		};
-
-		led2: led_2 {
-			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
-			label = "Green LED 2";
-		};
+		compatible = "gpio-leds";
 
 		led1: led_1 {
-			gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
-			label = "Green LED 3";
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "LED1 Status";
 		};
-
-        led0: led_0 {
-            gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
-			label = "EXT LED 4";
-
-        };
-
-        led5: led_5 {
-            gpios = <&gpio1 9 GPIO_ACTIVE_HIGH>;  
-			label = "EXT LED 5";
-
-        };
-
-        led6: led_6 {
-            gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
-			label = "EXT LED 6";
-
-        };
-    };
+	};
 };
 
 &uart0 {	

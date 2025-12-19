@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <zephyr/kernel.h>
 #include <zephyr/lorawan/lorawan.h>
+#include <zephyr/sys/atomic.h>
 
 // #define LORAWAN_DEV_EUI                                                        \
 //   { 0x3a, 0x2b, 0x35, 0xf2, 0x09, 0x78, 0x6d, 0x1e }
@@ -66,6 +67,27 @@ extern struct k_mutex lora_send_mutex;
 
 // LoRa thread ID
 extern const k_tid_t lora_thread_id;
+
+/* Join status tracking - atomic flag for thread safety */
+extern atomic_t lora_joined_flag;
+
+/* Semaphore to signal join completion to waiting threads */
+extern struct k_sem lora_join_sem;
+
+/**
+ * @brief Check if device has successfully joined the LoRaWAN network
+ * @return true if joined, false otherwise
+ */
+static inline bool lora_is_joined(void) {
+  return atomic_get(&lora_joined_flag) != 0;
+}
+
+/**
+ * @brief Wait for LoRaWAN join to complete
+ * @param timeout Maximum time to wait
+ * @return 0 on success, -EAGAIN on timeout
+ */
+int lora_wait_for_join(k_timeout_t timeout);
 
 /* Message queue API */
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout);

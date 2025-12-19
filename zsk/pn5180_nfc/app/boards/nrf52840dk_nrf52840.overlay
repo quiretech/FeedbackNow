@@ -22,6 +22,11 @@
 };	
 	
 
+&spi1 {	
+	status="disabled";
+};	
+	
+
 /* Wake-up GPIO configuration */
 / {
 	aliases {
@@ -36,10 +41,6 @@
             gpios = <&gpio0 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
         };
 
-		// button6: button_6 {
-        //     label = "Button 0";
-        //     gpios = <&gpio0 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-        // };
 	};
 
 	enables {
@@ -63,6 +64,16 @@
 		en3v6: en3v6 {
 			gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
 			label = "EN 3V6";
+		};
+
+		lrreset: lrreset {
+			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+			label = "LR Reset";
+		};
+
+		lrcs: lrcs {
+			gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
+			label = "LR CS";
 		};
 	};
 };

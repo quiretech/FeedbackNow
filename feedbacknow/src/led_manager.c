@@ -12,53 +12,25 @@ LOG_MODULE_REGISTER(led_manager, LOG_LEVEL_INF);
 K_MSGQ_DEFINE(led_cmd_queue, sizeof(led_cmd_t), LED_QUEUE_SIZE,
               LED_QUEUE_ALIGNMENT);
 
-// LED blink work items for each LED
+// LED blink work items - single LED
 static struct k_work led_blink_work[NUM_LEDS];
 static struct k_timer led_blink_timer[NUM_LEDS];
 
-// LED blink work handlers
+// LED blink work handler - single LED
 static void led_blink_work_handler_0(struct k_work *work) { led_set(0, false); }
-static void led_blink_work_handler_1(struct k_work *work) { led_set(1, false); }
-static void led_blink_work_handler_2(struct k_work *work) { led_set(2, false); }
-static void led_blink_work_handler_3(struct k_work *work) { led_set(3, false); }
-static void led_blink_work_handler_4(struct k_work *work) { led_set(4, false); }
-static void led_blink_work_handler_5(struct k_work *work) { led_set(5, false); }
-static void led_blink_work_handler_6(struct k_work *work) { led_set(6, false); }
 
 static void (*led_blink_handlers[NUM_LEDS])(struct k_work *) = {
-    led_blink_work_handler_0, led_blink_work_handler_1,
-    led_blink_work_handler_2, led_blink_work_handler_3,
-    led_blink_work_handler_4, led_blink_work_handler_5,
-    led_blink_work_handler_6};
+    led_blink_work_handler_0,
+};
 
-// Timer handlers for LED blink
+// Timer handler for LED blink - single LED
 static void led_blink_timer_handler_0(struct k_timer *timer) {
   k_work_submit(&led_blink_work[0]);
 }
-static void led_blink_timer_handler_1(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[1]);
-}
-static void led_blink_timer_handler_2(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[2]);
-}
-static void led_blink_timer_handler_3(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[3]);
-}
-static void led_blink_timer_handler_4(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[4]);
-}
-static void led_blink_timer_handler_5(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[5]);
-}
-static void led_blink_timer_handler_6(struct k_timer *timer) {
-  k_work_submit(&led_blink_work[6]);
-}
 
 static void (*led_timer_handlers[NUM_LEDS])(struct k_timer *) = {
-    led_blink_timer_handler_0, led_blink_timer_handler_1,
-    led_blink_timer_handler_2, led_blink_timer_handler_3,
-    led_blink_timer_handler_4, led_blink_timer_handler_5,
-    led_blink_timer_handler_6};
+    led_blink_timer_handler_0,
+};
 
 int led_manager_init(void) {
   // Initialize LED hardware

@@ -1,10 +1,13 @@
 #include "buttons.h"
+#include "led_manager.h"
 #include "nfc_manager.h"
 #include "state_manager.h"
 #include "sys_config.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+
+#include "power_ctrl.h"
 
 LOG_MODULE_REGISTER(button_thread, LOG_LEVEL_INF);
 
@@ -26,6 +29,12 @@ void button_thread_func(void *a, void *b, void *c) {
             btn_evt.type == BUTTON_EVENT_PRESS ? "pressed" : "released",
             btn_evt.timestamp_ms);
 
+    // Any button press turns on the status LED
+    if (btn_evt.type == BUTTON_EVENT_PRESS) {
+      LOG_INF("Button pressed - turning on status LED");
+      led_manager_blink_once(0); // Blink LED 0 (the only LED)
+    }
+
     // Create system event
     event.event_type = (btn_evt.type == BUTTON_EVENT_PRESS)
                            ? EVENT_BUTTON_PRESSED
@@ -40,10 +49,15 @@ void button_thread_func(void *a, void *b, void *c) {
       LOG_ERR("Failed to send button event to state manager: %d", ret);
     }
 
-    // Special handling for button 0 (NFC trigger)
+    // Special handling for button 5 (NFC trigger)
     if (btn_evt.button_id == 5 && btn_evt.type == BUTTON_EVENT_PRESS) {
-      LOG_INF("Button 0 pressed - triggering NFC scan");
+      LOG_INF("Button 5 pressed - triggering NFC scan");
+      LOG_INF("Turning on 3.3a");
+      power_ctrl_set(POWER_EN_3V3A, true);
       nfc_manager_trigger_scan();
+      k_msleep(10);
+      power_ctrl_set(POWER_EN_3V3A, false);
+      LOG_INF("Turning off 3.3a");
     }
   }
 }

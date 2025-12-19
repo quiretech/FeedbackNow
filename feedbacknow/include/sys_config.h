@@ -18,7 +18,7 @@
 #define LED_BLINK_DURATION_MS 1000
 #define LED_QUEUE_SIZE 10
 #define LED_QUEUE_ALIGNMENT 4
-#define NUM_LEDS 7
+#define NUM_LEDS 1
 
 // ============================================================================
 // BUTTON CONFIGURATION

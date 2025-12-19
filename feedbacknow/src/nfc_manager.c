@@ -69,7 +69,7 @@ static void nfc_power_up(void) {
   LOG_INF("NFC powering up");
   k_mutex_lock(&nfc_mutex, K_FOREVER);
   LOG_DBG("Configuring PN5180 to ISO14443A (active mode)");
-  int ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO14443A);
+  int ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
   if (ret != 0) {
     LOG_ERR("Failed to configure PN5180 to active: %d", ret);
   }
@@ -211,7 +211,7 @@ int nfc_manager_init(void) {
   }
 
   // Configure for ISO14443A (most common NFC protocol)
-  ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO14443A);
+  ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
   if (ret != 0) {
     LOG_ERR("Failed to configure NFC protocol: %d", ret);
     return ret;
