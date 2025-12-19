@@ -7,7 +7,7 @@
         sw4 = &button4;
         sw5 = &button5;
         sw6 = &button6;
-        led0 = &led1;
+        led0 = &led0;
         lora0 = &lora_semtech_sx1262mb2das;
     };
 
@@ -33,13 +33,13 @@
 leds {
 		compatible = "gpio-leds";
 
-		led1: led_1 {
+		led0: led_0 {
 			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
 			label = "LED1 Status";
 		};
 	};
 
-	enables {
+enables {
 		compatible = "gpio-leds";
 
 		en3v3: en3v3 {
@@ -91,30 +91,47 @@ leds {
 	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>; /* LoRa CS - P1.08 */
 	       
 	
-	// lora_semtech_sx1262mb2das: sx1262@0 {
-	// 	compatible = "semtech,sx1262";
-	// 	reg = <0>;
-	// 	spi-max-frequency = <1000000>;
-	// 	label = "SX1262";
-	// 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
-	// 	busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
-	// 	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
-	// 	dio1-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>;
-	// 	dio2-tx-enable;
-	// 	tcxo-power-startup-delay-ms = <5>;
-	// };
-
-		lora_semtech_sx1262mb2das: sx1262@0 {
+	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
 		reg = <0>;
 		spi-max-frequency = <1000000>;
 		label = "SX1262";
-		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
-		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
-		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
+		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
+		busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
+		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&arduino_header 11 GPIO_ACTIVE_HIGH>;
 		dio2-tx-enable;
 		tcxo-power-startup-delay-ms = <5>;
 	};
 
+	// 	lora_semtech_sx1262mb2das: sx1262@0 {
+	// 	compatible = "semtech,sx1262";
+	// 	reg = <0>;
+	// 	spi-max-frequency = <1000000>;
+	// 	label = "SX1262";
+	// 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+	// 	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+	// 	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
+	// 	dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
+	// 	dio2-tx-enable;
+	// 	tcxo-power-startup-delay-ms = <5>;
+	// };
+
+};
+
+/* PCF8523 RTC on I2C (address 0x68).
+ * Adjust wiring/pins by switching to &i2c0 / &i2c1 if needed, but
+ * nrf52840dk's &arduino_i2c is usually routed to the Arduino header.
+ */
+&arduino_i2c {
+	status = "okay";
+
+	pcf8523: pcf8523@68 {
+		compatible = "nxp,pcf8523";
+		reg = <0x68>;
+		/* Required by binding: choose "disabled" unless you have VBAT wired */
+		battery-switch-over = "standard";
+		/* Optional: disable CLKOUT to save power/noise */
+		clkout-frequency = <0>;
+	};
 };

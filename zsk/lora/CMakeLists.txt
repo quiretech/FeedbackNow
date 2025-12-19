@@ -12,4 +12,7 @@ target_sources(app PRIVATE
   src/lora_thread.c
   src/payload_gen.c
   src/power_ctrl.c
+  src/buttons.c
+  src/button_thread.c
+  src/rtc.c
 )

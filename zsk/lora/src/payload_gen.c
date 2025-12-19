@@ -82,6 +82,39 @@ static void build_button(uint8_t *b) {
   ctx.next_button_id = (ctx.next_button_id + 1U) % (BUTTON_ID_MAX + 1U);
 }
 
+int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
+                             uint8_t *out_buf, uint32_t *out_counter) {
+  if (!out_buf) {
+    return -EINVAL;
+  }
+  if (button_id > BUTTON_ID_MAX) {
+    return -EINVAL;
+  }
+
+  k_mutex_lock(&ctx.lock, K_FOREVER);
+
+  ctx.button_counter[button_id] =
+      (ctx.button_counter[button_id] + 1U) % BUTTON_COUNTER_ROLLOVER;
+
+  write_be32(out_buf, epoch_s);
+  out_buf[4] = EVT_BUTTON;
+  out_buf[5] = button_id;
+
+  uint32_t c = ctx.button_counter[button_id];
+  out_buf[6] = (uint8_t)(c >> 16);
+  out_buf[7] = (uint8_t)(c >> 8);
+  out_buf[8] = (uint8_t)(c);
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+
+  if (out_counter) {
+    *out_counter = c;
+  }
+
+  k_mutex_unlock(&ctx.lock);
+  return 0;
+}
+
 static void build_nfc(uint8_t *b) {
   write_be32(b, get_epoch_seconds());
   b[4] = EVT_NFC;

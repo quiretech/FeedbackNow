@@ -11,9 +11,12 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include "button_thread.h"
+#include "buttons.h"
 #include "lora_app.h"
 #include "payload_gen.h"
 #include "power_ctrl.h"
+#include "rtc.h"
 #include "sys_config.h"
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -39,6 +42,13 @@ int main(void) {
   /* Initialize payload generator (stable NFC UID, counters) */
   payload_gen_init();
 
+  /* Optional RTC init (button mode uses RTC timestamps) */
+  ret = rtc_app_init();
+  if (ret != 0) {
+    LOG_WRN("RTC init not available (%d); button timestamps may fall back",
+            ret);
+  }
+
   /* Initialize LoRaWAN stack */
   ret = lora_app_init();
   if (ret < 0) {
@@ -60,7 +70,24 @@ int main(void) {
     LOG_INF("LoRa join confirmed!");
   }
 
-  LOG_INF("Starting periodic data transmission every %d seconds",
+  if (DEMO_USE_REAL_BUTTON_UPLINK) {
+    LOG_INF("Demo mode: REAL BUTTON uplinks");
+
+    ret = buttons_init();
+    if (ret != 0) {
+      LOG_ERR("buttons_init failed: %d", ret);
+      return 0;
+    }
+
+    k_thread_start(button_uplink_thread_id);
+    LOG_INF("Button uplink thread started");
+
+    while (1) {
+      k_sleep(K_SECONDS(1));
+    }
+  }
+
+  LOG_INF("Demo mode: PSEUDO simulation; sending every %d seconds",
           LORA_SEND_INTERVAL_SECONDS);
 
   /* Main loop - generate + queue payloads every interval */
