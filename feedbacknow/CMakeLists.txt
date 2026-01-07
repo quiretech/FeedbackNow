@@ -26,4 +26,5 @@ target_sources(app PRIVATE
     src/lora_manager.c
     src/nfc_manager.c
     src/system_monitor.c
+    src/power_rail_mgr.c
 )

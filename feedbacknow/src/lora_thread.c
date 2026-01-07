@@ -6,6 +6,8 @@
 #include <zephyr/lorawan/lorawan.h>
 
 #include "power_ctrl.h"
+#include "power_rail_mgr.h"
+#include "sys_config.h"
 
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -47,6 +49,9 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   LOG_INF("Sending payload (port %d, len %d):", port, len);
   LOG_HEXDUMP_INF(data, len, "");
 
+  /* LoRa requires 3V3A OFF while the radio is active (TX + RX windows). */
+  (void)power_rail_mgr_require_3v3a_off(POWER_RAIL_CLIENT_LORA, K_FOREVER);
+
   ret =
       lorawan_send(port, (uint8_t *)data, (uint8_t)len,
                    confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
@@ -58,6 +63,10 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   } else {
     LOG_INF("Data sent on port %d", port);
   }
+
+  /* Keep rail OFF briefly to cover RX windows after send. */
+  k_sleep(K_MSEC(LORA_3V3A_GUARD_MS));
+  power_rail_mgr_release_3v3a_off(POWER_RAIL_CLIENT_LORA);
 
   return ret;
 }
@@ -89,7 +98,13 @@ static void lora_thread_fn(void *a, void *b, void *c) {
             attempt++);
     LOG_INF("About to call lorawan_join()...");
     LOG_INF("Current uptime before join: %llu ms", k_uptime_get());
+
+    /* LoRa requires 3V3A OFF while the radio is active (join includes RX). */
+    (void)power_rail_mgr_require_3v3a_off(POWER_RAIL_CLIENT_LORA, K_FOREVER);
     ret = lorawan_join(&join_cfg);
+    k_sleep(K_MSEC(LORA_3V3A_GUARD_MS));
+    power_rail_mgr_release_3v3a_off(POWER_RAIL_CLIENT_LORA);
+
     LOG_INF("lorawan_join() returned: %d", ret);
     LOG_INF("Current uptime after join: %llu ms", k_uptime_get());
 

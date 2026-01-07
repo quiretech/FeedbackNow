@@ -1,5 +1,6 @@
 #include "lora_manager.h"
 #include "lora_app.h"
+#include "power_rail_mgr.h"
 #include "state_manager.h"
 #include "sys_config.h"
 #include "system_monitor.h"
@@ -101,9 +102,13 @@ static int lora_manager_send_with_retry(lora_message_t *msg) {
   lora_manager_set_status(LORA_STATUS_SENDING);
 
   while (attempts < LORA_MAX_RETRIES) {
+    /* LoRa requires 3V3A OFF while the radio is active (TX + RX windows). */
+    (void)power_rail_mgr_require_3v3a_off(POWER_RAIL_CLIENT_LORA, K_FOREVER);
     ret = lorawan_send(msg->port, msg->data, msg->len,
                        msg->confirmed ? LORAWAN_MSG_CONFIRMED
                                       : LORAWAN_MSG_UNCONFIRMED);
+    k_sleep(K_MSEC(LORA_3V3A_GUARD_MS));
+    power_rail_mgr_release_3v3a_off(POWER_RAIL_CLIENT_LORA);
 
     if (ret == 0) {
       // Success

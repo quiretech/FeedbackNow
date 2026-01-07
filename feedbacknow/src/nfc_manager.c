@@ -5,6 +5,7 @@
 #include "sys_config.h"
 
 #include "pn5180.h"
+#include "power_rail_mgr.h"
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -25,6 +26,8 @@ static enum nfc_system_state nfc_state = NFC_SLEEP;
 static const struct device *nfc_dev;
 static K_MUTEX_DEFINE(nfc_state_mutex);
 static K_MUTEX_DEFINE(nfc_mutex);
+static bool nfc_3v3a_held;
+static bool nfc_3v6_held;
 
 // NFC event queue
 K_MSGQ_DEFINE(nfc_event_queue, sizeof(nfc_event_t), NFC_QUEUE_SIZE,
@@ -62,13 +65,32 @@ static void nfc_power_down(void) {
     LOG_ERR("Failed to configure PN5180 to idle: %d", ret);
   }
   k_mutex_unlock(&nfc_mutex);
+
+  if (nfc_3v3a_held) {
+    power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v3a_held = false;
+  }
+  if (nfc_3v6_held) {
+    power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v6_held = false;
+  }
   set_nfc_state(NFC_SLEEP);
 }
 
 static void nfc_power_up(void) {
   LOG_INF("NFC powering up");
+  if (!nfc_3v6_held) {
+    (void)power_rail_mgr_require_3v6_on(POWER_RAIL_CLIENT_NFC, K_FOREVER);
+    nfc_3v6_held = true;
+    k_sleep(K_MSEC(POWER_RAIL_3V6_ON_DELAY_MS));
+  }
+  if (!nfc_3v3a_held) {
+    (void)power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_NFC, K_FOREVER);
+    nfc_3v3a_held = true;
+    k_sleep(K_MSEC(POWER_RAIL_3V3A_ON_DELAY_MS));
+  }
   k_mutex_lock(&nfc_mutex, K_FOREVER);
-  LOG_DBG("Configuring PN5180 to ISO14443A (active mode)");
+  LOG_DBG("Configuring PN5180 to PN5180_PROTOCOL_ISO15693 (active mode)");
   int ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
   if (ret != 0) {
     LOG_ERR("Failed to configure PN5180 to active: %d", ret);
@@ -195,10 +217,31 @@ void nfc_manager_thread(void *a, void *b, void *c) {
 int nfc_manager_init(void) {
   LOG_INF("=== NFC MANAGER INITIALIZATION ===");
 
+  LOG_INF("NFC requesting 3V6 ON...");
+  (void)power_rail_mgr_require_3v6_on(POWER_RAIL_CLIENT_NFC, K_FOREVER);
+  nfc_3v6_held = true;
+  k_sleep(K_MSEC(POWER_RAIL_3V6_ON_DELAY_MS));
+
+  LOG_INF("NFC requesting 3V3A ON...");
+  int rail_ret = power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_NFC, K_SECONDS(10));
+  if (rail_ret != 0) {
+    LOG_ERR("NFC timed out waiting for 3V3A ON (%d). Dumping rail state:", rail_ret);
+    power_rail_mgr_dump_state();
+    power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v6_held = false;
+    return rail_ret;
+  }
+  nfc_3v3a_held = true;
+  k_sleep(K_MSEC(POWER_RAIL_3V3A_ON_DELAY_MS));
+
   // Get NFC device
   nfc_dev = DEVICE_DT_GET(DT_NODELABEL(pn5180));
   if (!device_is_ready(nfc_dev)) {
     LOG_ERR("NFC device not ready");
+    power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v3a_held = false;
+    power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v6_held = false;
     return -ENODEV;
   }
   LOG_INF("NFC device ready: %s", nfc_dev->name);
@@ -207,6 +250,10 @@ int nfc_manager_init(void) {
   int ret = pn5180_init(nfc_dev);
   if (ret != 0) {
     LOG_ERR("Failed to initialize NFC driver: %d", ret);
+    power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v3a_held = false;
+    power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v6_held = false;
     return ret;
   }
 
@@ -214,10 +261,20 @@ int nfc_manager_init(void) {
   ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
   if (ret != 0) {
     LOG_ERR("Failed to configure NFC protocol: %d", ret);
+    power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v3a_held = false;
+    power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+    nfc_3v6_held = false;
     return ret;
   }
 
   LOG_INF("NFC manager initialized successfully");
+
+  /* Release after init; scan paths will re-acquire as needed. */
+  power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_NFC);
+  nfc_3v3a_held = false;
+  power_rail_mgr_release_3v6_on(POWER_RAIL_CLIENT_NFC);
+  nfc_3v6_held = false;
   return 0;
 }
 
@@ -234,7 +291,14 @@ int nfc_manager_start_scan(void) {
   nfc_power_up();
 
   // Perform single scan
-  return nfc_perform_single_scan();
+  int ret = nfc_perform_single_scan();
+
+  /* If no tag was found, we immediately power down and release 3V3A. */
+  if (ret != 0) {
+    nfc_power_down();
+  }
+
+  return ret;
 }
 
 int nfc_manager_stop_scan(void) {

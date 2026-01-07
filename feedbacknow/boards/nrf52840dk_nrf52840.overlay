@@ -79,7 +79,15 @@ leds {
 &qspi {	
 	status="disabled";
 };	
-	
+
+/* ================= SD card on SPI3 (sdhc-spi-slot) =================
+ * Pins (nRF52840 DK):
+ * - SCK  P1.15
+ * - MOSI P1.13
+ * - MISO P1.14
+ * - CS   P0.22 (free GPIO)
+ */
+
 &pwm0 {	
 	status="disabled";
 };	
@@ -87,11 +95,12 @@ leds {
 &arduino_spi {
 	status = "okay";
 
-	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=NFC */
+	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=SD */
 	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>,  /* LoRa CS - P1.08 */
-	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
+	           <&gpio1 12 GPIO_ACTIVE_LOW>,           /* EPD CS - P1.12 */
+	           <&gpio0 22 GPIO_ACTIVE_LOW>;          /* SD CS  - P0.22 */
+
 	       
-	
 	lora_semtech_sx1262mb2das: sx1262@0 {
 		compatible = "semtech,sx1262";
 		reg = <0>;
@@ -102,7 +111,7 @@ leds {
 		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
 		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
 		dio2-tx-enable;
-		tcxo-power-startup-delay-ms = <10>;
+		tcxo-power-startup-delay-ms = <2>;
 	};
 
 	// lora_semtech_sx1262mb2das: sx1262@0 {
@@ -118,7 +127,7 @@ leds {
 	// 	tcxo-power-startup-delay-ms = <5>;
 	// };
     
-    	ssd1683: ssd1683@1 {
+	ssd1683: ssd1683@1 {
 		compatible = "solomon,ssd1683";
 		reg = <1>;
 		spi-max-frequency = <400000>;
@@ -131,14 +140,29 @@ leds {
 		busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
 
 	};
-        pn5180: pn5180@2 {
- 		compatible = "nxp,pn5180";
+	/* PN5180 (manual CS via `nss-gpios`) */
+
+	/* SD card on Arduino SPI (shared SCK/MOSI/MISO). */
+	sdhc0: sdhc@2 {
+		compatible = "zephyr,sdhc-spi-slot";
 		reg = <2>;
+		status = "okay";
+		mmc {
+			compatible = "zephyr,sdmmc-disk";
+			disk-name = "SD";
+			status = "okay";
+		};
+		spi-max-frequency = <4000000>;
+	};
+
+	pn5180: pn5180@3 {
+ 		compatible = "nxp,pn5180";
+		reg = <3>;
 		spi-max-frequency = <400000>;
 		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
 		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
-		nss-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
+		nss-gpios = <&gpio0 29 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)	>;
 		timeout-ms = <1000>;
 	};
 

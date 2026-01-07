@@ -7,8 +7,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include "power_ctrl.h"
-
 LOG_MODULE_REGISTER(button_thread, LOG_LEVEL_INF);
 
 void button_thread_func(void *, void *, void *);
@@ -50,14 +48,9 @@ void button_thread_func(void *a, void *b, void *c) {
     }
 
     // Special handling for button 5 (NFC trigger)
-    if (btn_evt.button_id == 5 && btn_evt.type == BUTTON_EVENT_PRESS) {
+    if (btn_evt.button_id == 6 && btn_evt.type == BUTTON_EVENT_PRESS) {
       LOG_INF("Button 5 pressed - triggering NFC scan");
-      LOG_INF("Turning on 3.3a");
-      power_ctrl_set(POWER_EN_3V3A, true);
       nfc_manager_trigger_scan();
-      k_msleep(10);
-      power_ctrl_set(POWER_EN_3V3A, false);
-      LOG_INF("Turning off 3.3a");
     }
   }
 }

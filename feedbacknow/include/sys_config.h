@@ -43,6 +43,21 @@
 #define NFC_THREAD_PRIORITY 4
 
 // ============================================================================
+// POWER RAIL CONFIGURATION
+// ============================================================================
+
+/* 3V3A rail stabilization delays (tweak for your board/regulator) */
+#define POWER_RAIL_3V3A_ON_DELAY_MS 20
+#define POWER_RAIL_3V3A_OFF_DELAY_MS 5
+
+/* 3V6 rail stabilization delays (NFC rail on this board) */
+#define POWER_RAIL_3V6_ON_DELAY_MS 20
+#define POWER_RAIL_3V6_OFF_DELAY_MS 5
+
+/* After a LoRa join/send call returns, keep 3V3A OFF to cover RX windows. */
+#define LORA_3V3A_GUARD_MS 3000
+
+// ============================================================================
 // LORA CONFIGURATION
 // ============================================================================
 
@@ -60,15 +75,16 @@
 #define LORA_JOIN_RETRY_DELAY_SECONDS 5
 
 // // LoRaWAN credentials (default values)
-// #define LORAWAN_DEV_EUI \
-//   { 0x3a, 0x2b, 0x35, 0xf2, 0x09, 0x78, 0x6d, 0x1e }
-// #define LORAWAN_JOIN_EUI \
-//   { 0x15, 0x4e, 0x09, 0x81, 0x5d, 0xf3, 0x08, 0x2c }
-// #define LORAWAN_APP_KEY \
-//   { \
-//     0x89, 0x77, 0xe5, 0x9d, 0x13, 0x46, 0x35, 0x7d, 0x00, 0x8c, 0x32, 0x66, \
-//         0xd5, 0xee, 0xa6, 0x1b \
-//   }
+#define LORAWAN_DEV_EUI                                                        \
+  { 0x20, 0x25, 0x97, 0x19, 0x17, 0x7e, 0xae, 0xe8 }
+
+#define LORAWAN_JOIN_EUI                                                       \
+  { 0xa3, 0x95, 0xba, 0x60, 0x71, 0xbd, 0x03, 0x24 }
+
+#define LORAWAN_APP_KEY                                                        \
+  {                                                                            \
+    0x17, 0x17, 0x82, 0x72, 0xc7, 0xff, 0x39, 0x0d, 0x30, 0x81, 0xae, 0xd8,    \
+        0xfd, 0xf2, 0xcf, 0x6b
 
 // ============================================================================
 // STATE MANAGER CONFIGURATION
@@ -96,9 +112,9 @@
 // ============================================================================
 
 // Heartbeat timing
-#define HEARTBEAT_INTERVAL_MS 6000 // 60 seconds
+#define HEARTBEAT_INTERVAL_MS 60000 // 60 seconds
 #define HEARTBEAT_PORT 100
-#define HEARTBEAT_CONFIRM_BOOL true
+#define HEARTBEAT_CONFIRM_BOOL false
 
 // ============================================================================
 // THREAD CONFIGURATION

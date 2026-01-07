@@ -6,6 +6,7 @@
 
 extern struct k_msgq lora_downlink_msgq;
 #include "lora_app.h"
+#include "sdcard_logger.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -60,12 +61,35 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
 
   LOG_HEXDUMP_INF(hex_data, len, "Payload:");
 
-  // Convert binary bytes -> hex string
-  char hex_str[2 * len + 1];
-  for (uint8_t i = 0; i < len; i++) {
-    sprintf(&hex_str[i * 2], "%02X", hex_data[i]);
+  /* Persist full payload (best-effort) in a safe worker context */
+  if (sdcard_logger_is_ready()) {
+    int ret =
+        sdcard_logger_submit_downlink(port, flags, rssi, snr, hex_data, len);
+    if (ret != 0) {
+      LOG_WRN("SD submit failed: %d", ret);
+    }
   }
-  hex_str[2 * len] = '\0';
+
+  /*
+   * Convert binary bytes -> hex string, but ALWAYS enqueue a fixed-size,
+   * NUL-terminated message. The msgq item size is 64 bytes (see src/main.c).
+   * If the downlink payload is long, the hex string would otherwise be
+   * truncated without the terminator, and consumers calling strlen() would
+   * read past the buffer (memory corruption).
+   */
+  char hex_str[64];
+  static const char hex[] = "0123456789ABCDEF";
+  const uint8_t max_bytes = (uint8_t)((sizeof(hex_str) - 1) / 2);
+  uint8_t n = len;
+  if (n > max_bytes) {
+    n = max_bytes;
+    LOG_WRN("Downlink too long (%uB); truncating to %uB for UI queue", len, n);
+  }
+  for (uint8_t i = 0; i < n; i++) {
+    hex_str[i * 2] = hex[(hex_data[i] >> 4) & 0x0F];
+    hex_str[i * 2 + 1] = hex[hex_data[i] & 0x0F];
+  }
+  hex_str[n * 2] = '\0';
 
   // Enqueue the hex string for decoding/display
   if (k_msgq_put(&lora_downlink_msgq, hex_str, K_NO_WAIT) != 0) {
