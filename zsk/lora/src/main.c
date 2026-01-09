@@ -102,6 +102,16 @@ int main(void) {
     sys_reboot(SYS_REBOOT_COLD);
   }
 
+#if EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT
+  /* One-shot maintenance: erase DevNonce and reinitialize with random value, then reboot. */
+  ret = devnonce_store_factory_reset();
+  if (ret != 0) {
+    LOG_ERR("DevNonce factory reset failed (%d) - rebooting", ret);
+  }
+  LOG_INF("DevNonce factory reset complete - rebooting");
+  sys_reboot(SYS_REBOOT_COLD);
+#endif
+
 #if EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT
   /* One-shot maintenance: wipe persistent counters, then reboot. */
   ret = button_counter_store_factory_reset();

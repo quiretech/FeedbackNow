@@ -49,6 +49,8 @@
 
 /* EEPROM / persistent counter maintenance */
 #define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT 0
+/* If 1, erase and reinitialize DevNonce store with new random value on boot */
+#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT 0
 
 /* EEPROM layout (external AT24 @ eeprom0). Keep regions non-overlapping.
  * - 0x0000..0x01FF : button_counter_store (2x256B slots)
@@ -57,7 +59,8 @@
 #define EEPROM_COUNTER_STORE_BYTES 512U
 #define EEPROM_DEVNONCE_SLOT_SIZE 32U
 #define EEPROM_DEVNONCE_SLOT0_OFF ((uint32_t)EEPROM_COUNTER_STORE_BYTES)
-#define EEPROM_DEVNONCE_SLOT1_OFF ((uint32_t)EEPROM_DEVNONCE_SLOT0_OFF + (uint32_t)EEPROM_DEVNONCE_SLOT_SIZE)
+#define EEPROM_DEVNONCE_SLOT1_OFF                                              \
+  ((uint32_t)EEPROM_DEVNONCE_SLOT0_OFF + (uint32_t)EEPROM_DEVNONCE_SLOT_SIZE)
 
 /* RTC demo configuration (Option B: hardcode time at boot) */
 #define RTC_SET_TIME_ON_BOOT 1
@@ -82,13 +85,13 @@
 #define RTC_VALID_YEAR_MIN 2024
 
 /* Time sync behavior
- * If enabled, after a successful join we *require* DeviceTimeAns and a successful
- * RTC set within the window. If disabled, time sync is best-effort (requested,
- * but not gatekeeping boot).
+ * If enabled, after a successful join we *require* DeviceTimeAns and a
+ * successful RTC set within the window. If disabled, time sync is best-effort
+ * (requested, but not gatekeeping boot).
  */
 #define RTC_REQUIRE_LNS_TIME_SYNC 0
-/* Total wait window (seconds) for DeviceTimeAns + RTC set after requesting time.
- * Only used when RTC_REQUIRE_LNS_TIME_SYNC=1.
+/* Total wait window (seconds) for DeviceTimeAns + RTC set after requesting
+ * time. Only used when RTC_REQUIRE_LNS_TIME_SYNC=1.
  */
 #define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 40
 

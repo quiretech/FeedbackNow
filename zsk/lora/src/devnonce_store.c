@@ -233,4 +233,65 @@ int devnonce_store_next(uint16_t *out_nonce) {
   return 0;
 }
 
+static int erase_devnonce_slots(void) {
+  /* Erase both slots by writing 0xFF to them */
+  uint8_t ff[SLOT_SIZE];
+  memset(ff, 0xFF, sizeof(ff));
+
+  int ret = eeprom_write(eeprom_dev, SLOT0_OFF, ff, sizeof(ff));
+  if (ret != 0) {
+    return ret;
+  }
+  ret = eeprom_write(eeprom_dev, SLOT1_OFF, ff, sizeof(ff));
+  if (ret != 0) {
+    return ret;
+  }
+  return 0;
+}
+
+int devnonce_store_factory_reset(void) {
+  if (eeprom_dev == NULL || !device_is_ready(eeprom_dev)) {
+    return -ENODEV;
+  }
+
+  /* Avoid concurrent access */
+  k_mutex_lock(&ctx.lock, K_FOREVER);
+  ctx.initialized = false;
+  k_mutex_unlock(&ctx.lock);
+
+  LOG_SECTION_WRN("FACTORY RESET: EEPROM DevNonce store");
+
+  int ret = erase_devnonce_slots();
+  if (ret != 0) {
+    LOG_ERR("Failed to erase DevNonce slots: %d", ret);
+    return ret;
+  }
+
+  /* Reinitialize with a new random starting value */
+  k_mutex_lock(&ctx.lock, K_FOREVER);
+  
+  uint32_t rnd = 0;
+  sys_rand_get(&rnd, sizeof(rnd));
+  const uint16_t start = (uint16_t)rnd;
+
+  ctx.active_slot = 0;
+  ctx.seq = 0;
+  ctx.last_devnonce = start;
+
+  struct devnonce_record init = {0};
+  build_rec(&init, ctx.seq, ctx.last_devnonce);
+  ret = eeprom_write_rec(SLOT0_OFF, &init);
+  if (ret != 0) {
+    LOG_ERR("Failed to write initial DevNonce record: %d", ret);
+    k_mutex_unlock(&ctx.lock);
+    return ret;
+  }
+
+  ctx.initialized = true;
+  k_mutex_unlock(&ctx.lock);
+
+  LOG_WRN("DevNonce factory reset complete (slot=0 seq=0 start=%u). New random DevNonce initialized.", start);
+  return 0;
+}
+
 
