@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <string.h>
 #include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/i2c.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
@@ -44,12 +46,36 @@ int main(void) {
     return ret;
   }
 
+  /* Power up all domains for initialization */
   power_ctrl_set(POWER_EN_3V3, true);
   power_ctrl_set(POWER_EN_1V8, true);
   power_ctrl_set(POWER_EN_3V3A, true);
-  power_ctrl_set(POWER_EN_3V6, true);
+  power_ctrl_set(
+      POWER_EN_3V6,
+      true); /* LoRa radio - will be managed by lora_thread after join */
 
   k_sleep(K_SECONDS(1));
+
+  /* Wait for I2C bus to stabilize after power-on */
+#if DT_NODE_EXISTS(DT_NODELABEL(arduino_i2c))
+  const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(arduino_i2c));
+  if (i2c_dev != NULL) {
+    int i2c_retries = 10;
+    while (i2c_retries > 0 && !device_is_ready(i2c_dev)) {
+      LOG_DBG("Waiting for I2C bus to be ready...");
+      k_msleep(100);
+      i2c_retries--;
+    }
+    if (device_is_ready(i2c_dev)) {
+      LOG_INF("I2C bus ready");
+    } else {
+      LOG_WRN("I2C bus not ready after waiting");
+    }
+  }
+  /* Additional delay for EEPROM power-on stabilization */
+  k_msleep(50);
+#endif
+
   /* Initialize payload generator (stable NFC UID, counters) */
   payload_gen_init();
 
@@ -142,15 +168,24 @@ int main(void) {
     k_thread_start(button_uplink_thread_id);
     LOG_INF("Button uplink thread started");
 
+    /* Buttons are interrupt-driven, so main thread can sleep indefinitely.
+     * Button presses wake the system via GPIO interrupts, and the button
+     * thread handles all uplink processing. This allows maximum deep sleep
+     * time and minimal power consumption.
+     */
+    LOG_INF("Main thread entering deep sleep (buttons wake via interrupt)");
     while (1) {
-      k_sleep(K_SECONDS(1));
+      k_sleep(K_FOREVER); /* Sleep indefinitely - buttons wake via interrupt */
     }
   }
 
   LOG_INF("Demo mode: PSEUDO simulation; sending every %d seconds",
           LORA_SEND_INTERVAL_SECONDS);
 
-  /* Main loop - generate + queue payloads every interval */
+  /* Main loop - generate + queue payloads every interval.
+   * With tickless kernel enabled, k_sleep() allows CPU to enter deep sleep
+   * during the 15-minute interval, providing maximum power savings.
+   */
   while (1) {
     lora_uplink_msg_t msg = {0};
     uint8_t fport = 0;
@@ -160,6 +195,7 @@ int main(void) {
     ret = payload_gen_next(payload, &fport);
     if (ret != 0) {
       LOG_ERR("Failed to generate payload: %d", ret);
+      /* Deep sleep during interval - tickless kernel handles this */
       k_sleep(SEND_INTERVAL);
       continue;
     }
@@ -182,7 +218,10 @@ int main(void) {
       LOG_INF("Message queued successfully");
     }
 
-    /* Wait before sending next message */
+    /* Deep sleep during interval - tickless kernel allows CPU to enter
+     * System ON sleep mode, waking only when the timer expires.
+     * This provides maximum power savings between transmissions.
+     */
     k_sleep(SEND_INTERVAL);
   }
 

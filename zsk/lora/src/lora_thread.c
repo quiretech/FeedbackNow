@@ -2,6 +2,7 @@
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "power_ctrl.h"
 #include "sys_config.h"
 #include "time_sync.h"
 #include <stdbool.h>
@@ -14,6 +15,8 @@
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
+/* Class A RX windows: RX1 at ~1s, RX2 at ~2s after TX. Wait 3s before power down */
+#define LORA_RX_WINDOWS_DELAY_MS 3000
 
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
@@ -35,6 +38,13 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
     return -EINVAL;
   }
 
+  /* Power up LoRa radio domain before TX */
+  ret = power_ctrl_lora_power_up();
+  if (ret != 0) {
+    LOG_ERR("Failed to power up LoRa domain: %d", ret);
+    return ret;
+  }
+
   LOG_INF("Sending payload (port %d, len %zu):", port, len);
   LOG_HEXDUMP_INF(data, len, "");
 
@@ -44,10 +54,18 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 
   if (ret == -EAGAIN) {
     LOG_WRN("lorawan_send: busy / too long");
+    /* Power down on error */
+    power_ctrl_lora_power_down();
   } else if (ret < 0) {
     LOG_ERR("lorawan_send failed: %d", ret);
+    /* Power down on error */
+    power_ctrl_lora_power_down();
   } else {
     LOG_INF("Data sent on port %d", port);
+    /* Wait for RX windows (Class A: RX1 ~1s, RX2 ~2s after TX) */
+    k_msleep(LORA_RX_WINDOWS_DELAY_MS);
+    /* Power down LoRa radio domain after TX and RX windows */
+    power_ctrl_lora_power_down();
   }
 
   return ret;
@@ -111,6 +129,10 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
       /* Request network time and program RTC when DeviceTimeAns arrives */
       time_sync_request_and_update_rtc();
+      
+      /* Power down LoRa radio domain after successful join (will power up for TX) */
+      LOG_INF("Powering down LoRa domain after join (will power up for TX)");
+      power_ctrl_lora_power_down();
     }
 
     if (ret != 0) {

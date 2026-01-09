@@ -14,7 +14,11 @@
 #define LORA_MESSAGE_QUEUE_SIZE 10
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
-#define LORA_THREAD_PRIORITY 5
+/* Step 9: Lower priority (higher number) allows idle thread to run more often.
+ * Priority 7 = lower priority than before (5), reducing CPU usage when idle.
+ * Still high enough to handle TX/RX operations promptly.
+ */
+#define LORA_THREAD_PRIORITY 7
 #define LORA_JOIN_RETRY_DELAY_SECONDS 10
 #define LORA_MAX_RETRIES 3
 #define LORA_SEND_BUSY_RETRY_MS 1000
@@ -30,7 +34,11 @@
 #define BUTTON_QUEUE_SIZE 16
 #define BUTTON_QUEUE_ALIGNMENT 4
 #define BUTTON_THREAD_STACK_SIZE 1536
-#define BUTTON_THREAD_PRIORITY 6
+/* Step 9: Lower priority (higher number) for button thread.
+ * Priority 8 = lower priority than before (6), allowing more CPU idle time.
+ * Button processing is not time-critical, so lower priority is acceptable.
+ */
+#define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
 /* After any accepted press, ignore all further presses for this duration */
 #define BUTTON_COOLDOWN_MS 5000
