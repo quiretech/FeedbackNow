@@ -11,13 +11,21 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
+#include "devnonce_store.h"
+#include "eeprom_probe.h"
+#include "led_manager.h"
+#include "log_fmt.h"
 #include "lora_app.h"
 #include "payload_gen.h"
 #include "power_ctrl.h"
 #include "rtc.h"
 #include "sys_config.h"
+#include "time_sync.h"
+
+#include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -26,7 +34,9 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 int main(void) {
   int ret;
 
-  LOG_INF("=== LoRaWAN Application Starting ===");
+  LOG_SECTION_INF("LoRaWAN Application Starting");
+
+  k_sleep(K_SECONDS(1));
 
   ret = power_ctrl_init();
   if (ret < 0) {
@@ -36,17 +46,51 @@ int main(void) {
 
   power_ctrl_set(POWER_EN_3V3, true);
   power_ctrl_set(POWER_EN_1V8, true);
-  power_ctrl_set(POWER_EN_3V3A, false);
+  power_ctrl_set(POWER_EN_3V3A, true);
   power_ctrl_set(POWER_EN_3V6, true);
 
+  k_sleep(K_SECONDS(1));
   /* Initialize payload generator (stable NFC UID, counters) */
   payload_gen_init();
+
+  /* Initialize LED manager early (used for join + button feedback) */
+  ret = led_manager_init();
+  if (ret != 0) {
+    LOG_WRN("LED manager init failed (%d); LED feedback may be disabled", ret);
+  }
+
+  /* EEPROM bring-up (readiness check only) */
+  eeprom_probe_log();
+
+  /* Persistent button counters (EEPROM is mandatory) */
+  ret = button_counter_store_init();
+  if (ret != 0) {
+    LOG_ERR("Button counter store init failed (%d) - rebooting", ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+
+  /* Persistent DevNonce (EEPROM-backed). Mandatory for robust OTAA joins. */
+  ret = devnonce_store_init();
+  if (ret != 0) {
+    LOG_ERR("DevNonce store init failed (%d) - rebooting", ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+
+#if EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT
+  /* One-shot maintenance: wipe persistent counters, then reboot. */
+  ret = button_counter_store_factory_reset();
+  if (ret != 0) {
+    LOG_ERR("Factory reset failed (%d) - rebooting", ret);
+  }
+  sys_reboot(SYS_REBOOT_COLD);
+#endif
 
   /* Optional RTC init (button mode uses RTC timestamps) */
   ret = rtc_app_init();
   if (ret != 0) {
     LOG_WRN("RTC init not available (%d); button timestamps may fall back",
             ret);
+    sys_reboot(SYS_REBOOT_COLD);
   }
 
   /* Initialize LoRaWAN stack */
@@ -65,10 +109,26 @@ int main(void) {
   ret = lora_wait_for_join(K_SECONDS(120));
   if (ret != 0) {
     LOG_ERR("LoRa join did not complete within timeout!");
-    /* Continue anyway - the thread will keep trying to join */
+#if LORA_REBOOT_ON_JOIN_TIMEOUT
+    LOG_ERR("LORA_REBOOT_ON_JOIN_TIMEOUT=1; rebooting");
+    sys_reboot(SYS_REBOOT_COLD);
+#endif
+    /* Continue anyway - the thread will keep trying to join (if reboot
+     * disabled) */
   } else {
     LOG_INF("LoRa join confirmed!");
   }
+
+#if RTC_REQUIRE_LNS_TIME_SYNC
+  LOG_SECTION_INF("RTC SYNC REQUIRED: requesting LoRaWAN network time");
+  time_sync_request_and_update_rtc();
+  ret = time_sync_wait(K_SECONDS(RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS));
+  if (ret != 0) {
+    LOG_ERR("RTC time sync did not complete successfully (%d) - rebooting",
+            ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+#endif
 
   if (DEMO_USE_REAL_BUTTON_UPLINK) {
     LOG_INF("Demo mode: REAL BUTTON uplinks");

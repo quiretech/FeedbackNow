@@ -1,16 +1,15 @@
 #include "button_thread.h"
 
 #include "buttons.h"
+#include "led_manager.h"
 #include "lora_app.h"
+#include "log_fmt.h"
 #include "payload_gen.h"
 #include "rtc.h"
 #include "sys_config.h"
 
 #include <errno.h>
 #include <string.h>
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
-#include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
@@ -19,51 +18,16 @@ LOG_MODULE_REGISTER(button_uplink, CONFIG_LOG_DEFAULT_LEVEL);
 /* Map driver button index (0..NUM_BUTTONS-1) -> payload button_id */
 static const uint8_t button_id_map[NUM_BUTTONS] = {0, 1, 2, 3, 4, 5, 6};
 
-/* Status LED (blink 1s on button press) */
-#define LED0_NODE DT_ALIAS(led0)
-static const struct gpio_dt_spec led0 =
-    GPIO_DT_SPEC_GET_OR(LED0_NODE, gpios, {0});
-static bool led0_ok;
-static struct k_work led0_off_work;
-static struct k_timer led0_off_timer;
-
-static void led0_off_work_handler(struct k_work *work) {
-  ARG_UNUSED(work);
-  if (!led0_ok) {
-    return;
-  }
-  (void)gpio_pin_set_dt(&led0, 0);
-}
-
-static void led0_off_timer_handler(struct k_timer *timer) {
-  ARG_UNUSED(timer);
-  k_work_submit(&led0_off_work);
-}
-
 static void button_uplink_thread_fn(void *a, void *b, void *c) {
   button_event_t btn_evt;
   uint32_t last_press_ms[NUM_BUTTONS] = {0};
+  uint32_t last_accepted_any_press_ms = 0;
 
   ARG_UNUSED(a);
   ARG_UNUSED(b);
   ARG_UNUSED(c);
 
-  LOG_INF("=== BUTTON UPLINK THREAD ENTRY ===");
-
-  /* Initialize LED GPIO and make sure it's OFF by default */
-  led0_ok = (led0.port != NULL) && device_is_ready(led0.port);
-  if (!led0_ok) {
-    LOG_WRN("LED0 not ready; blink disabled");
-  } else {
-    int ret = gpio_pin_configure_dt(&led0, GPIO_OUTPUT_INACTIVE);
-    if (ret != 0) {
-      led0_ok = false;
-      LOG_WRN("LED0 configure failed (%d); blink disabled", ret);
-    } else {
-      k_work_init(&led0_off_work, led0_off_work_handler);
-      k_timer_init(&led0_off_timer, led0_off_timer_handler, NULL);
-    }
-  }
+  LOG_SECTION_INF("BUTTON UPLINK THREAD ENTRY");
 
   while (1) {
     (void)buttons_get_event(&btn_evt, K_FOREVER);
@@ -83,11 +47,16 @@ static void button_uplink_thread_fn(void *a, void *b, void *c) {
     }
     last_press_ms[btn_evt.button_id] = now_ms;
 
-    /* Blink LED for 1 second on press */
-    if (led0_ok) {
-      (void)gpio_pin_set_dt(&led0, 1);
-      k_timer_start(&led0_off_timer, K_SECONDS(1), K_NO_WAIT);
+    /* Global anti-spam cooldown: ignore all presses for a while after any press */
+    if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
+      LOG_DBG("Button press ignored due to cooldown (%u ms remaining)",
+              (uint32_t)(BUTTON_COOLDOWN_MS -
+                         (now_ms - last_accepted_any_press_ms)));
+      continue;
     }
+
+    /* Blink LED for 1 second on press */
+    (void)led_manager_blink_once(0);
 
     uint32_t epoch_s = 0;
     int ret = rtc_get_epoch_seconds(&epoch_s);
@@ -120,6 +89,7 @@ static void button_uplink_thread_fn(void *a, void *b, void *c) {
     } else if (ret != 0) {
       LOG_ERR("Failed to queue button uplink: %d", ret);
     } else {
+      last_accepted_any_press_ms = now_ms;
       LOG_INF("Queued button uplink: btn=%u ctr=%u ts=%u", payload_button_id,
               new_counter, epoch_s);
     }

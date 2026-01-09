@@ -3,6 +3,7 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
@@ -21,6 +22,31 @@ static const struct gpio_dt_spec power_gpios[POWER_DOMAIN_COUNT] = {
     GPIO_DT_SPEC_GET_OR(EN3V6_NODE, gpios, {0}),
 };
 
+/*
+ * Ensure external power rails are enabled early enough for devices that
+ * initialize before main() (e.g., the PCF8523 RTC driver).
+ *
+ * The RTC driver may probe the I2C device during POST_KERNEL init; if the
+ * rail is off at that point, the probe fails and the device will remain
+ * "not ready" for the rest of the boot.
+ */
+static int power_ctrl_boot_enable(void) {
+  for (int i = 0; i < POWER_DOMAIN_COUNT; i++) {
+    if (!gpio_is_ready_dt(&power_gpios[i])) {
+      /* If a domain isn't present/ready, just skip it. */
+      continue;
+    }
+
+    /* Configure and drive high immediately. */
+    (void)gpio_pin_configure_dt(&power_gpios[i], GPIO_OUTPUT_ACTIVE);
+    (void)gpio_pin_set_dt(&power_gpios[i], 1);
+  }
+
+  return 0;
+}
+
+SYS_INIT(power_ctrl_boot_enable, EARLY, 0);
+
 int power_ctrl_init(void) {
   int ret;
 
@@ -31,7 +57,8 @@ int power_ctrl_init(void) {
       return -ENODEV;
     }
 
-    ret = gpio_pin_configure_dt(&power_gpios[i], GPIO_OUTPUT_INACTIVE);
+    /* Keep domains on by default; callers can disable explicitly if needed. */
+    ret = gpio_pin_configure_dt(&power_gpios[i], GPIO_OUTPUT_ACTIVE);
     if (ret != 0) {
       LOG_ERR("Failed to configure power GPIO %d", i);
       return ret;

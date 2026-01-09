@@ -57,7 +57,7 @@ int main(void) {
   /* Create centered label */
   uptime_label = lv_label_create(lv_scr_act());
   lv_obj_add_style(uptime_label, &style, 0);
-  lv_label_set_text(uptime_label, "Uptime: 0");
+  lv_label_set_text(uptime_label, "Count: 0");
   lv_obj_center(uptime_label);
 
   display_blanking_off(display);
@@ -65,10 +65,9 @@ int main(void) {
   ssd1683_clear_screen(display, 0xFF);
 #else
   while (1) {
-    snprintf(buf, sizeof(buf), "Counter: %u", seconds);
+    snprintf(buf, sizeof(buf), "Count: %u", seconds);
     lv_label_set_text(uptime_label, buf);
     lv_task_handler();
-
     k_msleep(1000);
     seconds += 1;
   }

@@ -1,5 +1,7 @@
 #include "payload_gen.h"
 
+#include "button_counter_store.h"
+
 #include <errno.h>
 #include <string.h>
 #include <zephyr/logging/log.h>
@@ -15,7 +17,6 @@ LOG_MODULE_REGISTER(payload_gen, CONFIG_LOG_DEFAULT_LEVEL);
 
 static struct {
   uint8_t nfc_uid[6];
-  uint32_t button_counter[BUTTON_ID_MAX + 1]; /* per-button, 24-bit used */
   uint8_t next_button_id;
   enum payload_event_type next_evt;
   uint32_t base_epoch; /* pseudo-UTC seed per boot */
@@ -52,9 +53,6 @@ void payload_gen_init(void) {
   sys_rand_get(&r, sizeof(r));
   ctx.base_epoch = 1700000000U + (r % 31536000U); /* +/- ~1 year window */
 
-  for (int i = 0; i <= BUTTON_ID_MAX; i++) {
-    ctx.button_counter[i] = 0;
-  }
   ctx.next_button_id = rand_in_range(0, BUTTON_ID_MAX);
   ctx.next_evt = EVT_BUTTON;
 
@@ -65,13 +63,15 @@ void payload_gen_init(void) {
 
 static void build_button(uint8_t *b) {
   uint8_t btn_id = ctx.next_button_id;
-  ctx.button_counter[btn_id] =
-      (ctx.button_counter[btn_id] + 1U) % BUTTON_COUNTER_ROLLOVER;
 
   write_be32(b, get_epoch_seconds());
   b[4] = EVT_BUTTON;
   b[5] = btn_id;
-  uint32_t c = ctx.button_counter[btn_id];
+  uint32_t c = 0;
+  if (button_counter_store_inc(btn_id, &c) != 0) {
+    /* Should not happen in production (EEPROM is mandatory); fall back to 0 */
+    c = 0;
+  }
   b[6] = (uint8_t)(c >> 16);
   b[7] = (uint8_t)(c >> 8);
   b[8] = (uint8_t)(c);
@@ -93,14 +93,15 @@ int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
 
   k_mutex_lock(&ctx.lock, K_FOREVER);
 
-  ctx.button_counter[button_id] =
-      (ctx.button_counter[button_id] + 1U) % BUTTON_COUNTER_ROLLOVER;
-
   write_be32(out_buf, epoch_s);
   out_buf[4] = EVT_BUTTON;
   out_buf[5] = button_id;
 
-  uint32_t c = ctx.button_counter[button_id];
+  uint32_t c = 0;
+  if (button_counter_store_inc(button_id, &c) != 0) {
+    /* Should not happen in production (EEPROM is mandatory); fall back to 0 */
+    c = 0;
+  }
   out_buf[6] = (uint8_t)(c >> 16);
   out_buf[7] = (uint8_t)(c >> 8);
   out_buf[8] = (uint8_t)(c);

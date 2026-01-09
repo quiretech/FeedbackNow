@@ -16,4 +16,11 @@ int rtc_app_init(void);
  */
 int rtc_get_epoch_seconds(uint32_t *out_epoch_s);
 
+/**
+ * @brief Program RTC from a Unix epoch timestamp (UTC).
+ * @param epoch_s seconds since Unix epoch.
+ * @return 0 on success, negative error otherwise.
+ */
+int rtc_set_epoch_seconds(uint32_t epoch_s);
+
 #endif /* RTC_APP_H */

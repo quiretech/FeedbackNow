@@ -1,0 +1,4 @@
+grpcio>=1.60,<2
+chirpstack-api>=4.0.0,<5
+protobuf>=5.26.1,<6
+

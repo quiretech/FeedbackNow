@@ -70,6 +70,7 @@ static int rtc_set_time_from_config(void) {
 }
 
 int rtc_app_init(void) {
+
   if (rtc_dev == NULL) {
     return -ENODEV;
   }
@@ -144,4 +145,40 @@ int rtc_get_epoch_seconds(uint32_t *out_epoch_s) {
   }
   *out_epoch_s = (uint32_t)epoch;
   return 0;
+}
+
+int rtc_set_epoch_seconds(uint32_t epoch_s) {
+  if (rtc_dev == NULL || !device_is_ready(rtc_dev)) {
+    return -ENODEV;
+  }
+
+  time_t tt = (time_t)epoch_s;
+  struct tm tm_utc = {0};
+  if (gmtime_r(&tt, &tm_utc) == NULL) {
+    return -EINVAL;
+  }
+
+  LOG_INF("Programming RTC from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
+          epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+          tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+
+  struct rtc_time t = {0};
+  t.tm_sec = tm_utc.tm_sec;
+  t.tm_min = tm_utc.tm_min;
+  t.tm_hour = tm_utc.tm_hour;
+  t.tm_mday = tm_utc.tm_mday;
+  t.tm_mon = tm_utc.tm_mon;
+  t.tm_year = tm_utc.tm_year;
+  t.tm_wday = tm_utc.tm_wday;
+  t.tm_yday = tm_utc.tm_yday;
+  t.tm_isdst = tm_utc.tm_isdst;
+  t.tm_nsec = 0;
+
+  int ret = rtc_set_time(rtc_dev, &t);
+  if (ret == 0) {
+    LOG_INF("RTC updated from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
+            epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+            tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+  }
+  return ret;
 }

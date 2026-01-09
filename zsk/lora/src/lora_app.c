@@ -5,6 +5,7 @@
 #include <zephyr/lorawan/lorawan.h>
 #include <zephyr/random/random.h>
 
+#include "log_fmt.h"
 #include "lora_app.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -90,6 +91,11 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
   LOG_INF("Port %d, Pending %d, RSSI %ddB, SNR %ddBm, Time %d", port,
           flags & LORAWAN_DATA_PENDING, rssi, snr,
           !!(flags & LORAWAN_TIME_UPDATED));
+
+  if (flags & LORAWAN_TIME_UPDATED) {
+    LOG_SECTION_INF(
+        "LoRaWAN time updated by network (DeviceTimeAns / clock sync)");
+  }
 
   if (!hex_data || len == 0) {
     return;

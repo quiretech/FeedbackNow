@@ -10,9 +10,15 @@ target_sources(app PRIVATE
   src/main.c
   src/lora_app.c
   src/lora_thread.c
+  src/devnonce_store.c
   src/payload_gen.c
   src/power_ctrl.c
   src/buttons.c
   src/button_thread.c
+  src/leds.c
+  src/led_manager.c
+  src/time_sync.c
+  src/eeprom_probe.c
+  src/button_counter_store.c
   src/rtc.c
 )

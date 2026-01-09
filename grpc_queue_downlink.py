@@ -1,10 +1,10 @@
 import grpc
 from chirpstack_api import api
 
-CHIRPSTACK_API = "192.168.0.248:8080"
+CHIRPSTACK_API = "http://192.168.0.169:8080/"
 API_TOKEN = ""
 
-def enqueue_device_queue_item(data, f_port, confirmed=False, dev_eui="24e124601e171829"):
+def enqueue_device_queue_item(data, f_port, confirmed=False, dev_eui="464c588a04bf5771"):
 
     channel = grpc.insecure_channel(CHIRPSTACK_API)
 

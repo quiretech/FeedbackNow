@@ -1,5 +1,5 @@
 #include "leds.h"
-#include "led_manager.h"
+#include "sys_config.h"
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/kernel.h>

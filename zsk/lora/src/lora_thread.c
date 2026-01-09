@@ -1,10 +1,15 @@
+#include "devnonce_store.h"
+#include "led_manager.h"
+#include "log_fmt.h"
 #include "lora_app.h"
 #include "sys_config.h"
+#include "time_sync.h"
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
 #include <zephyr/random/random.h>
+#include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -14,16 +19,10 @@ static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
 
-static uint16_t generate_dev_nonce(void) {
-  uint16_t nonce;
-  uint32_t rnd = 0;
-  sys_rand_get(&rnd, sizeof(rnd));
-  // Mix in uptime and cycle count for extra entropy
-  rnd ^= k_uptime_get_32();
-  rnd ^= k_cycle_get_32();
-  // Use all 16 bits for DevNonce
-  nonce = (uint16_t)(rnd & 0xFFFF);
-  return nonce;
+static void lora_log_join_ids(void) {
+  LOG_INF("LoRaWAN OTAA identifiers in use:");
+  LOG_HEXDUMP_INF(dev_eui, sizeof(dev_eui), "DevEUI");
+  LOG_HEXDUMP_INF(join_eui, sizeof(join_eui), "JoinEUI");
 }
 
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
@@ -58,7 +57,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   int ret;
   uint16_t dev_nonce;
 
-  LOG_INF("=== LORA THREAD ENTRY ===");
+  LOG_SECTION_INF("LORA THREAD ENTRY");
   LOG_INF("LoRa thread started - Thread ID: %p", k_current_get());
   LOG_INF("LoRa thread priority: %d", k_thread_priority_get(k_current_get()));
   LOG_INF("LoRa thread stack size: %d", LORA_THREAD_STACK_SIZE);
@@ -72,12 +71,19 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
   // Try to join until success
   int attempt = 0;
-  LOG_INF("=== STARTING LORA JOIN LOOP ===");
+  LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   do {
-    // Generate a fresh random DevNonce for each join attempt
-    dev_nonce = generate_dev_nonce();
+    /* Allocate a monotonic, persisted DevNonce (prevents reuse across reboots).
+     */
+    ret = devnonce_store_next(&dev_nonce);
+    if (ret != 0) {
+      LOG_ERR("DevNonce allocation failed (%d) - rebooting", ret);
+      sys_reboot(SYS_REBOOT_COLD);
+    }
     join_cfg.otaa.dev_nonce = dev_nonce;
+    LOG_INF("");
     LOG_INF("=== JOIN ATTEMPT %d ===", attempt);
+    lora_log_join_ids();
     LOG_INF("Joining network using OTAA, devNonce: %d; attempt: %d", dev_nonce,
             attempt++);
     ret = lorawan_join(&join_cfg);
@@ -90,10 +96,21 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       LOG_ERR("Join failed (%d) - will retry in %d seconds", ret,
               LORA_JOIN_RETRY_DELAY_SECONDS);
     } else {
-      LOG_INF("=== LORA JOIN SUCCESSFUL ===");
+      LOG_SECTION_INF("LORA JOIN SUCCESSFUL");
       /* Mark as joined and signal waiting threads */
       atomic_set(&lora_joined_flag, 1);
       k_sem_give(&lora_join_sem);
+
+      /* Visual feedback: blink status LED 5 times on successful join */
+      for (int i = 0; i < 5; i++) {
+        (void)led_manager_set_led(0, true);
+        k_sleep(K_MSEC(200));
+        (void)led_manager_set_led(0, false);
+        k_sleep(K_MSEC(200));
+      }
+
+      /* Request network time and program RTC when DeviceTimeAns arrives */
+      time_sync_request_and_update_rtc();
     }
 
     if (ret != 0) {
@@ -104,14 +121,15 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
   } while (ret != 0);
 
-  LOG_INF("=== LORA JOIN LOOP COMPLETED SUCCESSFULLY ===");
+  LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
 
-  LOG_INF("=== LORA THREAD ENTERING MESSAGE LOOP ===");
+  LOG_SECTION_INF("LORA THREAD ENTERING MESSAGE LOOP");
   while (1) {
     lora_uplink_msg_t msg = {0}; // Zero-initialize to prevent garbage data
 
     LOG_DBG("LoRa thread waiting for events...");
     if (lora_get_event(&msg, K_FOREVER)) {
+      LOG_INF("");
       LOG_INF("=== LORA THREAD PROCESSING EVENT ===");
 
       // Additional validation before sending

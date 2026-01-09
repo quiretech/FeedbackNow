@@ -240,9 +240,10 @@ lv_obj_t *downlink_label = NULL; // Global pointer for downlink message
 #define DOWNLINK_RESET_DELAY_MS 3000
 
 /* ----------------- LVGL tick safety net -----------------
- * If LVGL ticks aren't advancing, LVGL timers never expire (e.g. downlink restore).
- * Zephyr often provides LVGL ticking, but not always depending on config/version.
- * We probe once at boot and start a local lv_tick_inc timer only if needed.
+ * If LVGL ticks aren't advancing, LVGL timers never expire (e.g. downlink
+ * restore). Zephyr often provides LVGL ticking, but not always depending on
+ * config/version. We probe once at boot and start a local lv_tick_inc timer
+ * only if needed.
  */
 static struct k_timer lv_tick_timer;
 static bool lv_tick_timer_started;
@@ -271,11 +272,13 @@ static void ensure_lvgl_ticks_running(void) {
   }
 }
 
-/* Request an EPD flush. We only turn 3V3A ON briefly when we know the UI changed. */
+/* Request an EPD flush. We only turn 3V3A ON briefly when we know the UI
+ * changed. */
 static volatile bool epd_flush_pending;
 static void request_epd_flush(void) { epd_flush_pending = true; }
 
-/* Use a Zephyr timer (not LVGL timer) for restore so it's independent of LVGL ticks. */
+/* Use a Zephyr timer (not LVGL timer) for restore so it's independent of LVGL
+ * ticks. */
 static struct k_timer downlink_restore_timer;
 static volatile bool downlink_restore_pending;
 
@@ -425,7 +428,8 @@ int main(void) {
   // Initialize LVGL display while holding 3V3A ON (EPD needs 3V3A)
   (void)power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_BOOT, K_FOREVER);
   lvgl_init_display();
-  /* Force at least one flush while 3V3A is definitely ON, otherwise EPD can stay blank. */
+  /* Force at least one flush while 3V3A is definitely ON, otherwise EPD can
+   * stay blank. */
   lv_task_handler();
   power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_BOOT);
   ensure_lvgl_ticks_running();
@@ -515,8 +519,8 @@ int main(void) {
       restore_static_display();
     }
 
-    /* Handle LVGL tasks. If we have a pending screen change, briefly turn 3V3A ON
-     * so the LVGL flush can complete (SSD1683 write/refresh is synchronous).
+    /* Handle LVGL tasks. If we have a pending screen change, briefly turn 3V3A
+     * ON so the LVGL flush can complete (SSD1683 write/refresh is synchronous).
      */
     if (epd_flush_pending) {
       /* LoRa may hold 3V3A OFF for RX windows (seconds). Main/UI thread can
@@ -529,7 +533,8 @@ int main(void) {
       power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_EPD);
       epd_flush_pending = false;
 
-      /* Arm (or restart) restore timer only after the downlink is actually visible on EPD. */
+      /* Arm (or restart) restore timer only after the downlink is actually
+       * visible on EPD. */
       if (downlink_label) {
         k_timer_stop(&downlink_restore_timer);
         k_timer_start(&downlink_restore_timer, K_MSEC(DOWNLINK_RESET_DELAY_MS),
