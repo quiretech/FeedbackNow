@@ -15,7 +15,7 @@
 #define LORAWAN_DEV_EUI                                                        \
   { 0x46, 0x4c, 0x58, 0x71, 0x81, 0x32, 0xe9, 0x08 }
 
-#define LORAWAN_JOIN_EUI                                                        \
+#define LORAWAN_JOIN_EUI                                                       \
   { 0xea, 0xf2, 0x42, 0x8a, 0x14, 0xdb, 0xfd, 0x07 }
 
 #define LORAWAN_APP_KEY                                                        \
