@@ -49,9 +49,9 @@ int power_ctrl_init(void) {
       return -ENODEV;
     }
 
-    ret = gpio_pin_configure_dt(&power_gpios[i],
-                                boot_default[i] ? GPIO_OUTPUT_ACTIVE
-                                                : GPIO_OUTPUT_INACTIVE);
+    ret = gpio_pin_configure_dt(&power_gpios[i], boot_default[i]
+                                                     ? GPIO_OUTPUT_ACTIVE
+                                                     : GPIO_OUTPUT_INACTIVE);
     if (ret != 0) {
       LOG_ERR("Failed to configure power GPIO %d", i);
       return ret;
@@ -82,6 +82,7 @@ int power_ctrl_toggle(enum power_domain domain) {
   return gpio_pin_toggle_dt(&power_gpios[domain]);
 }
 
-/* Ensure enable pins are configured before other POST_KERNEL device init runs. */
+/* Ensure enable pins are configured before other POST_KERNEL device init runs.
+ */
 static int power_ctrl_sys_init(void) { return power_ctrl_init(); }
 SYS_INIT(power_ctrl_sys_init, POST_KERNEL, 0);

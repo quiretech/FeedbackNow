@@ -545,6 +545,6 @@ int main(void) {
     }
 
     // Sleep to prevent tight loop
-    k_sleep(K_MSEC(100));
+    k_sleep(K_FOREVER);
   }
 }

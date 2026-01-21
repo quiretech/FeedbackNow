@@ -9,6 +9,9 @@
 
 LOG_MODULE_REGISTER(button_thread, LOG_LEVEL_INF);
 
+/* External wake semaphore from lora_thread - signal on any button press */
+extern struct k_sem deep_sleep_wake_sem;
+
 void button_thread_func(void *, void *, void *);
 
 void button_thread_func(void *a, void *b, void *c) {
@@ -27,10 +30,13 @@ void button_thread_func(void *a, void *b, void *c) {
             btn_evt.type == BUTTON_EVENT_PRESS ? "pressed" : "released",
             btn_evt.timestamp_ms);
 
-    // Any button press turns on the status LED
+    // Any button press turns on the status LED and signals wake semaphore
     if (btn_evt.type == BUTTON_EVENT_PRESS) {
       LOG_INF("Button pressed - turning on status LED");
       led_manager_blink_once(0); // Blink LED 0 (the only LED)
+
+      /* Signal wake semaphore (for deep sleep test) */
+      k_sem_give(&deep_sleep_wake_sem);
     }
 
     // Create system event
@@ -49,7 +55,7 @@ void button_thread_func(void *a, void *b, void *c) {
 
     // Special handling for button 5 (NFC trigger)
     if (btn_evt.button_id == 6 && btn_evt.type == BUTTON_EVENT_PRESS) {
-      LOG_INF("Button 5 pressed - triggering NFC scan");
+      LOG_INF("Button 6 pressed - triggering NFC scan");
       nfc_manager_trigger_scan();
     }
   }

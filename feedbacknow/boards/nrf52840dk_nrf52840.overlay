@@ -21,6 +21,7 @@
             gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
             label = "EN 3V6";
         };
+
     };
 
     aliases {
@@ -64,12 +65,44 @@ leds {
 	};
 };
 
-&uart0 {	
-	status="disabled";
-};	
+/* ---------- PINCTRL configuration ---------- */
+&pinctrl {
+    uart0_default: uart0_default {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 23)>,
+                    <NRF_PSEL(UART_RTS, 0, 5)>;
+        };
+        group2 {
+            psels = <NRF_PSEL(UART_RX, 0, 20)>,
+                    <NRF_PSEL(UART_CTS, 0, 7)>;
+            bias-pull-up;
+        };
+    };
 
-&uart1 {	
-	status="disabled";
+    uart0_sleep: uart0_sleep {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 23)>,
+                    <NRF_PSEL(UART_RX, 0, 20)>,
+                    <NRF_PSEL(UART_RTS, 0, 5)>,
+                    <NRF_PSEL(UART_CTS, 0, 7)>;
+            low-power-enable;
+        };
+    };
+};
+
+/* ---------- UART configuration ---------- */
+&uart0 {
+    compatible = "nordic,nrf-uarte";
+    status = "okay";
+    current-speed = <115200>;
+
+    /* Link pinctrl groups */
+    pinctrl-0 = <&uart0_default>;
+    pinctrl-1 = <&uart0_sleep>;
+    pinctrl-names = "default", "sleep";
+
+    /* Optional: disable HW flow control if not used */
+    // hw-flow-control;
 };	
 	
 &spi1 {	
@@ -101,23 +134,11 @@ leds {
 	           <&gpio0 22 GPIO_ACTIVE_LOW>;          /* SD CS  - P0.22 */
 
 	       
-	lora_semtech_sx1262mb2das: sx1262@0 {
-		compatible = "semtech,sx1262";
-		reg = <0>;
-		spi-max-frequency = <400000>;
-		label = "SX1262";
-		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
-		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
-		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-		dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
-		dio2-tx-enable;
-		tcxo-power-startup-delay-ms = <2>;
-	};
-
+	// SX1262 SHIELD
 	// lora_semtech_sx1262mb2das: sx1262@0 {
 	// 	compatible = "semtech,sx1262";
 	// 	reg = <0>;
-	// 	spi-max-frequency = <1000000>;
+	// 	spi-max-frequency = <7000000>;
 	// 	label = "SX1262";
 	// 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
 	// 	busy-gpios = <&arduino_header 9 GPIO_ACTIVE_HIGH>;
@@ -126,6 +147,39 @@ leds {
 	// 	dio2-tx-enable;
 	// 	tcxo-power-startup-delay-ms = <5>;
 	// };
+
+	// LR62E
+	lora_semtech_sx1262mb2das: sx1262@0 {
+	compatible = "semtech,sx1262";
+	reg = <0>;
+	spi-max-frequency = <7000000>;
+	label = "SX1262";
+	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
+	dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
+	dio2-tx-enable;
+	tcxo-power-startup-delay-ms = <5>;
+
+	// SEEED WIO
+	// lora_semtech_sx1262mb2das: sx1262@0 {
+    // compatible = "semtech,sx1262";
+    // reg = <0>;
+    // /* SPI */
+    // spi-max-frequency = <8000000>;
+    // label = "SX1262";
+    // /* Control signals */
+    // reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; /* P0.03 */
+    // busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;        /* P0.31 */
+    // dio1-gpios  = <&gpio0 19 GPIO_ACTIVE_HIGH>;        /* P0.19 */
+    // /* TCXO (Wio-SX1262 uses DIO3 @ 1.8V) */
+    // dio3-tcxo-voltage = <0x02>;
+    // tcxo-power-startup-delay-ms = <5>;
+    // /* RF switch handled internally via DIO2 */
+    // dio2-tx-enable;
+    // status = "okay";
+
+	};
     
 	ssd1683: ssd1683@1 {
 		compatible = "solomon,ssd1683";
@@ -173,3 +227,15 @@ leds {
 		zephyr,display = &ssd1683;
 	};
 };
+
+
+        
+
+/*
+
+NOTES: all gpios are connected to gpio 21. 
+and Active Low			Detect on falling edge
+
+when detected, wake system up
+
+*/

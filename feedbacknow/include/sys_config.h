@@ -28,7 +28,7 @@
 #define BUTTON_QUEUE_SIZE 10
 #define BUTTON_QUEUE_ALIGNMENT 1
 #define NUM_BUTTONS 7
-#define MAX_BUTTON_ID 6
+#define MAX_BUTTON_ID 7
 
 // ============================================================================
 // NFC CONFIGURATION
