@@ -12,6 +12,24 @@
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
+/*============================================================================
+ * NFC READ MODE CONFIGURATION
+ *
+ * Set to 1 for SINGLE BLOCK mode (production) - reads only the custom data
+ *block Set to 0 for FULL DUMP mode (debugging) - reads all 28 blocks and hex
+ *dumps
+ *============================================================================*/
+#define NFC_READ_SINGLE_BLOCK_MODE 0
+
+/* Block number where your custom 4-byte data is stored (used in single block
+ * mode) */
+#define NFC_CUSTOM_DATA_BLOCK 10
+
+/* SLIX tag parameters */
+#define SLIX_BLOCK_SIZE 4
+#define SLIX_NUM_BLOCKS 28
+#define SLIX_TOTAL_SIZE (SLIX_BLOCK_SIZE * SLIX_NUM_BLOCKS) /* 112 bytes */
+
 /* Thread stack sizes */
 #define NFC_THREAD_STACK_SIZE 2048
 #define PROCESSING_THREAD_STACK_SIZE 2048
@@ -37,6 +55,12 @@ enum system_state {
 struct nfc_event {
   enum { NFC_EVENT_TAG_DETECTED, NFC_EVENT_TAG_LOST, NFC_EVENT_ERROR } type;
   uint8_t uid[8];
+#if NFC_READ_SINGLE_BLOCK_MODE
+  uint8_t custom_data[SLIX_BLOCK_SIZE]; /* 4 bytes from specific block */
+#else
+  uint8_t tag_data[SLIX_TOTAL_SIZE]; /* Full 112 bytes for dump mode */
+  size_t tag_data_len;
+#endif
   uint32_t timestamp;
 };
 
@@ -67,9 +91,16 @@ K_THREAD_STACK_DEFINE(nfc_thread_stack, NFC_THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(processing_thread_stack, PROCESSING_THREAD_STACK_SIZE);
 
 /* Custom tag processing functions */
-static void process_tag_detected(uint8_t *uid, uint32_t timestamp);
+#if NFC_READ_SINGLE_BLOCK_MODE
+static void process_tag_detected(uint8_t *uid, uint8_t *custom_data,
+                                 uint32_t timestamp);
+#else
+static void process_tag_detected(uint8_t *uid, uint8_t *tag_data,
+                                 size_t tag_data_len, uint32_t timestamp);
+static void print_tag_data(uint8_t *data, size_t len);
+#endif
 static void process_tag_lost(uint32_t timestamp);
-static bool is_authorized_tag(uint8_t *uid);
+static bool is_authorized_tag(uint8_t *uid, uint8_t *custom_data);
 static void trigger_access_granted(void);
 static void trigger_access_denied(void);
 static void reset_access_state(void);
@@ -112,12 +143,42 @@ static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
       memcpy(event.uid, uid, sizeof(uid));
       event.timestamp = k_uptime_get();
 
+      LOG_INF("Tag UID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", uid[0],
+              uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
+
+#if NFC_READ_SINGLE_BLOCK_MODE
+      /* Single block mode: Read only the custom data block */
+      k_mutex_lock(&nfc_mutex, K_FOREVER);
+      ret = pn5180_read_block(pn5180_dev, uid, NFC_CUSTOM_DATA_BLOCK,
+                              event.custom_data, SLIX_BLOCK_SIZE);
+      k_mutex_unlock(&nfc_mutex);
+
+      if (ret == 0) {
+        LOG_INF("Block %d: %02X %02X %02X %02X", NFC_CUSTOM_DATA_BLOCK,
+                event.custom_data[0], event.custom_data[1],
+                event.custom_data[2], event.custom_data[3]);
+      } else {
+        LOG_WRN("Failed to read block %d: %d", NFC_CUSTOM_DATA_BLOCK, ret);
+        memset(event.custom_data, 0, sizeof(event.custom_data));
+      }
+#else
+      /* Full dump mode: Read all blocks */
+      event.tag_data_len = 0;
+      k_mutex_lock(&nfc_mutex, K_FOREVER);
+      ret = pn5180_read_tag(pn5180_dev, uid, event.tag_data,
+                            sizeof(event.tag_data), &event.tag_data_len);
+      k_mutex_unlock(&nfc_mutex);
+
+      if (ret == 0) {
+        LOG_INF("Read %d bytes from tag", event.tag_data_len);
+      } else {
+        LOG_WRN("Failed to read tag data: %d", ret);
+      }
+#endif
+
       if (k_msgq_put(&nfc_queue, &event, K_NO_WAIT) != 0) {
         LOG_WRN("NFC queue full, dropping tag detected event");
       }
-
-      LOG_INF("Tag detected: %02X %02X %02X %02X %02X %02X %02X %02X", uid[0],
-              uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
 
       set_system_state(SYSTEM_NFC_PROCESSING);
 
@@ -147,13 +208,14 @@ static void processing_thread_entry(void *arg1, void *arg2, void *arg3) {
     if (k_msgq_get(&nfc_queue, &event, K_FOREVER) == 0) {
       switch (event.type) {
       case NFC_EVENT_TAG_DETECTED:
-        LOG_INF("Processing tag: %02X %02X %02X %02X %02X %02X %02X %02X",
-                event.uid[0], event.uid[1], event.uid[2], event.uid[3],
-                event.uid[4], event.uid[5], event.uid[6], event.uid[7]);
-
-        /* Your custom tag processing logic here */
-        process_tag_detected(event.uid, event.timestamp);
-
+#if NFC_READ_SINGLE_BLOCK_MODE
+        /* Single block mode - process custom 4-byte data */
+        process_tag_detected(event.uid, event.custom_data, event.timestamp);
+#else
+        /* Full dump mode - process all tag data */
+        process_tag_detected(event.uid, event.tag_data, event.tag_data_len,
+                             event.timestamp);
+#endif
         /* Signal that processing is complete */
         k_sem_give(&nfc_scan_complete_sem);
         break;
@@ -172,19 +234,88 @@ static void processing_thread_entry(void *arg1, void *arg2, void *arg3) {
   }
 }
 
-/* Custom tag processing functions */
-static void process_tag_detected(uint8_t *uid, uint32_t timestamp) {
-  /* Example: Check if tag is authorized */
-  if (is_authorized_tag(uid)) {
-    LOG_INF("Authorized tag detected");
-    /* Trigger access granted actions */
+#if NFC_READ_SINGLE_BLOCK_MODE
+/*============================================================================
+ * SINGLE BLOCK MODE - Production
+ * Reads only the custom data block and processes the 4-byte identifier
+ *============================================================================*/
+static void process_tag_detected(uint8_t *uid, uint8_t *custom_data,
+                                 uint32_t timestamp) {
+  LOG_INF("Custom data: %02X %02X %02X %02X", custom_data[0], custom_data[1],
+          custom_data[2], custom_data[3]);
+
+  /* Check if tag is authorized based on UID and/or custom data */
+  if (is_authorized_tag(uid, custom_data)) {
+    LOG_INF("*** ACCESS GRANTED ***");
     trigger_access_granted();
   } else {
-    LOG_WRN("Unauthorized tag detected");
-    /* Trigger access denied actions */
+    LOG_WRN("*** ACCESS DENIED ***");
     trigger_access_denied();
   }
 }
+
+#else
+/*============================================================================
+ * FULL DUMP MODE - Debugging
+ * Reads all 28 blocks and prints a hex dump with ASCII
+ *============================================================================*/
+static void print_tag_data(uint8_t *data, size_t len) {
+  if (len == 0) {
+    LOG_INF("No tag data to display");
+    return;
+  }
+
+  LOG_INF("================ TAG MEMORY DUMP (%d bytes) ================", len);
+  LOG_INF("Block    | Hex Data                          | ASCII");
+  LOG_INF("---------+-----------------------------------+------------------");
+
+  /* Print all blocks in groups of 4 (16 bytes per line) */
+  for (size_t row = 0; row < len; row += 16) {
+    size_t blk_start = row / SLIX_BLOCK_SIZE;
+    char ascii[17] = {0};
+
+    /* Build ASCII representation */
+    for (int i = 0; i < 16 && (row + i) < len; i++) {
+      uint8_t c = data[row + i];
+      ascii[i] = (c >= 32 && c < 127) ? c : '.';
+    }
+
+    LOG_INF("%02d-%02d    | %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X | %s",
+            blk_start, blk_start + 3,
+            data[row + 0], data[row + 1], data[row + 2], data[row + 3],
+            data[row + 4], data[row + 5], data[row + 6], data[row + 7],
+            data[row + 8], data[row + 9], data[row + 10], data[row + 11],
+            data[row + 12], data[row + 13], data[row + 14], data[row + 15],
+            ascii);
+    k_msleep(10); /* Small delay to prevent RTT overflow */
+  }
+
+  LOG_INF("=============================================================");
+}
+
+static void process_tag_detected(uint8_t *uid, uint8_t *tag_data,
+                                 size_t tag_data_len, uint32_t timestamp) {
+  /* Print full tag data dump */
+  if (tag_data_len > 0) {
+    print_tag_data(tag_data, tag_data_len);
+  }
+
+  /* Extract custom data from the configured block for authorization check */
+  uint8_t *custom_data = &tag_data[NFC_CUSTOM_DATA_BLOCK * SLIX_BLOCK_SIZE];
+
+  LOG_INF("Block %d (custom data): %02X %02X %02X %02X", NFC_CUSTOM_DATA_BLOCK,
+          custom_data[0], custom_data[1], custom_data[2], custom_data[3]);
+
+  /* Check authorization */
+  if (is_authorized_tag(uid, custom_data)) {
+    LOG_INF("*** ACCESS GRANTED ***");
+    trigger_access_granted();
+  } else {
+    LOG_WRN("*** ACCESS DENIED ***");
+    trigger_access_denied();
+  }
+}
+#endif
 
 static void process_tag_lost(uint32_t timestamp) {
   LOG_INF("Tag removed, resetting access state");
@@ -192,17 +323,35 @@ static void process_tag_lost(uint32_t timestamp) {
   reset_access_state();
 }
 
-static bool is_authorized_tag(uint8_t *uid) {
-  /* Example authorized UIDs - add your own authorized tags here */
-  uint8_t authorized_uids[][8] = {
-      {0xE0, 0x04, 0x01, 0x00, 0x88, 0x8C, 0x9C, 0xA5},
-      {0x04, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}};
+/*
+ * Check if tag is authorized.
+ *
+ * You can authorize based on:
+ *   - UID only (unique to each physical tag)
+ *   - Custom data only (your provisioned 4-byte ID)
+ *   - Both UID and custom data
+ *
+ * For production, you'll likely check the custom_data against a database
+ * or list of authorized device IDs.
+ */
+static bool is_authorized_tag(uint8_t *uid, uint8_t *custom_data) {
+  /* Example: Authorize based on custom 4-byte data */
+  /* Replace with your actual authorized device IDs */
+  uint8_t authorized_ids[][4] = {
+      {0xDE, 0xAD, 0xBE, 0xEF}, /* Example ID 1 */
+      {0x12, 0x34, 0x56, 0x78}, /* Example ID 2 */
+      {0xAA, 0xBB, 0xCC, 0xDD}, /* Example ID 3 */
+  };
 
-  for (int i = 0; i < ARRAY_SIZE(authorized_uids); i++) {
-    if (memcmp(uid, authorized_uids[i], 8) == 0) {
+  for (size_t i = 0; i < ARRAY_SIZE(authorized_ids); i++) {
+    if (memcmp(custom_data, authorized_ids[i], 4) == 0) {
       return true;
     }
   }
+
+  /* Alternatively, you could also check UID if needed */
+  /* (void)uid;  // Uncomment if not using UID */
+
   return false;
 }
 

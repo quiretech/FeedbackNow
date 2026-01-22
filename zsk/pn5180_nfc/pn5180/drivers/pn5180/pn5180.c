@@ -29,6 +29,10 @@ struct pn5180_config {
   uint32_t timeout_ms;
 };
 
+/* Forward declarations */
+static int pn5180_read_reception_buffer(const struct device *dev,
+                                        uint8_t *buffer, int16_t len);
+
 /* Helper Functions */
 static inline void cs_low(const struct device *dev) {
   const struct pn5180_config *config = dev->config;
@@ -323,6 +327,156 @@ static int pn5180_send_end_of_frame(const struct device *dev) {
   return pn5180_spi_send_bytes(dev, cmd_send, sizeof(cmd_send));
 }
 
+/*
+ * Issue an ISO15693 command and wait for response.
+ * Returns the number of bytes received, or negative error code.
+ */
+static int pn5180_issue_iso15693_command(const struct device *dev,
+                                         const uint8_t *iso_cmd,
+                                         size_t iso_cmd_len, uint8_t *response,
+                                         size_t response_max_len) {
+  const struct pn5180_data *data = dev->data;
+  int ret;
+
+  /* Build SEND_DATA command: [0x09, 0x00, iso_cmd...] */
+  uint8_t send_cmd[2 + 32]; /* Max ISO command size */
+  if (iso_cmd_len > 30) {
+    LOG_ERR("ISO15693 command too long: %d", iso_cmd_len);
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  send_cmd[0] = PN5180_SEND_DATA;
+  send_cmd[1] = 0x00; /* Framing byte */
+  memcpy(&send_cmd[2], iso_cmd, iso_cmd_len);
+
+  /* Clear IRQ, set idle, then activate transceive */
+  pn5180_clear_irq(dev);
+  pn5180_set_idle(dev);
+  pn5180_activate_transceive(dev);
+
+  /* Send the command */
+  ret = pn5180_spi_send_bytes(dev, send_cmd, 2 + iso_cmd_len);
+  if (ret) {
+    LOG_ERR("Failed to send ISO15693 command");
+    return ret;
+  }
+
+  /* Wait for response */
+  k_msleep(10);
+
+  /* Poll for RX_IRQ_STAT indicating reception complete */
+  int64_t start_time = k_uptime_get();
+  uint32_t irq_status = 0;
+
+  while (1) {
+    ret = pn5180_read_register(dev, IRQ_STATUS, &irq_status);
+    if (ret) {
+      return ret;
+    }
+
+    /* Check if we received start of frame (card present) */
+    if (irq_status & RX_IRQ_STAT) {
+      break; /* Reception complete */
+    }
+
+    if ((k_uptime_get() - start_time) > data->timeout_ms) {
+      LOG_DBG("Timeout waiting for ISO15693 response (IRQ=0x%08X)", irq_status);
+      return ISO15693_EC_NO_CARD;
+    }
+
+    k_msleep(5);
+  }
+
+  /* Read RX_STATUS to get response length */
+  uint32_t rx_status = 0;
+  ret = pn5180_read_register(dev, RX_STATUS, &rx_status);
+  if (ret) {
+    return ret;
+  }
+
+  uint16_t len = (uint16_t)(rx_status & 0x01FF);
+  LOG_DBG("ISO15693 response length: %d bytes", len);
+
+  if (len == 0) {
+    return ISO15693_EC_NO_CARD;
+  }
+
+  if (len > response_max_len) {
+    LOG_WRN("Response truncated: %d > %d", len, response_max_len);
+    len = response_max_len;
+  }
+
+  /* Read the response data */
+  ret = pn5180_read_reception_buffer(dev, response, len);
+  if (ret) {
+    return ret;
+  }
+
+  /* Check response flags for errors */
+  if (response[0] & 0x01) { /* Error flag set */
+    uint8_t error_code = response[1];
+    LOG_ERR("ISO15693 error response: 0x%02X", error_code);
+    if (error_code == 0x10) {
+      return ISO15693_EC_BLOCK_NOT_AVAILABLE;
+    }
+    return ISO15693_EC_UNKNOWN_ERROR;
+  }
+
+  /* Clear IRQ flags */
+  pn5180_clear_irq(dev);
+
+  return len;
+}
+
+/*
+ * Read a single block from an ISO15693 tag.
+ * uid: 8-byte UID in MSB-first format (as returned by get_inventory)
+ * block_num: Block number to read (0-27 for SLIX with 28 blocks)
+ * block_data: Buffer to receive block data (must be at least block_size bytes)
+ * block_size: Expected block size (4 bytes for SLIX)
+ */
+static int pn5180_read_single_block(const struct device *dev,
+                                    const uint8_t *uid, uint8_t block_num,
+                                    uint8_t *block_data, size_t block_size) {
+  uint8_t response[16]; /* Response: flags(1) + data(up to 32) */
+  int ret;
+
+  /* Build ReadSingleBlock command
+   * Format: [flags, cmd, UID(8 bytes LSB first), block_num]
+   */
+  uint8_t cmd[11];
+  cmd[0] = ISO15693_FLAG_HIGH_DATA_RATE | ISO15693_FLAG_ADDRESS; /* 0x22 */
+  cmd[1] = ISO15693_CMD_READ_SINGLE_BLOCK;                       /* 0x20 */
+
+  /* UID must be sent LSB first, but we store it MSB first */
+  for (int i = 0; i < 8; i++) {
+    cmd[2 + i] = uid[7 - i];
+  }
+  cmd[10] = block_num;
+
+  LOG_DBG("ReadSingleBlock: block=%d", block_num);
+
+  ret = pn5180_issue_iso15693_command(dev, cmd, sizeof(cmd), response,
+                                      sizeof(response));
+  if (ret < 0) {
+    return ret;
+  }
+
+  /* Response format: [flags(1), data(block_size)] */
+  if (ret < (int)(1 + block_size)) {
+    LOG_ERR("ReadSingleBlock response too short: %d", ret);
+    return ISO15693_EC_UNKNOWN_ERROR;
+  }
+
+  /* Copy block data (skip flags byte) */
+  memcpy(block_data, &response[1], block_size);
+
+  LOG_DBG("Block %d data: %02X %02X %02X %02X", block_num, block_data[0],
+          block_data[1], block_data[2], block_data[3]);
+
+  return PN5180_OK;
+}
+
 static int pn5180_read_reception_buffer(const struct device *dev,
                                         uint8_t *buffer, int16_t len) {
   uint8_t cmd_read[] = {PN5180_READ_DATA, 0x00};
@@ -534,10 +688,112 @@ static int pn5180_driver_get_inventory(const struct device *dev, uint8_t *uid,
   return tag_detected ? PN5180_OK : PN5180_ERR_TIMEOUT;
 }
 
-static int pn5180_driver_read_tag(const struct device *dev, uint8_t *data,
-                                  size_t data_len) {
-  /* TODO: Implement tag reading */
-  return -ENOTSUP;
+/*
+ * Read a single block from the tag (public API).
+ */
+static int pn5180_driver_read_block(const struct device *dev, uint8_t *uid,
+                                    uint8_t block_num, uint8_t *block_data,
+                                    size_t block_size) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized || !uid || !block_data || block_size == 0) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  /* Load protocol configuration */
+  ret = pn5180_load_iso15693_config(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Activate RF */
+  ret = pn5180_activate_rf(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Read the block */
+  ret = pn5180_read_single_block(dev, uid, block_num, block_data, block_size);
+
+  /* Disable RF */
+  pn5180_disable_rf(dev);
+
+  k_mutex_unlock(&data->mutex);
+  return ret;
+}
+
+/*
+ * Read all data from an ISO15693 tag.
+ * This reads all blocks (assuming SLIX with 28 blocks of 4 bytes = 112 bytes).
+ */
+static int pn5180_driver_read_tag(const struct device *dev, uint8_t *uid,
+                                  uint8_t *tag_data, size_t data_len,
+                                  size_t *bytes_read) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  /* SLIX has 28 blocks of 4 bytes each = 112 bytes */
+  const uint8_t num_blocks = 28;
+  const uint8_t block_size = ISO15693_SLIX_BLOCK_SIZE;
+
+  if (!data->initialized || !uid || !tag_data) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  if (data_len < (num_blocks * block_size)) {
+    LOG_ERR("Buffer too small: need %d bytes, got %d",
+            num_blocks * block_size, data_len);
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  /* Load protocol configuration */
+  ret = pn5180_load_iso15693_config(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Activate RF */
+  ret = pn5180_activate_rf(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Read all blocks */
+  size_t total_bytes = 0;
+  for (uint8_t block = 0; block < num_blocks; block++) {
+    ret =
+        pn5180_read_single_block(dev, uid, block, &tag_data[block * block_size],
+                                 block_size);
+    if (ret) {
+      LOG_ERR("Failed to read block %d: %d", block, ret);
+      /* Disable RF and return error */
+      pn5180_disable_rf(dev);
+      k_mutex_unlock(&data->mutex);
+      return ret;
+    }
+    total_bytes += block_size;
+  }
+
+  /* Disable RF */
+  pn5180_disable_rf(dev);
+
+  if (bytes_read) {
+    *bytes_read = total_bytes;
+  }
+
+  LOG_INF("Read %d bytes from tag (%d blocks)", total_bytes, num_blocks);
+
+  k_mutex_unlock(&data->mutex);
+  return PN5180_OK;
 }
 
 static int pn5180_driver_write_tag(const struct device *dev,
@@ -552,6 +808,7 @@ static const struct pn5180_driver_api pn5180_api = {
     .configure = pn5180_driver_configure,
     .get_inventory = pn5180_driver_get_inventory,
     .read_tag = pn5180_driver_read_tag,
+    .read_block = pn5180_driver_read_block,
     .write_tag = pn5180_driver_write_tag,
 };
 
