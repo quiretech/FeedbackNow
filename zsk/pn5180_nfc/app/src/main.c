@@ -16,28 +16,42 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
  * NFC READ MODE CONFIGURATION
  *
  * Set to 1 for SINGLE BLOCK mode (production) - reads only the custom data
- *block Set to 0 for FULL DUMP mode (debugging) - reads all 28 blocks and hex
- *dumps
+ * block. Set to 0 for FULL DUMP mode (debugging) - reads all blocks and hex
+ * dumps.
  *============================================================================*/
 #define NFC_READ_SINGLE_BLOCK_MODE 0
 
+/* Set to 1 to enable write demo (writes test data to a block) */
+#define NFC_WRITE_DEMO_ENABLED 1
+#define NFC_WRITE_DEMO_BLOCK 27 /* Block to write test data to */
+
 /* Block number where your custom 4-byte data is stored (used in single block
  * mode) */
-#define NFC_CUSTOM_DATA_BLOCK 10
+#define NFC_CUSTOM_DATA_BLOCK 27
 
-/* SLIX tag parameters */
-#define SLIX_BLOCK_SIZE 4
-#define SLIX_NUM_BLOCKS 28
-#define SLIX_TOTAL_SIZE (SLIX_BLOCK_SIZE * SLIX_NUM_BLOCKS) /* 112 bytes */
+/* Maximum tag parameters (used for buffer allocation)
+ * Note: Keep MAX_TAG_SIZE reasonable to avoid stack overflow!
+ * - SLIX: 28 blocks × 4 bytes = 112 bytes
+ * - SLIX2: 80 blocks × 4 bytes = 320 bytes
+ * We use 512 bytes as a safe maximum for most ISO15693 tags.
+ */
+#define MAX_BLOCK_SIZE 32
+#define MAX_NUM_BLOCKS 128
+#define MAX_TAG_SIZE 512 /* Maximum tag data we'll read */
 
-/* Thread stack sizes */
-#define NFC_THREAD_STACK_SIZE 2048
-#define PROCESSING_THREAD_STACK_SIZE 2048
+/* Default SLIX tag parameters (fallback if get_system_info fails) */
+#define DEFAULT_BLOCK_SIZE 4
+#define DEFAULT_NUM_BLOCKS 28
+
+/* Thread stack sizes - must be large enough for local buffers */
+#define NFC_THREAD_STACK_SIZE 4096
+#define PROCESSING_THREAD_STACK_SIZE 4096
 
 /* Message queue for NFC events */
-#define NFC_QUEUE_SIZE 10
+#define NFC_QUEUE_SIZE 4 /* Reduced to save memory */
 
-/* Power management and wake-up configuration */
+/* Power management and wake-up clear
+configuration */
 #define WAKE_UP_GPIO_NODE DT_ALIAS(wakeup)
 #define WAKE_UP_GPIO_DEV DT_GPIO_CTLR(WAKE_UP_GPIO_NODE, gpios)
 #define WAKE_UP_GPIO_PIN DT_GPIO_PIN(WAKE_UP_GPIO_NODE, gpios)
@@ -55,10 +69,13 @@ enum system_state {
 struct nfc_event {
   enum { NFC_EVENT_TAG_DETECTED, NFC_EVENT_TAG_LOST, NFC_EVENT_ERROR } type;
   uint8_t uid[8];
+  /* Tag memory parameters (discovered via get_system_info) */
+  uint8_t block_size;
+  uint8_t num_blocks;
 #if NFC_READ_SINGLE_BLOCK_MODE
-  uint8_t custom_data[SLIX_BLOCK_SIZE]; /* 4 bytes from specific block */
+  uint8_t custom_data[MAX_BLOCK_SIZE]; /* Custom block data */
 #else
-  uint8_t tag_data[SLIX_TOTAL_SIZE]; /* Full 112 bytes for dump mode */
+  uint8_t tag_data[MAX_TAG_SIZE]; /* Full tag data for dump mode */
   size_t tag_data_len;
 #endif
   uint32_t timestamp;
@@ -90,20 +107,20 @@ static struct k_thread processing_thread;
 K_THREAD_STACK_DEFINE(nfc_thread_stack, NFC_THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(processing_thread_stack, PROCESSING_THREAD_STACK_SIZE);
 
-/* Custom tag processing functions */
+/* PN5180 verification and info functions */
+static int verify_pn5180_communication(void);
+static void print_pn5180_version(const struct pn5180_version_info *info);
+
+/* Tag processing functions */
 #if NFC_READ_SINGLE_BLOCK_MODE
 static void process_tag_detected(uint8_t *uid, uint8_t *custom_data,
-                                 uint32_t timestamp);
+                                 uint8_t block_size, uint32_t timestamp);
 #else
 static void process_tag_detected(uint8_t *uid, uint8_t *tag_data,
-                                 size_t tag_data_len, uint32_t timestamp);
-static void print_tag_data(uint8_t *data, size_t len);
+                                 size_t tag_data_len, uint8_t block_size,
+                                 uint8_t num_blocks, uint32_t timestamp);
+static void print_tag_data(uint8_t *data, size_t len, uint8_t block_size);
 #endif
-static void process_tag_lost(uint32_t timestamp);
-static bool is_authorized_tag(uint8_t *uid, uint8_t *custom_data);
-static void trigger_access_granted(void);
-static void trigger_access_denied(void);
-static void reset_access_state(void);
 static void handle_application_logic(void);
 
 /* Power management functions */
@@ -118,6 +135,7 @@ static void power_down_nfc_system(void);
 static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
   uint8_t uid[8] = {0};
   struct nfc_event event;
+  struct iso15693_system_info tag_info;
   int ret;
 
   LOG_INF("NFC thread started");
@@ -132,7 +150,7 @@ static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
     LOG_INF("NFC system awakened - starting scan");
     set_system_state(SYSTEM_NFC_SCANNING);
 
-    /* Perform NFC scan */
+    /* Perform NFC scan (inventory) */
     k_mutex_lock(&nfc_mutex, K_FOREVER);
     ret = pn5180_get_inventory(pn5180_dev, uid, sizeof(uid));
     k_mutex_unlock(&nfc_mutex);
@@ -146,11 +164,59 @@ static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
       LOG_INF("Tag UID: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X", uid[0],
               uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
 
+      /* Get tag system info to determine memory layout */
+      k_mutex_lock(&nfc_mutex, K_FOREVER);
+      ret = pn5180_get_system_info(pn5180_dev, uid, &tag_info);
+      k_mutex_unlock(&nfc_mutex);
+
+      if (ret == 0) {
+        event.block_size = tag_info.block_size;
+        event.num_blocks = tag_info.num_blocks;
+        LOG_INF("Tag info: %d blocks x %d bytes = %d bytes total",
+                tag_info.num_blocks, tag_info.block_size,
+                tag_info.num_blocks * tag_info.block_size);
+        if (tag_info.info_flags & ISO15693_INFO_FLAG_AFI) {
+          LOG_INF("  AFI: 0x%02X", tag_info.afi);
+        }
+        if (tag_info.info_flags & ISO15693_INFO_FLAG_DSFID) {
+          LOG_INF("  DSFID: 0x%02X", tag_info.dsfid);
+        }
+        if (tag_info.info_flags & ISO15693_INFO_FLAG_IC_REF) {
+          LOG_INF("  IC Reference: 0x%02X", tag_info.ic_reference);
+        }
+      } else {
+        LOG_WRN("Failed to get system info: %s, using defaults",
+                pn5180_strerror(ret));
+        event.block_size = DEFAULT_BLOCK_SIZE;
+        event.num_blocks = DEFAULT_NUM_BLOCKS;
+      }
+
+#if NFC_WRITE_DEMO_ENABLED
+      /* Write demo: Write test data to a block */
+      {
+        uint8_t test_data[MAX_BLOCK_SIZE] = {0x48, 0x65, 0x79, 0x21}; // "Hey!"
+        LOG_INF("Write demo: Writing to block %d...", NFC_WRITE_DEMO_BLOCK);
+
+        k_mutex_lock(&nfc_mutex, K_FOREVER);
+        ret = pn5180_write_block(pn5180_dev, uid, NFC_WRITE_DEMO_BLOCK,
+                                 test_data, event.block_size);
+        k_mutex_unlock(&nfc_mutex);
+
+        if (ret == 0) {
+          LOG_INF("Write demo: Block %d written successfully!",
+                  NFC_WRITE_DEMO_BLOCK);
+        } else {
+          LOG_ERR("Write demo: Failed to write block %d: %s",
+                  NFC_WRITE_DEMO_BLOCK, pn5180_strerror(ret));
+        }
+      }
+#endif
+
 #if NFC_READ_SINGLE_BLOCK_MODE
       /* Single block mode: Read only the custom data block */
       k_mutex_lock(&nfc_mutex, K_FOREVER);
       ret = pn5180_read_block(pn5180_dev, uid, NFC_CUSTOM_DATA_BLOCK,
-                              event.custom_data, SLIX_BLOCK_SIZE);
+                              event.custom_data, event.block_size);
       k_mutex_unlock(&nfc_mutex);
 
       if (ret == 0) {
@@ -158,21 +224,39 @@ static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
                 event.custom_data[0], event.custom_data[1],
                 event.custom_data[2], event.custom_data[3]);
       } else {
-        LOG_WRN("Failed to read block %d: %d", NFC_CUSTOM_DATA_BLOCK, ret);
+        LOG_WRN("Failed to read block %d: %s", NFC_CUSTOM_DATA_BLOCK,
+                pn5180_strerror(ret));
         memset(event.custom_data, 0, sizeof(event.custom_data));
       }
 #else
-      /* Full dump mode: Read all blocks */
+      /* Full dump mode: Read all blocks dynamically */
       event.tag_data_len = 0;
+      size_t total_size = (size_t)event.block_size * event.num_blocks;
+      uint8_t blocks_to_read = event.num_blocks;
+
+      if (total_size > sizeof(event.tag_data)) {
+        LOG_WRN("Tag size (%d) exceeds buffer (%d), truncating", total_size,
+                sizeof(event.tag_data));
+        blocks_to_read = sizeof(event.tag_data) / event.block_size;
+      }
+
+      /* Read blocks one at a time for reliability */
       k_mutex_lock(&nfc_mutex, K_FOREVER);
-      ret = pn5180_read_tag(pn5180_dev, uid, event.tag_data,
-                            sizeof(event.tag_data), &event.tag_data_len);
+      for (uint8_t block = 0; block < blocks_to_read; block++) {
+        ret = pn5180_read_block(pn5180_dev, uid, block,
+                                &event.tag_data[block * event.block_size],
+                                event.block_size);
+        if (ret != 0) {
+          LOG_ERR("Failed to read block %d: %s", block, pn5180_strerror(ret));
+          break;
+        }
+        event.tag_data_len += event.block_size;
+      }
       k_mutex_unlock(&nfc_mutex);
 
-      if (ret == 0) {
-        LOG_INF("Read %d bytes from tag", event.tag_data_len);
-      } else {
-        LOG_WRN("Failed to read tag data: %d", ret);
+      if (event.tag_data_len > 0) {
+        LOG_INF("Read %d bytes from tag (%d blocks)", event.tag_data_len,
+                event.tag_data_len / event.block_size);
       }
 #endif
 
@@ -186,7 +270,7 @@ static void nfc_thread_entry(void *arg1, void *arg2, void *arg3) {
       k_sem_take(&nfc_scan_complete_sem, K_FOREVER);
 
     } else {
-      LOG_INF("No tag detected");
+      LOG_INF("No tag detected (%s)", pn5180_strerror(ret));
     }
 
     /* Power down NFC system and return to sleep */
@@ -209,11 +293,13 @@ static void processing_thread_entry(void *arg1, void *arg2, void *arg3) {
       switch (event.type) {
       case NFC_EVENT_TAG_DETECTED:
 #if NFC_READ_SINGLE_BLOCK_MODE
-        /* Single block mode - process custom 4-byte data */
-        process_tag_detected(event.uid, event.custom_data, event.timestamp);
+        /* Single block mode - process custom block data */
+        process_tag_detected(event.uid, event.custom_data, event.block_size,
+                             event.timestamp);
 #else
         /* Full dump mode - process all tag data */
         process_tag_detected(event.uid, event.tag_data, event.tag_data_len,
+                             event.block_size, event.num_blocks,
                              event.timestamp);
 #endif
         /* Signal that processing is complete */
@@ -222,7 +308,6 @@ static void processing_thread_entry(void *arg1, void *arg2, void *arg3) {
 
       case NFC_EVENT_TAG_LOST:
         LOG_INF("Tag lost at %u ms", event.timestamp);
-        process_tag_lost(event.timestamp);
         break;
 
       case NFC_EVENT_ERROR:
@@ -237,56 +322,62 @@ static void processing_thread_entry(void *arg1, void *arg2, void *arg3) {
 #if NFC_READ_SINGLE_BLOCK_MODE
 /*============================================================================
  * SINGLE BLOCK MODE - Production
- * Reads only the custom data block and processes the 4-byte identifier
+ * Reads only the custom data block
  *============================================================================*/
 static void process_tag_detected(uint8_t *uid, uint8_t *custom_data,
-                                 uint32_t timestamp) {
-  LOG_INF("Custom data: %02X %02X %02X %02X", custom_data[0], custom_data[1],
-          custom_data[2], custom_data[3]);
+                                 uint8_t block_size, uint32_t timestamp) {
+  (void)uid;
+  (void)timestamp;
 
-  /* Check if tag is authorized based on UID and/or custom data */
-  if (is_authorized_tag(uid, custom_data)) {
-    LOG_INF("*** ACCESS GRANTED ***");
-    trigger_access_granted();
-  } else {
-    LOG_WRN("*** ACCESS DENIED ***");
-    trigger_access_denied();
-  }
+  LOG_INF("Block %d data (%d bytes): %02X %02X %02X %02X",
+          NFC_CUSTOM_DATA_BLOCK, block_size, custom_data[0], custom_data[1],
+          custom_data[2], custom_data[3]);
 }
 
 #else
 /*============================================================================
  * FULL DUMP MODE - Debugging
- * Reads all 28 blocks and prints a hex dump with ASCII
+ * Reads all blocks and prints a hex dump with ASCII
  *============================================================================*/
-static void print_tag_data(uint8_t *data, size_t len) {
+static void print_tag_data(uint8_t *data, size_t len, uint8_t block_size) {
   if (len == 0) {
     LOG_INF("No tag data to display");
     return;
   }
 
   LOG_INF("================ TAG MEMORY DUMP (%d bytes) ================", len);
-  LOG_INF("Block    | Hex Data                          | ASCII");
-  LOG_INF("---------+-----------------------------------+------------------");
+  LOG_INF("Block | Hex Data                          | ASCII");
+  LOG_INF("------+-----------------------------------+------------------");
 
-  /* Print all blocks in groups of 4 (16 bytes per line) */
-  for (size_t row = 0; row < len; row += 16) {
-    size_t blk_start = row / SLIX_BLOCK_SIZE;
+  /* Print blocks - group by 4 blocks (up to 16 bytes per line) */
+  size_t bytes_per_row = block_size * 4; /* Show 4 blocks per row */
+  if (bytes_per_row > 16) {
+    bytes_per_row = 16;
+  }
+
+  for (size_t row = 0; row < len; row += bytes_per_row) {
+    size_t blk_start = row / block_size;
+    size_t blk_end = (row + bytes_per_row - 1) / block_size;
+    if (blk_end >= len / block_size) {
+      blk_end = (len / block_size) - 1;
+    }
+
+    char hex_str[64] = {0};
     char ascii[17] = {0};
+    int hex_pos = 0;
 
-    /* Build ASCII representation */
-    for (int i = 0; i < 16 && (row + i) < len; i++) {
+    /* Build hex and ASCII representation */
+    for (size_t i = 0; i < bytes_per_row && (row + i) < len; i++) {
       uint8_t c = data[row + i];
+      hex_pos +=
+          snprintf(&hex_str[hex_pos], sizeof(hex_str) - hex_pos, "%02X ", c);
+      if ((i + 1) % block_size == 0 && (row + i + 1) < len) {
+        hex_pos += snprintf(&hex_str[hex_pos], sizeof(hex_str) - hex_pos, " ");
+      }
       ascii[i] = (c >= 32 && c < 127) ? c : '.';
     }
 
-    LOG_INF("%02d-%02d    | %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X | %s",
-            blk_start, blk_start + 3,
-            data[row + 0], data[row + 1], data[row + 2], data[row + 3],
-            data[row + 4], data[row + 5], data[row + 6], data[row + 7],
-            data[row + 8], data[row + 9], data[row + 10], data[row + 11],
-            data[row + 12], data[row + 13], data[row + 14], data[row + 15],
-            ascii);
+    LOG_INF("%02d-%02d | %-35s | %s", blk_start, blk_end, hex_str, ascii);
     k_msleep(10); /* Small delay to prevent RTT overflow */
   }
 
@@ -294,84 +385,18 @@ static void print_tag_data(uint8_t *data, size_t len) {
 }
 
 static void process_tag_detected(uint8_t *uid, uint8_t *tag_data,
-                                 size_t tag_data_len, uint32_t timestamp) {
+                                 size_t tag_data_len, uint8_t block_size,
+                                 uint8_t num_blocks, uint32_t timestamp) {
+  (void)uid;
+  (void)num_blocks;
+  (void)timestamp;
+
   /* Print full tag data dump */
   if (tag_data_len > 0) {
-    print_tag_data(tag_data, tag_data_len);
-  }
-
-  /* Extract custom data from the configured block for authorization check */
-  uint8_t *custom_data = &tag_data[NFC_CUSTOM_DATA_BLOCK * SLIX_BLOCK_SIZE];
-
-  LOG_INF("Block %d (custom data): %02X %02X %02X %02X", NFC_CUSTOM_DATA_BLOCK,
-          custom_data[0], custom_data[1], custom_data[2], custom_data[3]);
-
-  /* Check authorization */
-  if (is_authorized_tag(uid, custom_data)) {
-    LOG_INF("*** ACCESS GRANTED ***");
-    trigger_access_granted();
-  } else {
-    LOG_WRN("*** ACCESS DENIED ***");
-    trigger_access_denied();
+    print_tag_data(tag_data, tag_data_len, block_size);
   }
 }
 #endif
-
-static void process_tag_lost(uint32_t timestamp) {
-  LOG_INF("Tag removed, resetting access state");
-  /* Reset access control state */
-  reset_access_state();
-}
-
-/*
- * Check if tag is authorized.
- *
- * You can authorize based on:
- *   - UID only (unique to each physical tag)
- *   - Custom data only (your provisioned 4-byte ID)
- *   - Both UID and custom data
- *
- * For production, you'll likely check the custom_data against a database
- * or list of authorized device IDs.
- */
-static bool is_authorized_tag(uint8_t *uid, uint8_t *custom_data) {
-  /* Example: Authorize based on custom 4-byte data */
-  /* Replace with your actual authorized device IDs */
-  uint8_t authorized_ids[][4] = {
-      {0xDE, 0xAD, 0xBE, 0xEF}, /* Example ID 1 */
-      {0x12, 0x34, 0x56, 0x78}, /* Example ID 2 */
-      {0xAA, 0xBB, 0xCC, 0xDD}, /* Example ID 3 */
-  };
-
-  for (size_t i = 0; i < ARRAY_SIZE(authorized_ids); i++) {
-    if (memcmp(custom_data, authorized_ids[i], 4) == 0) {
-      return true;
-    }
-  }
-
-  /* Alternatively, you could also check UID if needed */
-  /* (void)uid;  // Uncomment if not using UID */
-
-  return false;
-}
-
-static void trigger_access_granted(void) {
-  LOG_INF("*** ACCESS GRANTED ***");
-  /* Add your access granted logic here */
-  /* Examples: Turn on LED, unlock door, send notification, etc. */
-}
-
-static void trigger_access_denied(void) {
-  LOG_INF("*** ACCESS DENIED ***");
-  /* Add your access denied logic here */
-  /* Examples: Turn on red LED, sound alarm, log attempt, etc. */
-}
-
-static void reset_access_state(void) {
-  LOG_INF("Resetting access control state");
-  /* Add your state reset logic here */
-  /* Examples: Turn off LEDs, reset indicators, etc. */
-}
 
 static void handle_application_logic(void) {
   /* Main application logic that runs independently of NFC */
@@ -382,6 +407,56 @@ static void handle_application_logic(void) {
   if (counter % 10 == 0) {
     LOG_INF("Application running... (counter: %u)", counter);
   }
+}
+
+/*============================================================================
+ * PN5180 Verification and Info Functions
+ *============================================================================*/
+
+/* Print PN5180 version information */
+static void print_pn5180_version(const struct pn5180_version_info *info) {
+  LOG_INF("=========================================");
+  LOG_INF("PN5180 NFC Controller Information:");
+  LOG_INF("  Product Version:  %d.%d", (info->product_version >> 8) & 0xFF,
+          info->product_version & 0xFF);
+  LOG_INF("  Firmware Version: %d.%d", (info->firmware_version >> 8) & 0xFF,
+          info->firmware_version & 0xFF);
+  LOG_INF("  EEPROM Version:   %d.%d", (info->eeprom_version >> 8) & 0xFF,
+          info->eeprom_version & 0xFF);
+  LOG_INF("=========================================");
+}
+
+/*
+ * Verify PN5180 SPI communication by reading EEPROM.
+ * This is a good first check after power-on to ensure SPI is working.
+ * Returns 0 on success, negative error code on failure.
+ */
+static int verify_pn5180_communication(void) {
+  struct pn5180_version_info version;
+  int ret;
+
+  LOG_INF("Verifying PN5180 SPI communication...");
+
+  /* Read version info from EEPROM - this verifies SPI is working */
+  ret = pn5180_get_version(pn5180_dev, &version);
+  if (ret != 0) {
+    LOG_ERR("Failed to read PN5180 version: %s", pn5180_strerror(ret));
+    LOG_ERR("SPI communication may not be working!");
+    return ret;
+  }
+
+  /* Sanity check - firmware version should be non-zero */
+  if (version.firmware_version == 0 && version.product_version == 0) {
+    LOG_ERR("Invalid version data read - all zeros!");
+    LOG_ERR("Check SPI wiring and PN5180 power supply.");
+    return -EIO;
+  }
+
+  /* Print version info */
+  print_pn5180_version(&version);
+
+  LOG_INF("PN5180 SPI communication verified successfully!");
+  return 0;
 }
 
 /* GPIO interrupt callback - wakes up the system */
@@ -428,14 +503,21 @@ static void wake_up_nfc_system(void) {
   set_system_state(SYSTEM_NFC_ACTIVE);
 }
 
-/* Power down NFC system */
+/* Power down NFC system - prepare for external power cut */
 static void power_down_nfc_system(void) {
   LOG_INF("Powering down NFC system");
 
-  /* Disable RF field */
-  k_mutex_lock(&nfc_mutex, K_FOREVER);
-  pn5180_configure(pn5180_dev, PN5180_PROTOCOL_ISO15693); // Reset to idle
-  k_mutex_unlock(&nfc_mutex);
+  /* Prepare PN5180 for power off (disables RF, clears IRQs, sets idle) */
+  int ret = pn5180_prepare_poweroff(pn5180_dev);
+  if (ret != 0) {
+    LOG_WRN("prepare_poweroff returned: %d (continuing anyway)", ret);
+  }
+
+  /*
+   * At this point it's safe to cut power to the PN5180.
+   * Add your power rail disable calls here, e.g.:
+   * power_ctrl_set(POWER_EN_3V3A, false);
+   */
 }
 
 int main(void) {
@@ -512,16 +594,30 @@ int main(void) {
   }
 
   /* Initialize the NFC driver */
-  if (pn5180_init(pn5180_dev) != 0) {
-    LOG_ERR("Failed to initialize PN5180");
+  ret = pn5180_init(pn5180_dev);
+  if (ret != 0) {
+    LOG_ERR("Failed to initialize PN5180: %s", pn5180_strerror(ret));
     return -EIO;
   }
 
+  /*
+   * Verify SPI communication by reading EEPROM (firmware version).
+   * This is a critical first check - if this fails, SPI is not working.
+   */
+  ret = verify_pn5180_communication();
+  if (ret != 0) {
+    LOG_ERR("PN5180 communication verification failed!");
+    LOG_ERR("Please check: SPI wiring, NSS/CS pin, BUSY pin, power supply");
+    return ret;
+  }
+
   /* Configure for ISO15693 protocol */
-  if (pn5180_configure(pn5180_dev, PN5180_PROTOCOL_ISO15693) != 0) {
-    LOG_ERR("Failed to configure PN5180");
+  ret = pn5180_configure(pn5180_dev, PN5180_PROTOCOL_ISO15693);
+  if (ret != 0) {
+    LOG_ERR("Failed to configure PN5180: %s", pn5180_strerror(ret));
     return -EIO;
   }
+  LOG_INF("PN5180 configured for ISO15693 protocol");
 
   /* Configure wake-up GPIO */
   ret = gpio_pin_configure(wake_up_gpio_dev, wake_up_pin,

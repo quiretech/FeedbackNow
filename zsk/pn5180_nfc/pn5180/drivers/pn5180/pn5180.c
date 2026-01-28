@@ -187,19 +187,9 @@ static int pn5180_read_register(const struct device *dev, uint8_t reg_addr,
   return PN5180_OK;
 }
 
-/* NFC Protocol Functions */
+/* NFC Protocol Functions (ISO15693 only) */
 static int pn5180_load_iso15693_config(const struct device *dev) {
   uint8_t cmd[] = {PN5180_LOAD_RF_CONFIG, 0x0D, 0x8D};
-  return pn5180_spi_send_bytes(dev, cmd, sizeof(cmd));
-}
-
-static int pn5180_load_iso14443a_config(const struct device *dev) {
-  uint8_t cmd[] = {PN5180_LOAD_RF_CONFIG, 0x00, 0x80};
-  return pn5180_spi_send_bytes(dev, cmd, sizeof(cmd));
-}
-
-static int pn5180_load_iso14443b_config(const struct device *dev) {
-  uint8_t cmd[] = {PN5180_LOAD_RF_CONFIG, 0x03, 0x83};
   return pn5180_spi_send_bytes(dev, cmd, sizeof(cmd));
 }
 
@@ -330,6 +320,7 @@ static int pn5180_send_end_of_frame(const struct device *dev) {
 /*
  * Issue an ISO15693 command and wait for response.
  * Returns the number of bytes received, or negative error code.
+ * Includes CRC and collision checking for data integrity.
  */
 static int pn5180_issue_iso15693_command(const struct device *dev,
                                          const uint8_t *iso_cmd,
@@ -387,15 +378,33 @@ static int pn5180_issue_iso15693_command(const struct device *dev,
     k_msleep(5);
   }
 
-  /* Read RX_STATUS to get response length */
+  /* Read RX_STATUS to get response length and check for errors */
   uint32_t rx_status = 0;
   ret = pn5180_read_register(dev, RX_STATUS, &rx_status);
   if (ret) {
     return ret;
   }
 
-  uint16_t len = (uint16_t)(rx_status & 0x01FF);
-  LOG_DBG("ISO15693 response length: %d bytes", len);
+  /* Check for collision */
+  if (rx_status & RX_STATUS_COLLISION_DET) {
+    LOG_WRN("Collision detected during reception");
+    return ISO15693_EC_COLLISION;
+  }
+
+  /* Check for protocol error */
+  if (rx_status & RX_STATUS_PROTOCOL_ERR) {
+    LOG_ERR("Protocol error detected");
+    return ISO15693_EC_UNKNOWN_ERROR;
+  }
+
+  /* Check for data integrity error (actual CRC failure) */
+  if (rx_status & RX_STATUS_DATA_INTEGRITY_ERR) {
+    LOG_ERR("Data integrity error (CRC failure) detected");
+    return ISO15693_EC_CRC_ERROR;
+  }
+
+  uint16_t len = (uint16_t)(rx_status & RX_STATUS_LEN_MASK);
+  LOG_DBG("ISO15693 response length: %d bytes, RX_STATUS=0x%08X", len, rx_status);
 
   if (len == 0) {
     return ISO15693_EC_NO_CARD;
@@ -412,12 +421,23 @@ static int pn5180_issue_iso15693_command(const struct device *dev,
     return ret;
   }
 
-  /* Check response flags for errors */
+  /*
+   * Note: RX_STATUS_CRC_OK bit is NOT checked here.
+   * For ISO15693, the PN5180 RF configuration handles CRC differently -
+   * the CRC_OK bit may not be set even when CRC is valid.
+   * Actual CRC failures are caught by RX_STATUS_DATA_INTEGRITY_ERR above.
+   */
+
+  /* Check response flags for ISO15693 errors */
   if (response[0] & 0x01) { /* Error flag set */
     uint8_t error_code = response[1];
     LOG_ERR("ISO15693 error response: 0x%02X", error_code);
-    if (error_code == 0x10) {
-      return ISO15693_EC_BLOCK_NOT_AVAILABLE;
+    if (error_code >= 0xA0 && error_code <= 0xDF) {
+      return ISO15693_EC_CUSTOM_CMD_ERROR;
+    }
+    /* Return the actual ISO15693 error code if it's a standard one */
+    if (error_code >= 0x01 && error_code <= 0x14) {
+      return error_code; /* Standard ISO15693 error codes */
     }
     return ISO15693_EC_UNKNOWN_ERROR;
   }
@@ -477,6 +497,211 @@ static int pn5180_read_single_block(const struct device *dev,
   return PN5180_OK;
 }
 
+/*
+ * Write a single block to an ISO15693 tag.
+ * uid: 8-byte UID in MSB-first format (as returned by get_inventory)
+ * block_num: Block number to write (0-27 for SLIX with 28 blocks)
+ * block_data: Data to write (must be block_size bytes)
+ * block_size: Block size (4 bytes for SLIX)
+ */
+static int pn5180_write_single_block(const struct device *dev,
+                                     const uint8_t *uid, uint8_t block_num,
+                                     const uint8_t *block_data,
+                                     size_t block_size) {
+  uint8_t response[8]; /* Response: flags(1) + optional error code */
+  int ret;
+
+  if (block_size > ISO15693_MAX_BLOCK_SIZE) {
+    LOG_ERR("Block size too large: %d", block_size);
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  /* Build WriteSingleBlock command
+   * Format: [flags, cmd, UID(8 bytes LSB first), block_num, data...]
+   */
+  uint8_t cmd[11 + ISO15693_MAX_BLOCK_SIZE];
+  cmd[0] = ISO15693_FLAG_HIGH_DATA_RATE | ISO15693_FLAG_ADDRESS; /* 0x22 */
+  cmd[1] = ISO15693_CMD_WRITE_SINGLE_BLOCK;                      /* 0x21 */
+
+  /* UID must be sent LSB first, but we store it MSB first */
+  for (int i = 0; i < 8; i++) {
+    cmd[2 + i] = uid[7 - i];
+  }
+  cmd[10] = block_num;
+
+  /* Copy block data */
+  memcpy(&cmd[11], block_data, block_size);
+
+  LOG_DBG("WriteSingleBlock: block=%d, size=%d", block_num, block_size);
+
+  ret = pn5180_issue_iso15693_command(dev, cmd, 11 + block_size, response,
+                                      sizeof(response));
+  if (ret < 0) {
+    return ret;
+  }
+
+  /* Write command returns just flags byte on success */
+  LOG_DBG("Block %d written successfully", block_num);
+
+  return PN5180_OK;
+}
+
+/*
+ * Get System Information from an ISO15693 tag.
+ * Returns tag parameters including UID, block size, number of blocks, etc.
+ */
+static int pn5180_get_system_info_internal(const struct device *dev,
+                                           const uint8_t *uid,
+                                           struct iso15693_system_info *info) {
+  uint8_t response[32]; /* Max response size */
+  int ret;
+
+  /* Build GetSystemInfo command
+   * Format: [flags, cmd, UID(8 bytes LSB first)]
+   */
+  uint8_t cmd[10];
+  cmd[0] = ISO15693_FLAG_HIGH_DATA_RATE | ISO15693_FLAG_ADDRESS; /* 0x22 */
+  cmd[1] = ISO15693_CMD_GET_SYSTEM_INFO;                         /* 0x2B */
+
+  /* UID must be sent LSB first, but we store it MSB first */
+  for (int i = 0; i < 8; i++) {
+    cmd[2 + i] = uid[7 - i];
+  }
+
+  LOG_DBG("GetSystemInfo for UID");
+
+  ret = pn5180_issue_iso15693_command(dev, cmd, sizeof(cmd), response,
+                                      sizeof(response));
+  if (ret < 0) {
+    return ret;
+  }
+
+  /* Minimum response: flags(1) + info_flags(1) + UID(8) = 10 bytes */
+  if (ret < 10) {
+    LOG_ERR("GetSystemInfo response too short: %d", ret);
+    return ISO15693_EC_INVALID_RESPONSE;
+  }
+
+  /* Clear info struct */
+  memset(info, 0, sizeof(*info));
+
+  /* Parse response */
+  uint8_t *p = &response[1]; /* Skip response flags */
+  info->info_flags = *p++;
+
+  /* UID (LSB first in response, convert to MSB first) */
+  for (int i = 0; i < 8; i++) {
+    info->uid[i] = p[7 - i];
+  }
+  p += 8;
+
+  /* Optional DSFID field */
+  if (info->info_flags & ISO15693_INFO_FLAG_DSFID) {
+    info->dsfid = *p++;
+    LOG_DBG("DSFID: 0x%02X", info->dsfid);
+  }
+
+  /* Optional AFI field */
+  if (info->info_flags & ISO15693_INFO_FLAG_AFI) {
+    info->afi = *p++;
+    LOG_DBG("AFI: 0x%02X", info->afi);
+  }
+
+  /* Optional VICC memory size */
+  if (info->info_flags & ISO15693_INFO_FLAG_VICC_MEM) {
+    info->num_blocks = *p++ + 1;  /* Number of blocks (0 means 1 block) */
+    uint8_t block_info = *p++;
+    info->block_size = (block_info & 0x1F) + 1; /* Block size in bytes */
+    LOG_DBG("Memory: %d blocks x %d bytes = %d bytes total", info->num_blocks,
+            info->block_size, info->num_blocks * info->block_size);
+  }
+
+  /* Optional IC reference */
+  if (info->info_flags & ISO15693_INFO_FLAG_IC_REF) {
+    info->ic_reference = *p++;
+    LOG_DBG("IC Reference: 0x%02X", info->ic_reference);
+  }
+
+  return PN5180_OK;
+}
+
+/*
+ * Read data from PN5180 EEPROM.
+ * addr: EEPROM address to read from
+ * data: Buffer to store read data
+ * len: Number of bytes to read (max 255)
+ */
+static int pn5180_read_eeprom_internal(const struct device *dev, uint8_t addr,
+                                       uint8_t *data, size_t len) {
+  int ret;
+
+  if (!data || len == 0 || len > 255) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  /* Build READ_EEPROM command: [cmd, addr, len] */
+  uint8_t cmd[] = {PN5180_READ_EEPROM, addr, (uint8_t)len};
+
+  ret = pn5180_spi_send_bytes(dev, cmd, sizeof(cmd));
+  if (ret) {
+    LOG_ERR("Failed to send READ_EEPROM command");
+    return ret;
+  }
+
+  ret = pn5180_spi_read_bytes(dev, data, len);
+  if (ret) {
+    LOG_ERR("Failed to read EEPROM data");
+    return ret;
+  }
+
+  LOG_DBG("Read %d bytes from EEPROM addr 0x%02X", len, addr);
+  return PN5180_OK;
+}
+
+/*
+ * Get PN5180 firmware and product version information.
+ */
+static int pn5180_get_version_internal(const struct device *dev,
+                                       struct pn5180_version_info *info) {
+  uint8_t data[6];
+  int ret;
+
+  if (!info) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  /* Read product version (2 bytes at 0x10) */
+  ret = pn5180_read_eeprom_internal(dev, PN5180_EEPROM_PRODUCT_VERSION, data, 2);
+  if (ret) {
+    LOG_ERR("Failed to read product version");
+    return ret;
+  }
+  info->product_version = sys_get_le16(data);
+
+  /* Read firmware version (2 bytes at 0x12) */
+  ret = pn5180_read_eeprom_internal(dev, PN5180_EEPROM_FIRMWARE_VERSION, data, 2);
+  if (ret) {
+    LOG_ERR("Failed to read firmware version");
+    return ret;
+  }
+  info->firmware_version = sys_get_le16(data);
+
+  /* Read EEPROM version (2 bytes at 0x14) */
+  ret = pn5180_read_eeprom_internal(dev, PN5180_EEPROM_EEPROM_VERSION, data, 2);
+  if (ret) {
+    LOG_ERR("Failed to read EEPROM version");
+    return ret;
+  }
+  info->eeprom_version = sys_get_le16(data);
+
+  LOG_INF("PN5180 Product: %d.%d, Firmware: %d.%d, EEPROM: %d.%d",
+          (info->product_version >> 8) & 0xFF, info->product_version & 0xFF,
+          (info->firmware_version >> 8) & 0xFF, info->firmware_version & 0xFF,
+          (info->eeprom_version >> 8) & 0xFF, info->eeprom_version & 0xFF);
+
+  return PN5180_OK;
+}
+
 static int pn5180_read_reception_buffer(const struct device *dev,
                                         uint8_t *buffer, int16_t len) {
   uint8_t cmd_read[] = {PN5180_READ_DATA, 0x00};
@@ -501,6 +726,66 @@ static int pn5180_read_reception_buffer(const struct device *dev,
 
   LOG_DBG("Read %d bytes from reception buffer", len);
   return PN5180_OK;
+}
+
+/*
+ * Get human-readable error string for ISO15693/PN5180 error codes.
+ */
+const char *pn5180_strerror(int error_code) {
+  switch (error_code) {
+  /* Success */
+  case PN5180_OK:
+    return "OK";
+
+  /* Driver-specific errors (negative) */
+  case PN5180_ERR_TIMEOUT:
+    return "Timeout";
+  case PN5180_ERR_SPI:
+    return "SPI communication error";
+  case PN5180_ERR_GPIO:
+    return "GPIO error";
+  case PN5180_ERR_INVALID_PARAM:
+    return "Invalid parameter";
+
+  /* ISO15693 driver errors (negative) */
+  case ISO15693_EC_NO_CARD:
+    return "No card detected";
+  case ISO15693_EC_COLLISION:
+    return "Collision detected";
+  case ISO15693_EC_TIMEOUT:
+    return "Response timeout";
+  case ISO15693_EC_CRC_ERROR:
+    return "CRC error";
+  case ISO15693_EC_INVALID_RESPONSE:
+    return "Invalid response format";
+
+  /* ISO15693 standard errors (positive, from tag) */
+  case ISO15693_EC_NOT_SUPPORTED:
+    return "Command not supported";
+  case ISO15693_EC_NOT_RECOGNIZED:
+    return "Command not recognized (format error)";
+  case ISO15693_EC_OPTION_NOT_SUPPORTED:
+    return "Option not supported";
+  case ISO15693_EC_UNKNOWN_ERROR:
+    return "Unknown error";
+  case ISO15693_EC_BLOCK_NOT_AVAILABLE:
+    return "Block not available";
+  case ISO15693_EC_BLOCK_ALREADY_LOCKED:
+    return "Block already locked";
+  case ISO15693_EC_BLOCK_IS_LOCKED:
+    return "Block is locked and cannot be changed";
+  case ISO15693_EC_BLOCK_NOT_PROGRAMMED:
+    return "Block programming failed";
+  case ISO15693_EC_BLOCK_NOT_LOCKED:
+    return "Block lock failed";
+
+  default:
+    /* Check for custom command error range (0xA0-0xDF) */
+    if (error_code >= 0xA0 && error_code <= 0xDF) {
+      return "Custom command error";
+    }
+    return "Unknown error code";
+  }
 }
 
 /* Driver API Implementation */
@@ -589,13 +874,8 @@ static int pn5180_driver_configure(const struct device *dev,
   case PN5180_PROTOCOL_ISO15693:
     ret = pn5180_load_iso15693_config(dev);
     break;
-  case PN5180_PROTOCOL_ISO14443A:
-    ret = pn5180_load_iso14443a_config(dev);
-    break;
-  case PN5180_PROTOCOL_ISO14443B:
-    ret = pn5180_load_iso14443b_config(dev);
-    break;
   default:
+    LOG_ERR("Unsupported protocol: %d (only ISO15693 supported)", protocol);
     ret = -ENOTSUP;
     break;
   }
@@ -796,10 +1076,180 @@ static int pn5180_driver_read_tag(const struct device *dev, uint8_t *uid,
   return PN5180_OK;
 }
 
+/*
+ * Write a single block to the tag (public API).
+ */
+static int pn5180_driver_write_block(const struct device *dev,
+                                     const uint8_t *uid, uint8_t block_num,
+                                     const uint8_t *block_data,
+                                     size_t block_size) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized || !uid || !block_data || block_size == 0) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  /* Load protocol configuration */
+  ret = pn5180_load_iso15693_config(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Activate RF */
+  ret = pn5180_activate_rf(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Write the block */
+  ret = pn5180_write_single_block(dev, uid, block_num, block_data, block_size);
+
+  /* Disable RF */
+  pn5180_disable_rf(dev);
+
+  k_mutex_unlock(&data->mutex);
+  return ret;
+}
+
+/*
+ * Get system information from an ISO15693 tag (public API).
+ */
+static int pn5180_driver_get_system_info(const struct device *dev,
+                                         const uint8_t *uid,
+                                         struct iso15693_system_info *info) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized || !uid || !info) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  /* Load protocol configuration */
+  ret = pn5180_load_iso15693_config(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Activate RF */
+  ret = pn5180_activate_rf(dev);
+  if (ret) {
+    k_mutex_unlock(&data->mutex);
+    return ret;
+  }
+
+  /* Get system info */
+  ret = pn5180_get_system_info_internal(dev, uid, info);
+
+  /* Disable RF */
+  pn5180_disable_rf(dev);
+
+  k_mutex_unlock(&data->mutex);
+  return ret;
+}
+
+/*
+ * Get PN5180 version information (public API).
+ */
+static int pn5180_driver_get_version(const struct device *dev,
+                                     struct pn5180_version_info *info) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized || !info) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  ret = pn5180_get_version_internal(dev, info);
+
+  k_mutex_unlock(&data->mutex);
+  return ret;
+}
+
+/*
+ * Read from PN5180 EEPROM (public API).
+ */
+static int pn5180_driver_read_eeprom(const struct device *dev, uint8_t addr,
+                                     uint8_t *eeprom_data, size_t len) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized || !eeprom_data || len == 0) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  ret = pn5180_read_eeprom_internal(dev, addr, eeprom_data, len);
+
+  k_mutex_unlock(&data->mutex);
+  return ret;
+}
+
 static int pn5180_driver_write_tag(const struct device *dev,
-                                   const uint8_t *data, size_t data_len) {
-  /* TODO: Implement tag writing */
+                                   const uint8_t *write_data, size_t data_len) {
+  /* TODO: Implement full tag writing */
   return -ENOTSUP;
+}
+
+/*
+ * Prepare PN5180 for power off.
+ * Ensures clean state before external power is cut.
+ * This is a "best effort" shutdown - it won't fail even if RF is already off.
+ */
+static int pn5180_driver_prepare_poweroff(const struct device *dev) {
+  struct pn5180_data *data = dev->data;
+  int ret;
+
+  if (!data->initialized) {
+    return PN5180_ERR_INVALID_PARAM;
+  }
+
+  k_mutex_lock(&data->mutex, K_FOREVER);
+
+  LOG_DBG("Preparing PN5180 for power off");
+
+  /*
+   * Step 1: Send RF_OFF command (don't wait for IRQ confirmation)
+   * RF might already be off, so we just send the command without waiting.
+   * This avoids timeout errors when RF is already disabled.
+   */
+  uint8_t cmd_rf_off[] = {PN5180_RF_OFF, 0x00};
+  ret = pn5180_spi_send_bytes(dev, cmd_rf_off, sizeof(cmd_rf_off));
+  if (ret) {
+    LOG_WRN("RF_OFF command failed: %d (continuing)", ret);
+  }
+
+  /* Small delay to let RF_OFF take effect if it was on */
+  k_msleep(5);
+
+  /* Step 2: Clear all IRQ flags */
+  ret = pn5180_clear_irq(dev);
+  if (ret) {
+    LOG_WRN("Failed to clear IRQ flags: %d", ret);
+    /* Continue anyway - not critical */
+  }
+
+  /* Step 3: Set device to idle mode */
+  ret = pn5180_set_idle(dev);
+  if (ret) {
+    LOG_WRN("Failed to set idle mode: %d", ret);
+    /* Continue anyway - not critical */
+  }
+
+  LOG_INF("PN5180 ready for power off");
+
+  k_mutex_unlock(&data->mutex);
+  return PN5180_OK;
 }
 
 /* Driver API Structure */
@@ -809,7 +1259,12 @@ static const struct pn5180_driver_api pn5180_api = {
     .get_inventory = pn5180_driver_get_inventory,
     .read_tag = pn5180_driver_read_tag,
     .read_block = pn5180_driver_read_block,
+    .write_block = pn5180_driver_write_block,
     .write_tag = pn5180_driver_write_tag,
+    .get_system_info = pn5180_driver_get_system_info,
+    .get_version = pn5180_driver_get_version,
+    .read_eeprom = pn5180_driver_read_eeprom,
+    .prepare_poweroff = pn5180_driver_prepare_poweroff,
 };
 
 /* Device Instances */
