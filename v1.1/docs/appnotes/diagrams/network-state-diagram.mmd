@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> Disconnected
+    Connected --> Disconnected: Uplink Failure / Join Timeout
+    Disconnected --> Connected: Join Success
+
+    note right of Connected
+      Uplink immediately
+      Process downlinks
+      RTC sync available
+    end note
+
+    note right of Disconnected
+      Queue events in EEPROM
+      1-hour rejoin timer
+      Local RTC only
+      Flush queue on reconnect
+    end note

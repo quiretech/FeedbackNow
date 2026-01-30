@@ -1,0 +1,15 @@
+flowchart TD
+    P1[POWER ON\nLED 2 flashes]
+    P2[HARDWARE INIT\nGPIO, SPI, I2C, ADC]
+    P3[EEPROM INIT\nConfig, counters, DevNonce, CRC check]
+    P4[SDHC INIT\nMount card or continue without]
+    P5[RTC INIT\nRead time, flag if invalid]
+    P6[EPD INIT\nDisplay Connecting if Variant A]
+    P7[LORA INIT\nSX1262, credentials]
+    P8[LORA JOIN\nOTAA 10 attempts; offline + 1hr rejoin if fail]
+    P9[RTC SYNC\nDeviceTimeReq if connected]
+    P10[EPD UPDATE\nLast Cleaned + timestamp if Variant A]
+    P11[BOOT UPLINK\nEvent 0x04, flush queue if connected]
+    P12[NORMAL MODE\nEnable buttons, heartbeat, rejoin timer if offline]
+
+    P1 --> P2 --> P3 --> P4 --> P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> P12

@@ -1,0 +1,37 @@
+flowchart TD
+    %% BOOT SEQUENCE
+    subgraph BOOT
+        B1[Attempt join: 10 tries with exponential backoff]
+        B2{Success?}
+        B3[Normal operation - connected]
+        B4[Offline mode: events queued, retry every 1hr]
+
+        B1 --> B2
+        B2 -->|Yes| B3
+        B2 -->|No| B4
+    end
+
+    %% HOURLY REJOIN
+    subgraph HOURLY_REJOIN
+        H1[Attempt join: 3 tries with backoff]
+        H2{Success?}
+        H3[Flush queued events, resume connected]
+        H4[Continue offline, retry in 1hr]
+
+        H1 --> H2
+        H2 -->|Yes| H3
+        H2 -->|No| H4
+    end
+
+    %% ON RECONNECT
+    subgraph ON_RECONNECT
+        R1[Flush queued events - oldest first, rate limited]
+        R2[Sync RTC via DeviceTimeReq]
+        R3[Resume normal heartbeat schedule]
+
+        R1 --> R2 --> R3
+    end
+
+    %% OPTIONAL: connecting the overall flow
+    B4 --> H1
+    H3 --> R1
