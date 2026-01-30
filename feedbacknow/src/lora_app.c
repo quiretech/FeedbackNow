@@ -21,7 +21,10 @@ bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
 
   int ret = k_msgq_get(&lora_msgq, msg, timeout);
   if (ret != 0) {
-    LOG_ERR("lora_get_event failed: %d", ret);
+    /* -EAGAIN is normal when timeout expires with no message */
+    if (ret != -EAGAIN) {
+      LOG_ERR("lora_get_event failed: %d", ret);
+    }
     return false;
   }
   return true;

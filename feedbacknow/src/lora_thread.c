@@ -12,9 +12,6 @@
 #include "power_rail_mgr.h"
 #include "sys_config.h"
 
-/* Wake semaphore - signaled by button_thread when any button is pressed */
-K_SEM_DEFINE(deep_sleep_wake_sem, 0, 1);
-
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
@@ -145,60 +142,24 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
   LOG_INF("=== LORA JOIN LOOP COMPLETED SUCCESSFULLY ===");
 
-  /* ===== POWER SAVE LOOP ===== */
-  LOG_INF("=== ENTERING POWER SAVE MODE ===");
+  /* Process uplink queue in a normal loop (no rail shutdown). */
+  lora_uplink_msg_t msg = {0};
 
   while (1) {
-    /* --- SLEEP STATE: Rails OFF, wait for button --- */
-    LOG_INF("[POWER] Entering sleep - turning OFF rails");
-    power_ctrl_set(POWER_EN_3V3, false);
-    power_ctrl_set(POWER_EN_1V8, false);
-    power_ctrl_set(POWER_EN_3V3A, false);
-    power_ctrl_set(POWER_EN_3V6, false);
-
-    LOG_INF("[POWER] Waiting for button press...");
-    k_sem_take(&deep_sleep_wake_sem, K_FOREVER);
-
-    /* --- WAKE STATE: Button pressed --- */
-    LOG_INF("[POWER] WOKE UP! Button pressed - turning ON rails");
-    power_ctrl_set(POWER_EN_3V3, true);
-    power_ctrl_set(POWER_EN_1V8, true);
-    /* 3V3A stays off - LoRa rail manager handles it */
-    /* 3V6 stays off - NFC manager handles it when needed */
-
-    /* Small delay for rails to stabilize */
-    k_sleep(K_MSEC(50));
-
-    /* --- ACTIVE STATE: Process all pending LoRa messages --- */
-    LOG_INF("[POWER] Processing LoRa message queue...");
-
-    lora_uplink_msg_t msg = {0};
-    int messages_sent = 0;
-
-    /* Process messages with a short timeout - if no message within 500ms,
-     * assume queue is empty and go back to sleep */
-    while (lora_get_event(&msg, K_MSEC(1000))) {
-      LOG_INF("[POWER] Processing message %d", messages_sent + 1);
-
-      if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
-        ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
-        if (ret < 0) {
-          LOG_ERR("Failed to send LoRa message: %d", ret);
-        } else {
-          messages_sent++;
-        }
-      } else {
-        LOG_ERR("Invalid message length: %d", msg.len);
-      }
-
-      /* Clear msg for next iteration */
-      memset(&msg, 0, sizeof(msg));
+    if (!lora_get_event(&msg, K_MSEC(1000))) {
+      continue;
     }
 
-    LOG_INF("[POWER] Work done - sent %d messages. Going back to sleep...",
-            messages_sent);
+    if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
+      ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
+      if (ret < 0) {
+        LOG_ERR("Failed to send LoRa message: %d", ret);
+      }
+    } else {
+      LOG_ERR("Invalid message length: %d", msg.len);
+    }
 
-    /* Loop back to sleep state */
+    memset(&msg, 0, sizeof(msg));
   }
 }
 // Define the thread but don't auto-start it (delay = -1 means don't auto-start)
