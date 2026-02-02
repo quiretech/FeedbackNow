@@ -1,6 +1,7 @@
 #include "sdcard_logger.h"
 
 #include "power_rail_mgr.h"
+#include "spi_mutex.h"
 
 #include <errno.h>
 #include <ff.h>
@@ -58,8 +59,8 @@ int sdcard_logger_init(void) {
   /* Dedicated workqueue so SD writes can block waiting for 3V3A without
    * starving the system workqueue.
    */
-  k_work_queue_start(&sd_wq, sd_wq_stack, K_THREAD_STACK_SIZEOF(sd_wq_stack),
-                     5, NULL);
+  k_work_queue_start(&sd_wq, sd_wq_stack, K_THREAD_STACK_SIZEOF(sd_wq_stack), 5,
+                     NULL);
 
   /* IMPORTANT:
    * LoRa requires 3V3A OFF, but SD needs 3V3A ON.
@@ -109,6 +110,12 @@ static void sd_work_handler(struct k_work *work) {
     /* Full per-write lifecycle to survive 3V3A power-cycling. */
     int ret = 0;
 
+    /* SD shares SPI with EPD; serialize access so only one uses the bus. */
+    if (spi_mutex_lock(K_FOREVER) != 0) {
+      LOG_WRN("SD worker: SPI mutex lock failed");
+      continue;
+    }
+
     (void)power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_SD, K_FOREVER);
 
     ret = disk_access_ioctl(DISK_DRIVE_NAME, DISK_IOCTL_CTRL_INIT, NULL);
@@ -128,10 +135,11 @@ static void sd_work_handler(struct k_work *work) {
 
     (void)fs_unmount(&mp);
 
-out_deinit:
+  out_deinit:
     (void)disk_access_ioctl(DISK_DRIVE_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
-out_power:
+  out_power:
     power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_SD);
+    spi_mutex_unlock();
 
     if (ret != 0) {
       LOG_WRN("SD worker append failed: %d", ret);

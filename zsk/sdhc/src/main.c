@@ -105,10 +105,9 @@ static int mount_sd_card(void) {
 static int create_test_file(void) {
   struct fs_file_t file;
   const char *filename = DISK_MOUNT_PT "/hello.txt";
-  const char *content =
-      "Hello World from nRF52840DK!\n"
-      "SD card write test successful.\n"
-      "This file was created by the hello world example 2222.\n";
+  const char *content = "Hello World from nRF52840DK!\n"
+                        "SD card write test successful.\n"
+                        "This file was created by the hello world example.\n";
 
   printk("\n=== STEP 2: Creating File with Content ===\n");
 
@@ -182,6 +181,8 @@ int main(void) {
     printk("ERROR: Failed to enable 3V6 rail (%d)\n", ret);
     goto error;
   }
+
+  k_sleep(K_MSEC(10));
 
   if (disk_access_ioctl(DISK_DRIVE_NAME, DISK_IOCTL_CTRL_INIT, NULL) != 0) {
     printk("ERROR: SD card init failed!\n");

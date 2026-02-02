@@ -86,7 +86,7 @@
 			disk-name = "SD";
 			status = "okay";
 		};
-		spi-max-frequency = <8000000>;
+		spi-max-frequency = <400000>;
 	};
 };
 

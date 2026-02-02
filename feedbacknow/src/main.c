@@ -202,6 +202,7 @@
 #include "power_ctrl.h"
 #include "power_rail_mgr.h"
 #include "sdcard_logger.h"
+#include "spi_mutex.h"
 #include "state_manager.h"
 #include "sys_config.h"
 #include "system_init.h"
@@ -525,12 +526,16 @@ int main(void) {
     if (epd_flush_pending) {
       /* LoRa may hold 3V3A OFF for RX windows (seconds). Main/UI thread can
        * block here safely; LoRa runs on its own thread.
+       * EPD shares SPI with SD; serialize so only one uses the bus.
        */
       LOG_INF("EPD flush pending; waiting for 3V3A ON...");
-      (void)power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_EPD, K_FOREVER);
-      LOG_INF("EPD got 3V3A ON; flushing LVGL");
-      lv_task_handler();
-      power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_EPD);
+      if (spi_mutex_lock(K_FOREVER) == 0) {
+        (void)power_rail_mgr_require_3v3a_on(POWER_RAIL_CLIENT_EPD, K_FOREVER);
+        LOG_INF("EPD got 3V3A ON; flushing LVGL");
+        lv_task_handler();
+        power_rail_mgr_release_3v3a_on(POWER_RAIL_CLIENT_EPD);
+        spi_mutex_unlock();
+      }
       epd_flush_pending = false;
 
       /* Arm (or restart) restore timer only after the downlink is actually

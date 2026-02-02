@@ -2,6 +2,7 @@
 #include "buttons.h"
 #include "leds.h"
 #include "lora_app.h"
+#include "spi_mutex.h"
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(SYS_INIT);
@@ -9,6 +10,12 @@ LOG_MODULE_REGISTER(SYS_INIT);
 int system_init(void) {
   LOG_INF("System init start\n");
   int ret;
+
+  ret = spi_mutex_init();
+  if (ret) {
+    LOG_ERR("SPI mutex init failed: %d", ret);
+    return ret;
+  }
 
   ret = buttons_init();
   if (ret) {
