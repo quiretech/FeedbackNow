@@ -1,0 +1,16 @@
+# PN5180 / RPi configuration (optional)
+# Defaults: BUSY=27, RST=17, NSS=22 (avoid GPIO 8 = SPI CE0).
+
+# SPI
+# spi_bus: 0
+# spi_device: 0
+# spi_speed_hz: 1000000
+
+# GPIO (BCM). NSS = manual CS, active LOW. Do not use 8 (SPI CE0).
+# gpio_nss: 22
+# gpio_rst: 17
+# gpio_busy: 27
+# gpio_irq: null
+
+# timeout_ms: 1000
+# csv_path: "./nfc_log.csv"

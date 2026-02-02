@@ -1,0 +1,4 @@
+# PN5180 on Raspberry Pi
+spidev>=3.5
+lgpio>=0.2.0   # preferred (works without root on newer Pi OS)
+RPi.GPIO>=0.7.0   # fallback
