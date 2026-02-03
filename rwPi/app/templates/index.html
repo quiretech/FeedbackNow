@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>TagWriter</title>
+      <style>
+         :root {
+         --bg: #0d0d10;
+         --surface: rgba(26, 26, 32, 0.92);
+         --border: #2e2e38;
+         --text: #f0f0f4;
+         --text-muted: #9ca3af;
+         --accent: #6366f1;
+         --accent-hover: #818cf8;
+         --success: #10b981;
+         --error: #ef4444;
+         --radius: 14px;
+         --shadow: 0 8px 32px rgba(0,0,0,0.35);
+         }
+         * { box-sizing: border-box; }
+         body {
+         margin: 0;
+         min-height: 100vh;
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg);
+         background-image: url('/static/fbnowlogo.svg');
+         background-size: contain;
+         background-position: center;
+         background-repeat: no-repeat;
+         color: var(--text);
+         display: flex;
+         flex-direction: column;
+         justify-content: center;
+         align-items: center;
+         padding: 2rem 1rem;
+         position: relative;
+         overflow-x: hidden;
+         }
+         .blur-band {
+         width: 100%;
+         max-width: 600px;
+         padding: 2rem;
+         margin: 0 auto;
+         border-radius: var(--radius);
+         backdrop-filter: blur(20px);
+         -webkit-backdrop-filter: blur(20px);
+         background: rgba(13, 13, 16, 0.25);
+         }
+         .blur-band .card {
+         margin: 0;
+         }
+         .brand-logos {
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         gap: 0.75rem; /* tighter spacing */
+         margin-top: 1rem;
+         padding: 0.25rem 0;
+         }
+         .brand-logos img {
+         width: 48px; /* smaller */
+         height: auto;
+         object-fit: contain;
+         opacity: 0.85;
+         }
+         .page {
+         position: relative;
+         z-index: 1;
+         width: 100%;
+         max-width: 760px; /* wider, airy */
+         display: flex;
+         flex-direction: column;
+         align-items: center;
+         margin: 0 auto;
+         padding: 1rem;
+         }
+         h1 {
+         font-size: 1.85rem;
+         font-weight: 700;
+         margin: 0 0 1.5rem;
+         letter-spacing: -0.03em;
+         }
+         .card {
+         background: linear-gradient(
+         135deg,
+         rgba(255, 255, 255, 0.12),
+         rgba(255, 255, 255, 0.04)
+         );
+         border: 1px solid rgba(255, 255, 255, 0.18);
+         border-radius: var(--radius);
+         padding: 1.75rem;
+         width: 100%;
+         box-shadow:
+         0 12px 40px rgba(0, 0, 0, 0.45),
+         inset 0 1px 0 rgba(255, 255, 255, 0.15);
+         backdrop-filter: blur(24px) saturate(180%);
+         -webkit-backdrop-filter: blur(24px) saturate(180%);
+         position: relative;
+         padding: 2.25rem 2.5rem; /* more breathing room */
+         min-height: 560px;
+         display: flex;
+         flex-direction: column;
+         justify-content: space-between;
+         }
+         .card-wrapper {
+         width: 100%;
+         max-width: 900px; /* ← stretch it */
+         }
+         .card::before {
+         content: "";
+         position: absolute;
+         inset: 0;
+         border-radius: inherit;
+         pointer-events: none;
+         background: linear-gradient(
+         180deg,
+         rgba(255,255,255,0.25),
+         rgba(255,255,255,0.02)
+         );
+         opacity: 0.35;
+         }
+         .field {
+         margin-bottom: 1.5rem;
+         }
+         .field label {
+         display: block;
+         font-size: 0.875rem;
+         font-weight: 500;
+         color: var(--text-muted);
+         margin-bottom: 0.45rem;
+         }
+         .field input {
+         width: 100%;
+         padding: 0.7rem 0.9rem;
+         font-size: 1rem;
+         background: rgba(15, 15, 18, 0.8);
+         border: 1px solid var(--border);
+         border-radius: 10px;
+         color: var(--text);
+         }
+         .field input::placeholder { color: var(--text-muted); }
+         .field input:focus {
+         outline: none;
+         border-color: var(--accent);
+         }
+         .field-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; }
+         .row {
+         display: flex;
+         gap: 0.75rem;
+         margin-top: 1.75rem;
+         }
+         .btn {
+         flex: 1;
+         padding: 0.8rem 1rem;
+         font-size: 1rem;
+         font-weight: 600;
+         border: none;
+         border-radius: 10px;
+         cursor: pointer;
+         transition: background 0.15s, transform 0.1s;
+         }
+         .btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+         .btn:active { transform: scale(0.98); }
+         .btn-scan {
+         background: var(--border);
+         color: var(--text);
+         }
+         .btn-scan:hover { background: #3d3d4a; }
+         .btn-flash {
+         background: var(--accent);
+         color: white;
+         }
+         .btn-flash:hover { background: var(--accent-hover); }
+         .btn-flash:disabled, .btn-scan:disabled {
+         opacity: 0.6;
+         cursor: not-allowed;
+         }
+         .result-box {
+         display: flex;
+         flex-direction: column;
+         justify-content: center;
+         gap: 0.5rem;
+         min-height: 5.25rem; /* slightly taller */
+         padding: 1.25rem 1.75rem; /* wider horizontal padding */
+         margin-top: 1.5rem;
+         border-radius: 12px;
+         background: rgba(15, 15, 18, 0.55);
+         border: 1px solid var(--border);
+         min-height: 4.75rem; /* LOCKED SPACE */
+         opacity: 0;
+         transition: opacity 0.25s ease;
+         opacity: 0.15;
+         }
+         .result-box .result-uid {
+         font-family: ui-monospace, monospace;
+         font-size: 0.9rem;
+         word-break: break-all;
+         color: var(--text-muted);
+         }
+         .result-box .result-message {
+         font-size: 0.95rem;
+         font-weight: 500;
+         line-height: 1.4;
+         }
+         .result-box .result-message.success { color: var(--success); }
+         .result-box .result-message.error { color: var(--error); }
+         .result-box.has-result {
+         opacity: 1;
+         }
+         .result-box.has-result .result-uid:empty { display: none; }
+         .footer-links {
+         margin-top: 1.25rem;
+         font-size: 0.875rem;
+         }
+         .footer-links a {
+         color: var(--accent);
+         text-decoration: none;
+         }
+         .footer-links a:hover { text-decoration: underline; }
+         footer.footer-brand {
+         position: fixed;
+         bottom: 1rem;
+         left: 50%;
+         transform: translateX(-50%);
+         font-size: 0.8rem;
+         color: var(--text-muted);
+         z-index: 1;
+         }
+         .status { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; min-height: 1.25rem; }
+      </style>
+   </head>
+   <body>
+      <div class="page">
+         <h1>TagWriter</h1>
+         <div class="card-wrapper">
+            <div class="card">
+               <form id="flash-form">
+                  <div class="field">
+                     <label for="employee_name">Employee name</label>
+                     <input type="text" id="employee_name" name="employee_name" placeholder="Paste name from Excel" required autocomplete="off">
+                     <div class="field-hint">For CSV asset tracking only (not written to tag)</div>
+                  </div>
+                  <div class="field">
+                     <label for="data_hex">4-byte hex data</label>
+                     <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" pattern="[0-9A-Fa-f]{8}" autocomplete="off">
+                     <div class="field-hint">Exactly 8 hex characters. This is written to the tag.</div>
+                  </div>
+                  <div class="field">
+                     <label for="block">Block number (0–27)</label>
+                     <input type="number" id="block" name="block" min="0" max="27" value="{{ default_block }}" step="1">
+                  </div>
+                  <div class="row">
+                     <button type="button" class="btn btn-scan" id="btn-scan">Scan</button>
+                     <button type="submit" class="btn btn-flash" id="btn-flash">Flash!</button>
+                  </div>
+                  <div class="status" id="status" aria-live="polite"></div>></div>
+               </form>
+               <div class="result-box" id="result-box">
+                  <span class="result-uid" id="result-uid"></span>
+                  <span class="result-message" id="result-message"></span>
+               </div>
+               <div class="footer-links">
+                  <a href="/csv" download>Download CSV</a>
+               </div>
+            </div>
+         </div>
+         <div class="brand-logos" aria-hidden="true">
+            <img src="/static/1.webp" alt="">
+            <img src="/static/2.webp" alt="">
+            <img src="/static/3.webp" alt="">
+         </div>
+         <footer class="footer-brand">QuireTech LLC</footer>
+      </div>
+      <script>
+         const form = document.getElementById('flash-form');
+         const employeeName = document.getElementById('employee_name');
+         const dataHex = document.getElementById('data_hex');
+         const blockInput = document.getElementById('block');
+         const btnScan = document.getElementById('btn-scan');
+         const btnFlash = document.getElementById('btn-flash');
+         const status = document.getElementById('status');
+         const resultBox = document.getElementById('result-box');
+         const resultUid = document.getElementById('result-uid');
+         const resultMessage = document.getElementById('result-message');
+         
+         function setBusy(busy) {
+           btnScan.disabled = btnFlash.disabled = busy;
+           status.textContent = busy ? 'Working…' : '';
+         }
+         
+         function showResult(uid, message, isError) {
+           resultUid.textContent = uid ? 'UID: ' + uid : '';
+           resultMessage.textContent = message || '';
+           resultMessage.classList.toggle('success', !isError);
+           resultMessage.classList.toggle('error', isError);
+           resultBox.classList.toggle('has-result', !!(message || uid));
+         }
+         
+         btnScan.addEventListener('click', function() {
+           setBusy(true);
+           fetch('/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+             .then(r => r.json())
+             .then(data => {
+               setBusy(false);
+               if (data.success) {
+                 showResult(data.uid, 'Tag detected.', false);
+               } else {
+                 showResult(null, data.error || 'Unknown error', true);
+               }
+             })
+             .catch(err => {
+               setBusy(false);
+               showResult(null, err.message || 'Request failed', true);
+             });
+         });
+         
+         form.addEventListener('submit', function(e) {
+           e.preventDefault();
+           const name = employeeName.value.trim();
+           const hex = dataHex.value.trim().replace(/\s/g, '');
+           const block = parseInt(blockInput.value, 10);
+           if (!name) {
+             showResult(null, 'Employee name is required.', true);
+             return;
+           }
+           if (!/^[0-9A-Fa-f]{8}$/.test(hex)) {
+             showResult(null, 'Data must be exactly 8 hex characters (e.g. AABBCCDD).', true);
+             return;
+           }
+           if (isNaN(block) || block < 0 || block > 27) {
+             showResult(null, 'Block must be 0–27.', true);
+             return;
+           }
+           setBusy(true);
+           fetch('/flash', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ employee_name: name, data_hex: hex, block: block })
+           })
+             .then(r => r.json())
+             .then(data => {
+               setBusy(false);
+               if (data.success) {
+                 showResult(data.uid, 'Block written successfully. Row appended to CSV.', false);
+                 employeeName.value = '';
+                 dataHex.value = '';
+               } else {
+                 showResult(data.uid || null, data.error || 'Unknown error', true);
+               }
+             })
+             .catch(err => {
+               setBusy(false);
+               showResult(null, err.message || 'Request failed', true);
+             });
+         });
+      </script>
+   </body>
+</html>

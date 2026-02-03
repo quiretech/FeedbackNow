@@ -18,7 +18,9 @@ from nfc.pn5180 import PN5180, strerror, PN5180_OK, PN5180_ERR_GPIO
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="PN5180 ISO15693 test CLI")
+    parser = argparse.ArgumentParser(description="PN5180 ISO15693 test CLI / Flash web app")
+    parser.add_argument("--web", action="store_true",
+                        help="Run Flash web app (Flask) instead of CLI")
     parser.add_argument("--eeprom-only", action="store_true",
                         help="Only init + EEPROM version read (verify SPI/GPIO like lpgio_eeprom.py)")
     parser.add_argument("--debug", action="store_true",
@@ -27,6 +29,11 @@ def main() -> None:
     parser.add_argument("--write-block", type=str, metavar="N HEX", nargs=2,
                         help="After inventory, write 4-byte HEX to block N (e.g. 5 AABBCCDD)")
     args = parser.parse_args()
+
+    if args.web:
+        from app.flask_app import main as flask_main
+        flask_main()
+        return
 
     cfg = get_config()
     spi_path = get_spi_path(cfg)
