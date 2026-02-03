@@ -14,3 +14,4 @@
 
 # timeout_ms: 1000
 # csv_path: "./nfc_log.csv"
+# default_block: 5   # block used for write (user cannot choose)

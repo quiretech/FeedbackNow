@@ -21,6 +21,7 @@ DEFAULTS = {
     "timeout_ms": 1000,
     "spi_speed_hz": 4_000_00,
     "csv_path": str(PROJECT_ROOT / "nfc_log.csv"),
+    "default_block": 5,  # block used for write; user cannot choose
 }
 
 
@@ -39,7 +40,7 @@ def _load_yaml_if_available():
 def _env_overrides():
     """Environment variable overrides (e.g. RWPI_SPI_BUS=0)."""
     overrides = {}
-    for key in ("spi_bus", "spi_device", "gpio_nss", "gpio_rst", "gpio_busy", "gpio_irq", "timeout_ms", "spi_speed_hz"):
+    for key in ("spi_bus", "spi_device", "gpio_nss", "gpio_rst", "gpio_busy", "gpio_irq", "timeout_ms", "spi_speed_hz", "default_block"):
         env_key = f"RWPI_{key.upper()}"
         val = os.environ.get(env_key)
         if val is not None:

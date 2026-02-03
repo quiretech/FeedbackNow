@@ -81,45 +81,48 @@
          margin: 0 0 1.5rem;
          letter-spacing: -0.03em;
          }
-         .card {
-         background: linear-gradient(
-         135deg,
-         rgba(255, 255, 255, 0.12),
-         rgba(255, 255, 255, 0.04)
-         );
-         border: 1px solid rgba(255, 255, 255, 0.18);
-         border-radius: var(--radius);
-         padding: 1.75rem;
-         width: 100%;
-         box-shadow:
-         0 12px 40px rgba(0, 0, 0, 0.45),
-         inset 0 1px 0 rgba(255, 255, 255, 0.15);
-         backdrop-filter: blur(24px) saturate(180%);
-         -webkit-backdrop-filter: blur(24px) saturate(180%);
-         position: relative;
-         padding: 2.25rem 2.5rem; /* more breathing room */
-         min-height: 560px;
-         display: flex;
-         flex-direction: column;
-         justify-content: space-between;
-         }
+.card {
+    background: linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.12),
+        rgba(255, 255, 255, 0.04)
+    );
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem; /* reduced padding */
+    width: 100%;
+    box-shadow:
+        0 12px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    position: relative;
+    
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* stack items naturally */
+    gap: 1rem; /* spacing between fields */
+    
+    min-height: auto; /* shrink to content */
+    max-width: 95%; /* better for small screens */
+}
          .card-wrapper {
          width: 100%;
          max-width: 900px; /* ← stretch it */
          }
-         .card::before {
-         content: "";
-         position: absolute;
-         inset: 0;
-         border-radius: inherit;
-         pointer-events: none;
-         background: linear-gradient(
-         180deg,
-         rgba(255,255,255,0.25),
-         rgba(255,255,255,0.02)
-         );
-         opacity: 0.35;
-         }
+.card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+        180deg,
+        rgba(255,255,255,0.2),
+        rgba(255,255,255,0.02)
+    );
+    opacity: 0.3;
+}
          .field {
          margin-bottom: 1.5rem;
          }
@@ -162,11 +165,11 @@
          }
          .btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
          .btn:active { transform: scale(0.98); }
-         .btn-scan {
+         .btn-read {
          background: var(--border);
          color: var(--text);
          }
-         .btn-scan:hover { background: #3d3d4a; }
+         .btn-read:hover { background: #3d3d4a; }
          .btn-flash {
          background: var(--accent);
          color: white;
@@ -176,48 +179,49 @@
          opacity: 0.6;
          cursor: not-allowed;
          }
-         .result-box {
-         display: flex;
-         flex-direction: column;
-         justify-content: center;
-         gap: 0.5rem;
-         min-height: 5.25rem; /* slightly taller */
-         padding: 1.25rem 1.75rem; /* wider horizontal padding */
-         margin-top: 1.5rem;
-         border-radius: 12px;
-         background: rgba(15, 15, 18, 0.55);
-         border: 1px solid var(--border);
-         min-height: 4.75rem; /* LOCKED SPACE */
-         opacity: 0;
-         transition: opacity 0.25s ease;
-         opacity: 0.15;
-         }
-         .result-box .result-uid {
-         font-family: ui-monospace, monospace;
-         font-size: 0.9rem;
-         word-break: break-all;
-         color: var(--text-muted);
-         }
-         .result-box .result-message {
-         font-size: 0.95rem;
-         font-weight: 500;
-         line-height: 1.4;
-         }
-         .result-box .result-message.success { color: var(--success); }
-         .result-box .result-message.error { color: var(--error); }
-         .result-box.has-result {
-         opacity: 1;
-         }
+
+
+
+
+.result-box { 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: center; 
+  gap: 0.5rem; 
+  min-height: 4.75rem; /* LOCKED SPACE */
+  padding: 1.5rem 1.75rem; /* match .card horizontal padding */
+  margin-top: 1.5rem; 
+  border-radius: 12px; 
+  background: rgba(15, 15, 18, 0.55); 
+  border: 1px solid var(--border); 
+  opacity: 0.15; 
+  transition: opacity 0.25s ease; 
+  width: 100%; 
+  box-sizing: border-box; /* ensures padding is included in width */
+}
+
+  
+  .result-box .result-uid { font-family: ui-monospace, monospace; font-size: 0.9rem; word-break: break-all; color: var(--text-muted); } .result-box .result-message { font-size: 0.95rem; font-weight: 500; line-height: 1.4; } .result-box .result-message.success { color: var(--success); } .result-box .result-message.error { color: var(--error); } .result-box .hexdump { font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.35; margin-top: 0.5rem; white-space: pre; max-height: 12rem; overflow: auto; } .result-box .hexdump .line { display: block; } .result-box .hexdump .line.highlight { background: rgba(99, 102, 241, 0.25); color: var(--accent); } .result-box.has-result { opacity: 1; }
          .result-box.has-result .result-uid:empty { display: none; }
          .footer-links {
          margin-top: 1.25rem;
+             text-align: center; /* center horizontally */
          font-size: 0.875rem;
          }
-         .footer-links a {
-         color: var(--accent);
-         text-decoration: none;
-         }
-         .footer-links a:hover { text-decoration: underline; }
+.footer-links a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 8px;
+    background: rgba(99, 102, 241, 0.15); /* subtle button style */
+    transition: background 0.2s;
+}
+.footer-links a:hover {
+    background: rgba(99, 102, 241, 0.25);
+    text-decoration: none;
+}
          footer.footer-brand {
          position: fixed;
          bottom: 1rem;
@@ -244,21 +248,18 @@
                   <div class="field">
                      <label for="data_hex">4-byte hex data</label>
                      <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" pattern="[0-9A-Fa-f]{8}" autocomplete="off">
-                     <div class="field-hint">Exactly 8 hex characters. This is written to the tag.</div>
-                  </div>
-                  <div class="field">
-                     <label for="block">Block number (0–27)</label>
-                     <input type="number" id="block" name="block" min="0" max="27" value="{{ default_block }}" step="1">
+                     <div class="field-hint">Exactly 8 hex characters. Written to block {{ default_block }} (from config).</div>
                   </div>
                   <div class="row">
-                     <button type="button" class="btn btn-scan" id="btn-scan">Scan</button>
+                     <button type="button" class="btn btn-read" id="btn-read">Read</button>
                      <button type="submit" class="btn btn-flash" id="btn-flash">Flash!</button>
                   </div>
-                  <div class="status" id="status" aria-live="polite"></div>></div>
+                  <div class="status" id="status" aria-live="polite"></div></div>
                </form>
                <div class="result-box" id="result-box">
                   <span class="result-uid" id="result-uid"></span>
                   <span class="result-message" id="result-message"></span>
+                  <div class="hexdump" id="result-hexdump" aria-hidden="true"></div>
                </div>
                <div class="footer-links">
                   <a href="/csv" download>Download CSV</a>
@@ -276,35 +277,47 @@
          const form = document.getElementById('flash-form');
          const employeeName = document.getElementById('employee_name');
          const dataHex = document.getElementById('data_hex');
-         const blockInput = document.getElementById('block');
-         const btnScan = document.getElementById('btn-scan');
+         const btnRead = document.getElementById('btn-read');
          const btnFlash = document.getElementById('btn-flash');
          const status = document.getElementById('status');
          const resultBox = document.getElementById('result-box');
          const resultUid = document.getElementById('result-uid');
          const resultMessage = document.getElementById('result-message');
+         const resultHexdump = document.getElementById('result-hexdump');
          
          function setBusy(busy) {
-           btnScan.disabled = btnFlash.disabled = busy;
+           btnRead.disabled = btnFlash.disabled = busy;
            status.textContent = busy ? 'Working…' : '';
          }
          
-         function showResult(uid, message, isError) {
+         function showResult(uid, message, isError, hexdumpLines) {
            resultUid.textContent = uid ? 'UID: ' + uid : '';
            resultMessage.textContent = message || '';
            resultMessage.classList.toggle('success', !isError);
            resultMessage.classList.toggle('error', isError);
-           resultBox.classList.toggle('has-result', !!(message || uid));
+           resultHexdump.innerHTML = '';
+           if (hexdumpLines && hexdumpLines.length) {
+             resultHexdump.hidden = false;
+             hexdumpLines.forEach(function(line) {
+               const span = document.createElement('span');
+               span.className = 'line' + (line.highlight ? ' highlight' : '');
+               span.textContent = line.text;
+               resultHexdump.appendChild(span);
+             });
+           } else {
+             resultHexdump.hidden = true;
+           }
+           resultBox.classList.toggle('has-result', !!(message || uid || (hexdumpLines && hexdumpLines.length)));
          }
          
-         btnScan.addEventListener('click', function() {
+         btnRead.addEventListener('click', function() {
            setBusy(true);
-           fetch('/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+           fetch('/read', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
              .then(r => r.json())
              .then(data => {
                setBusy(false);
                if (data.success) {
-                 showResult(data.uid, 'Tag detected.', false);
+                 showResult(data.uid, 'Read complete. Blocks 0–27 (default block ' + data.default_block + ' highlighted).', false, data.hexdump);
                } else {
                  showResult(null, data.error || 'Unknown error', true);
                }
@@ -319,7 +332,6 @@
            e.preventDefault();
            const name = employeeName.value.trim();
            const hex = dataHex.value.trim().replace(/\s/g, '');
-           const block = parseInt(blockInput.value, 10);
            if (!name) {
              showResult(null, 'Employee name is required.', true);
              return;
@@ -328,21 +340,17 @@
              showResult(null, 'Data must be exactly 8 hex characters (e.g. AABBCCDD).', true);
              return;
            }
-           if (isNaN(block) || block < 0 || block > 27) {
-             showResult(null, 'Block must be 0–27.', true);
-             return;
-           }
            setBusy(true);
            fetch('/flash', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ employee_name: name, data_hex: hex, block: block })
+             body: JSON.stringify({ employee_name: name, data_hex: hex })
            })
              .then(r => r.json())
              .then(data => {
                setBusy(false);
                if (data.success) {
-                 showResult(data.uid, 'Block written successfully. Row appended to CSV.', false);
+                 showResult(data.uid, 'Successfully written to block ' + data.block + '.', false);
                  employeeName.value = '';
                  dataHex.value = '';
                } else {

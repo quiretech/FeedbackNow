@@ -27,7 +27,10 @@ app = Flask(
 )
 nfc_lock = threading.Lock()
 _nfc_device = None
-_default_block = 5
+
+
+def _default_block():
+    return get_config().get("default_block", 5)
 
 
 def _get_nfc():
@@ -58,50 +61,58 @@ def _validate_hex(s):
     return len(s) == 8 and re.match(r"^[0-9A-Fa-f]{8}$", s) is not None
 
 
-def _validate_block(n):
-    try:
-        b = int(n)
-        return 0 <= b <= 27, b
-    except (TypeError, ValueError):
-        return False, 0
-
-
 @app.route("/")
 def index():
-    return render_template("index.html", default_block=_default_block)
+    return render_template("index.html", default_block=_default_block())
 
 
-@app.route("/scan", methods=["POST"])
-def scan():
-    """Inventory only; return UID or error. Single NFC op at a time."""
+def _hexdump_line(block_num: int, data: bytes) -> str:
+    """Format one block as 'NN: XX XX XX XX'."""
+    hex_bytes = " ".join(f"{b:02X}" for b in (data + bytes(4 - len(data)))[:4])
+    return f"{block_num:02d}: {hex_bytes}"
+
+
+@app.route("/read", methods=["POST"])
+def read():
+    """Inventory; read blocks 0-27; return UID and hexdump lines (default_block marked)."""
+    default_block = _default_block()
     with nfc_lock:
         try:
             dev = _get_nfc()
         except RuntimeError as e:
             return jsonify({"success": False, "error": str(e)}), 500
         err, uid = dev.get_inventory()
-    if err != PN5180_OK:
-        msg = "No tag detected" if err == PN5180_ERR_TIMEOUT else strerror(err)
-        return jsonify({"success": False, "error": msg}), 200
-    uid_hex = uid.hex().upper()
-    return jsonify({"success": True, "uid": uid_hex})
+        if err != PN5180_OK:
+            msg = "No tag detected" if err == PN5180_ERR_TIMEOUT else strerror(err)
+            return jsonify({"success": False, "error": msg}), 200
+        uid_hex = uid.hex().upper()
+        lines = []
+        for b in range(28):
+            err, data = dev.read_block(uid, b, 4)
+            if err != PN5180_OK:
+                lines.append({"block": b, "text": f"{b:02d}: ---- (read error)", "highlight": b == default_block})
+            else:
+                lines.append({"block": b, "text": _hexdump_line(b, data), "highlight": b == default_block})
+    return jsonify({
+        "success": True,
+        "uid": uid_hex,
+        "hexdump": lines,
+        "default_block": default_block,
+    })
 
 
 @app.route("/flash", methods=["POST"])
 def flash():
-    """Validate; inventory; write block; on success append CSV and return JSON."""
+    """Validate; inventory; write default block; on success append CSV and return JSON."""
     data = request.get_json(silent=True) or request.form
     employee_name = (data.get("employee_name") or "").strip()
     data_hex = (data.get("data_hex") or "").strip().replace(" ", "")
-    block_raw = data.get("block", _default_block)
+    block = _default_block()
 
     if not employee_name:
         return jsonify({"success": False, "error": "Employee name is required"}), 400
     if not _validate_hex(data_hex):
         return jsonify({"success": False, "error": "Data must be exactly 8 hex characters (e.g. AABBCCDD)"}), 400
-    ok, block = _validate_block(block_raw)
-    if not ok:
-        return jsonify({"success": False, "error": "Block must be 0–27"}), 400
 
     with nfc_lock:
         try:
@@ -123,7 +134,7 @@ def flash():
     csv_path = cfg.get("csv_path") or str(PROJECT_ROOT / "nfc_log.csv")
     append_flash_row(csv_path, uid_hex=uid_hex, employee_name=employee_name, block_number=block, data_hex=data_hex)
 
-    return jsonify({"success": True, "uid": uid_hex})
+    return jsonify({"success": True, "uid": uid_hex, "block": block})
 
 
 @app.route("/csv")
