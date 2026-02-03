@@ -54,13 +54,12 @@
          display: flex;
          align-items: center;
          justify-content: center;
-         gap: 0.75rem; /* tighter spacing */
+         gap: 0.75rem; 
          margin-top: 1rem;
          padding: 0.25rem 0;
          }
          .brand-logos img {
-         width: 48px; /* smaller */
-         height: auto;
+         width: 48px;
          object-fit: contain;
          opacity: 0.85;
          }
@@ -68,7 +67,7 @@
          position: relative;
          z-index: 1;
          width: 100%;
-         max-width: 760px; /* wider, airy */
+         max-width: 760px;
          display: flex;
          flex-direction: column;
          align-items: center;
@@ -89,7 +88,7 @@
     );
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: var(--radius);
-    padding: 1.5rem 1.75rem; /* reduced padding */
+    padding: 1.5rem 1.75rem;
     width: 100%;
     box-shadow:
         0 12px 32px rgba(0, 0, 0, 0.35),
@@ -100,15 +99,15 @@
     
     display: flex;
     flex-direction: column;
-    justify-content: flex-start; /* stack items naturally */
-    gap: 1rem; /* spacing between fields */
+    justify-content: flex-start; 
+    gap: 1rem;
     
-    min-height: auto; /* shrink to content */
-    max-width: 95%; /* better for small screens */
+    min-height: auto;
+    max-width: 95%;
 }
          .card-wrapper {
          width: 100%;
-         max-width: 900px; /* ← stretch it */
+         max-width: 900px;
          }
 .card::before {
     content: "";
@@ -188,8 +187,8 @@
   flex-direction: column; 
   justify-content: center; 
   gap: 0.5rem; 
-  min-height: 4.75rem; /* LOCKED SPACE */
-  padding: 1.5rem 1.75rem; /* match .card horizontal padding */
+  min-height: 4.75rem;
+  padding: 1.5rem 1.75rem;
   margin-top: 1.5rem; 
   border-radius: 12px; 
   background: rgba(15, 15, 18, 0.55); 
@@ -197,17 +196,60 @@
   opacity: 0.15; 
   transition: opacity 0.25s ease; 
   width: 100%; 
-  box-sizing: border-box; /* ensures padding is included in width */
+  box-sizing: border-box;
 }
 
   
-  .result-box .result-uid { font-family: ui-monospace, monospace; font-size: 0.9rem; word-break: break-all; color: var(--text-muted); } .result-box .result-message { font-size: 0.95rem; font-weight: 500; line-height: 1.4; } .result-box .result-message.success { color: var(--success); } .result-box .result-message.error { color: var(--error); } .result-box .hexdump { font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.35; margin-top: 0.5rem; white-space: pre; max-height: 12rem; overflow: auto; } .result-box .hexdump .line { display: block; } .result-box .hexdump .line.highlight { background: rgba(99, 102, 241, 0.25); color: var(--accent); } .result-box.has-result { opacity: 1; }
-         .result-box.has-result .result-uid:empty { display: none; }
-         .footer-links {
-         margin-top: 1.25rem;
-             text-align: center; /* center horizontally */
-         font-size: 0.875rem;
-         }
+.result-box .result-uid { 
+  font-family: ui-monospace, monospace; 
+  font-size: 0.9rem; 
+  word-break: break-all; 
+  color: var(--text-muted); 
+} 
+.result-box .result-message { 
+  font-size: 0.95rem; 
+  font-weight: 500; 
+  line-height: 1.4; 
+} 
+.result-box .result-message.success { 
+  color: var(--success); 
+} 
+.result-box .result-message.error { 
+  color: var(--error); 
+} 
+.result-box .hexdump { 
+  font-family: ui-monospace, monospace; 
+  font-size: 0.8rem; 
+  line-height: 1.35; 
+  margin-top: 0.5rem; 
+  white-space: pre; 
+  max-height: 12rem; 
+  overflow: auto; 
+} 
+.result-box .hexdump .line { 
+  display: block; 
+} 
+.result-box .hexdump .line.highlight { 
+  /* Make default block highlight more obvious: higher contrast bg, accent border, bold text, slight shadow */
+  background: linear-gradient(90deg, rgba(99,102,241,0.36) 0%, rgba(129,140,248,0.75) 100%);
+  color: #fff;
+  font-weight: bold;
+  border-left: 4px solid var(--accent);
+  box-shadow: 0 2px 8px rgba(99,102,241,0.09);
+  position: relative;
+  z-index: 1;
+}
+.result-box.has-result { 
+  opacity: 0.65; 
+}
+.result-box.has-result .result-uid:empty { 
+  display: none; 
+}
+.footer-links {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
 .footer-links a {
     color: var(--accent);
     text-decoration: none;
@@ -215,7 +257,7 @@
     font-size: 0.95rem;
     padding: 0.35rem 0.75rem;
     border-radius: 8px;
-    background: rgba(99, 102, 241, 0.15); /* subtle button style */
+    background: rgba(99, 102, 241, 0.15);
     transition: background 0.2s;
 }
 .footer-links a:hover {
@@ -232,40 +274,72 @@
          z-index: 1;
          }
          .status { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; min-height: 1.25rem; }
+
+
+
+.result-box .hexdump {
+    max-height: 150px;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px;
+    border-radius: 6px;
+    margin-top: 10px;
+    scrollbar-width: thin;
+}
+
+
+.btn-flash {
+    background: var(--accent);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+}
+
+
+@media (max-width: 480px) {
+    .row {
+        flex-direction: column;
+    }
+    .btn {
+        width: 100%;
+    }
+}
       </style>
    </head>
    <body>
       <div class="page">
          <h1>TagWriter</h1>
-         <div class="card-wrapper">
-            <div class="card">
-               <form id="flash-form">
-                  <div class="field">
-                     <label for="employee_name">Employee name</label>
-                     <input type="text" id="employee_name" name="employee_name" placeholder="Paste name from Excel" required autocomplete="off">
-                     <div class="field-hint">For CSV asset tracking only (not written to tag)</div>
-                  </div>
-                  <div class="field">
-                     <label for="data_hex">4-byte hex data</label>
-                     <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" pattern="[0-9A-Fa-f]{8}" autocomplete="off">
-                     <div class="field-hint">Exactly 8 hex characters. Written to block {{ default_block }} (from config).</div>
-                  </div>
-                  <div class="row">
-                     <button type="button" class="btn btn-read" id="btn-read">Read</button>
-                     <button type="submit" class="btn btn-flash" id="btn-flash">Flash!</button>
-                  </div>
-                  <div class="status" id="status" aria-live="polite"></div></div>
-               </form>
-               <div class="result-box" id="result-box">
-                  <span class="result-uid" id="result-uid"></span>
-                  <span class="result-message" id="result-message"></span>
-                  <div class="hexdump" id="result-hexdump" aria-hidden="true"></div>
-               </div>
-               <div class="footer-links">
-                  <a href="/csv" download>Download CSV</a>
-               </div>
+<div class="card-wrapper">
+    <div class="card">
+        <form id="flash-form">
+            <div class="field">
+                <label for="employee_name">Employee name</label>
+                <input type="text" id="employee_name" name="employee_name" placeholder="Paste name from Excel" required autocomplete="off">
+                <div class="field-hint">For CSV asset tracking only (not written to tag)</div>
             </div>
-         </div>
+
+            <div class="field">
+                <label for="data_hex">4-byte hex data</label>
+                <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" pattern="[0-9A-Fa-f]{8}" autocomplete="off">
+                <div class="field-hint">Exactly 8 hex characters.</div>
+            </div>
+
+            <div class="row">
+                <button type="button" class="btn btn-read" id="btn-read">Read</button>
+                <button type="submit" class="btn btn-flash" id="btn-flash">Flash!</button>
+            </div>
+            <div class="status" id="status" aria-live="polite"></div>
+        </form>
+
+        <div class="result-box" id="result-box">
+            <span class="result-uid" id="result-uid"></span>
+            <span class="result-message" id="result-message"></span>
+            <div class="hexdump" id="result-hexdump" aria-hidden="true"></div>
+        </div>
+
+        <div class="footer-links">
+            <a href="/csv" download>Download CSV</a>
+        </div>
+    </div>
+</div>
          <div class="brand-logos" aria-hidden="true">
             <img src="/static/1.webp" alt="">
             <img src="/static/2.webp" alt="">
@@ -346,8 +420,16 @@
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ employee_name: name, data_hex: hex })
            })
-             .then(r => r.json())
-             .then(data => {
+             .then(function(r) {
+               const ct = r.headers.get('content-type') || '';
+               if (!ct.includes('application/json')) {
+                 return r.text().then(function(text) {
+                   throw new Error('Server returned an error. Try again or check the server log.');
+                 });
+               }
+               return r.json();
+             })
+             .then(function(data) {
                setBusy(false);
                if (data.success) {
                  showResult(data.uid, 'Successfully written to block ' + data.block + '.', false);
@@ -357,7 +439,7 @@
                  showResult(data.uid || null, data.error || 'Unknown error', true);
                }
              })
-             .catch(err => {
+             .catch(function(err) {
                setBusy(false);
                showResult(null, err.message || 'Request failed', true);
              });

@@ -104,37 +104,43 @@ def read():
 @app.route("/flash", methods=["POST"])
 def flash():
     """Validate; inventory; write default block; on success append CSV and return JSON."""
-    data = request.get_json(silent=True) or request.form
-    employee_name = (data.get("employee_name") or "").strip()
-    data_hex = (data.get("data_hex") or "").strip().replace(" ", "")
-    block = _default_block()
+    try:
+        data = request.get_json(silent=True) or request.form
+        employee_name = (data.get("employee_name") or "").strip()
+        data_hex = (data.get("data_hex") or "").strip().replace(" ", "")
+        block = _default_block()
 
-    if not employee_name:
-        return jsonify({"success": False, "error": "Employee name is required"}), 400
-    if not _validate_hex(data_hex):
-        return jsonify({"success": False, "error": "Data must be exactly 8 hex characters (e.g. AABBCCDD)"}), 400
+        if not employee_name:
+            return jsonify({"success": False, "error": "Employee name is required"}), 400
+        if not _validate_hex(data_hex):
+            return jsonify({"success": False, "error": "Data must be exactly 8 hex characters (e.g. AABBCCDD)"}), 400
 
-    with nfc_lock:
-        try:
-            dev = _get_nfc()
-        except RuntimeError as e:
-            return jsonify({"success": False, "error": str(e)}), 500
-        err, uid = dev.get_inventory()
+        with nfc_lock:
+            try:
+                dev = _get_nfc()
+            except RuntimeError as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+            err, uid = dev.get_inventory()
+            if err != PN5180_OK:
+                msg = "No tag detected" if err == PN5180_ERR_TIMEOUT else strerror(err)
+                return jsonify({"success": False, "error": msg}), 200
+            uid_hex = uid.hex().upper()
+            payload = bytes.fromhex(data_hex)
+            err = dev.write_block(uid, block, payload)
         if err != PN5180_OK:
             msg = "No tag detected" if err == PN5180_ERR_TIMEOUT else strerror(err)
-            return jsonify({"success": False, "error": msg}), 200
-        uid_hex = uid.hex().upper()
-        payload = bytes.fromhex(data_hex)
-        err = dev.write_block(uid, block, payload)
-    if err != PN5180_OK:
-        msg = "No tag detected" if err == PN5180_ERR_TIMEOUT else strerror(err)
-        return jsonify({"success": False, "error": msg, "uid": uid_hex}), 200
+            return jsonify({"success": False, "error": msg, "uid": uid_hex}), 200
 
-    cfg = get_config()
-    csv_path = cfg.get("csv_path") or str(PROJECT_ROOT / "nfc_log.csv")
-    append_flash_row(csv_path, uid_hex=uid_hex, employee_name=employee_name, block_number=block, data_hex=data_hex)
+        cfg = get_config()
+        csv_path = cfg.get("csv_path") or str(PROJECT_ROOT / "nfc_log.csv")
+        try:
+            append_flash_row(csv_path, uid_hex=uid_hex, employee_name=employee_name, block_number=block, data_hex=data_hex)
+        except Exception as e:
+            return jsonify({"success": False, "error": f"CSV write failed: {e}", "uid": uid_hex}), 200
 
-    return jsonify({"success": True, "uid": uid_hex, "block": block})
+        return jsonify({"success": True, "uid": uid_hex, "block": block})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/csv")
