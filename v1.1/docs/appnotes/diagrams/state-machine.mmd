@@ -2,8 +2,9 @@ stateDiagram-v2
     [*] --> NormalMode
     NormalMode --> StaffMode: Btn 0+1 hold 2s
     NormalMode --> DeviceInfo: Btn 0+1+5 hold 3s
-    NormalMode --> Reboot: All 6 hold 10s
     StaffMode --> NormalMode: Timeout 10s
+    StaffMode --> NormalMode: 0+1+2 hold 3s (deliberate join)
+    StaffMode --> Reboot: 0+1+2+3 hold 10s
     StaffMode --> NFCScan: Button 0-5 pressed
     DeviceInfo --> NormalMode: Any button or timeout
     Reboot --> [*]: LED solid 3s then reboot

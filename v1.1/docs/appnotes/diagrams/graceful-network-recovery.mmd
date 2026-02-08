@@ -1,10 +1,10 @@
 flowchart TD
-    %% BOOT SEQUENCE
+    %% BOOT SEQUENCE (subsequent boot; first boot uses deliberate join 0+1+2 in staff)
     subgraph BOOT
         B1[Attempt join: 10 tries with exponential backoff]
         B2{Success?}
         B3[Normal operation - connected]
-        B4[Offline mode: events queued, retry every 1hr]
+        B4[Disconnected mode: counters in EEPROM, retry every 1hr]
 
         B1 --> B2
         B2 -->|Yes| B3
@@ -15,8 +15,8 @@ flowchart TD
     subgraph HOURLY_REJOIN
         H1[Attempt join: 3 tries with backoff]
         H2{Success?}
-        H3[Flush queued events, resume connected]
-        H4[Continue offline, retry in 1hr]
+        H3[Counter sync Event 0x07 per button, resume connected]
+        H4[Continue disconnected, retry in 1hr]
 
         H1 --> H2
         H2 -->|Yes| H3
@@ -25,13 +25,13 @@ flowchart TD
 
     %% ON RECONNECT
     subgraph ON_RECONNECT
-        R1[Flush queued events - oldest first, rate limited]
+        R1[Counter sync: per-button Event 0x07 with latest counts, rate limited]
         R2[Sync RTC via DeviceTimeReq]
         R3[Resume normal heartbeat schedule]
 
         R1 --> R2 --> R3
     end
 
-    %% OPTIONAL: connecting the overall flow
+    %% FLOW
     B4 --> H1
     H3 --> R1

@@ -1,0 +1,42 @@
+Jatan J. Pandya
+Englewood, NJ, USA | +1 (413)-362-6768 | jatanjay212@gmail.com | linkedin.com/in/jatanjay | jatanjay.github.io
+
+EDUCATION
+________________________________________
+University of Massachusetts Amherst								  Amherst, MA, USA
+•	Bachelor of Science, Computer Engineering							          09/2023
+•	Bachelor of Science, Computational Linguistics							          09/2023	    
+SKILLS
+________________________________________
+•	Languages: C, C++, Python 3, JavaScript
+•	Embedded Systems: Embedded Linux OS, Zephyr RTOS, ROS2
+•	Full Stack Development: AWS (IoT Core, S3), Bootstrap, PostgreSQL
+•	Protocols & Communication: I2C, UART, CAN, SPI, WiFi, LoRaWAN, NB-IoT
+•	Tools: git, bash, Hardware Debugging (Oscilloscopes, Logic Analyzers)
+
+WORK EXPERIENCE
+________________________________________
+QuireTech Engineering Consultants LLC							    Cresskill, NJ, USA
+Embedded Software Engineer								                    09/2023 – Present
+•	Developed C firmware for a facial skin micro-needling therapy device, delivering a robust solution to production within 7 weeks of the prototyping phase.
+•	Engineered real-time, low-latency firmware using ASF SDK on a 32-bit ARM-Cortex-M microcontroller, managing buttons, rechargeable battery, motor, LEDs to deliver seamless UX to customers.
+•	Utilized timer counters to create PWM signals for motor actuation, system ticks for scheduling tasks, enabling precise timing for operations and state updates, which is critical for responsive user interactions.
+•	Overcame challenges in accurate battery state detection under varying load conditions by implementing adaptive voltage thresholds based on real-time ADC readings. 
+•	Reduced power consumption by 80% by implementing sleep modes and optimizing wake-up processes. Extended device operation to over 8 hours per charge while maintaining critical functionality.
+
+PROJECTS
+________________________________________
+FeedbackNow – LoRaWAN Feedback Device					    Production deployment
+•	Developed from scratch and brought to production: battery-operated LoRaWAN feedback device (nRF52840 + Zephyr RTOS) for indoor deployment (bathrooms, retail, airports); 500+ units in production and growing, deployed across 2 continents and 6 countries.
+•	Designed for two user flows—public (single-button sentiment) and staff (NFC check-in/check-out, registered votes via ISO15693)—with stateless device logic; multi-threaded firmware, custom Zephyr drivers (PN5180 NFC, SSD1683 E-paper), power-rail arbitration and shared-SPI mutex for LoRa, EPD, NFC, and SD coexistence.
+•	Implemented offline-first operation: 50-event EEPROM queue, device never shuts down on network failure, full UX when disconnected; hourly rejoin and rate-limited queue flush; 7 uplink event types and 4 downlink commands; daily heartbeat with DevEUI jitter, RTC sync (DeviceTimeReq), EEPROM→SDHC housekeeping; two firmware variants (with/without EPD) from single codebase for unattended deployment.
+
+Smart BLE Sun Lamp										    Cresskill, NJ, USA
+•	Developed Zephyr RTOS firmware for nRF52830 BLE microcontroller, managing IR signals, I2C LED drivers, and BLE stack to transform a basic lamp into a smart IoT device.
+•	Built a web application, enabling remote control and wake-up scheduling via a mobile device.
+
+CardVerse – A Magic: The Gathering Card Sorting Machine                                                       Amherst, MA, USA
+
+•	Architected an award-winning automated card inventory machine ($7K Innovation Challenge prize) using ROS2 and Python, integrating computer vision, ML, and mechatronics for precise card authentication and grading.
+•	Developed real-time multi-state image processing pipeline using Nvidia Jetson and Raspberry Pi, achieving 97% accuracy in defect detection through YOLOv8 ML models and custom computer vision algorithms.
+•	Implemented pattern recognition system using image processing and ML algorithms (OpenCV, YOLOv8), achieving >99% accuracy in card authentication by combining feature extraction with industry standard verification tests. 
