@@ -156,8 +156,8 @@ static int load_or_init(void) {
   ctx.seq = best->seq;
   ctx.last_devnonce = best->last_devnonce;
 
-  LOG_INF("DevNonce store loaded (slot=%u seq=%u last=%u)",
-          ctx.active_slot, ctx.seq, ctx.last_devnonce);
+  LOG_INF("DevNonce store loaded (slot=%u seq=%u last=%u)", ctx.active_slot,
+          ctx.seq, ctx.last_devnonce);
   return 0;
 }
 
@@ -218,8 +218,8 @@ int devnonce_store_next(uint16_t *out_nonce) {
 
   k_mutex_lock(&ctx.lock, K_FOREVER);
   if (ret != 0) {
-    LOG_ERR("DevNonce persist failed (slot=%u off=0x%x): %d",
-            next_slot, (unsigned)off, ret);
+    LOG_ERR("DevNonce persist failed (slot=%u off=0x%x): %d", next_slot,
+            (unsigned)off, ret);
     k_mutex_unlock(&ctx.lock);
     return ret;
   }
@@ -269,7 +269,7 @@ int devnonce_store_factory_reset(void) {
 
   /* Reinitialize with a new random starting value */
   k_mutex_lock(&ctx.lock, K_FOREVER);
-  
+
   uint32_t rnd = 0;
   sys_rand_get(&rnd, sizeof(rnd));
   const uint16_t start = (uint16_t)rnd;
@@ -290,8 +290,8 @@ int devnonce_store_factory_reset(void) {
   ctx.initialized = true;
   k_mutex_unlock(&ctx.lock);
 
-  LOG_WRN("DevNonce factory reset complete (slot=0 seq=0 start=%u). New random DevNonce initialized.", start);
+  LOG_WRN("DevNonce factory reset complete (slot=0 seq=0 start=%u). New random "
+          "DevNonce initialized.",
+          start);
   return 0;
 }
-
-

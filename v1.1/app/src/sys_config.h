@@ -51,7 +51,8 @@
 #define COMBO_REBOOT_HOLD_MS 10000     /* 0+1+2+3 in Staff: reboot */
 
 /* Mode timeouts (FRD 3.3, 3.4) — return to Normal when elapsed */
-#define STAFF_TIMEOUT_MS 10000       /* Staff: 10s then Normal */
+#define STAFF_TIMEOUT_MS                                                       \
+  20000 /* Staff: 20s then Normal (allows 10s Reboot combo) */
 #define DEVICE_INFO_TIMEOUT_MS 30000 /* Device Info: 30s then Normal */
 #define REBOOT_LED_MS 3000           /* Reboot: LED solid 3s then reboot */
 
@@ -67,12 +68,18 @@
 /* EEPROM layout (external AT24 @ eeprom0). Keep regions non-overlapping.
  * - 0x0000..0x01FF : button_counter_store (2x256B slots)
  * - 0x0200..0x023F : devnonce_store (2x32B slots)
+ * - 0x0240..0x0247 : join_state_store (has_joined_once, 8B)
  */
 #define EEPROM_COUNTER_STORE_BYTES 512U
 #define EEPROM_DEVNONCE_SLOT_SIZE 32U
 #define EEPROM_DEVNONCE_SLOT0_OFF ((uint32_t)EEPROM_COUNTER_STORE_BYTES)
 #define EEPROM_DEVNONCE_SLOT1_OFF                                              \
   ((uint32_t)EEPROM_DEVNONCE_SLOT0_OFF + (uint32_t)EEPROM_DEVNONCE_SLOT_SIZE)
+#define EEPROM_JOIN_STATE_OFF 0x0240U
+#define EEPROM_JOIN_STATE_SIZE 8U
+/* If 1, ignore EEPROM and act as first boot (wait for Staff+0+1+2). Use for
+ * testing. */
+#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT 0
 
 /* RTC demo configuration (Option B: hardcode time at boot) */
 #define RTC_SET_TIME_ON_BOOT 1

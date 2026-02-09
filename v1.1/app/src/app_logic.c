@@ -25,13 +25,16 @@ void app_logic_public_vote(uint8_t button_id)
 {
 	uint32_t now_ms = (uint32_t)k_uptime_get_32();
 
+	LOG_INF("[app_logic] public_vote called: button_id=%u, now=%u", button_id, now_ms);
+
 	if (button_id >= NUM_BUTTONS) {
+		LOG_WRN("[app_logic] Invalid button_id=%u (>= NUM_BUTTONS=%u)", button_id, NUM_BUTTONS);
 		return;
 	}
 
 	/* Public lockout: 5s after any accepted press (per FRD) */
 	if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
-		LOG_DBG("Vote ignored: cooldown (%u ms left)",
+		LOG_INF("[app_logic] Vote BLOCKED by cooldown (%u ms left)",
 			(uint32_t)(BUTTON_COOLDOWN_MS - (now_ms - last_accepted_any_press_ms)));
 		return;
 	}

@@ -22,5 +22,7 @@ typedef struct {
 
 int buttons_init(void);
 bool buttons_get_event(button_event_t *event, k_timeout_t timeout);
+/** Current mask of pressed buttons (bit i set = button i pressed). Use to sync held state. */
+uint32_t buttons_get_held_mask(void);
 
 #endif // BUTTONS_H

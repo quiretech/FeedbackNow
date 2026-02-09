@@ -11,6 +11,7 @@ target_sources(app PRIVATE
   src/lora_app.c
   src/lora_thread.c
   src/devnonce_store.c
+  src/join_state_store.c
   src/payload_gen.c
   src/power_ctrl.c
   src/buttons.c

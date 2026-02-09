@@ -40,10 +40,10 @@ static void button_isr(const struct device *dev, struct gpio_callback *cb,
 static void debounce_expiry(struct k_timer *timer) {
   intptr_t i = (intptr_t)k_timer_user_data_get(timer);
   int val = gpio_pin_get_dt(&buttons[i]);
-  /* Active-low: 0 = pressed, 1 = released */
+  /* Active-high: 1 = pressed, 0 = released */
   button_event_t evt = {
       .button_id = (uint8_t)i,
-      .type = val ? BUTTON_EVENT_RELEASE : BUTTON_EVENT_PRESS,
+      .type = val ? BUTTON_EVENT_PRESS : BUTTON_EVENT_RELEASE,
       .timestamp_ms = k_uptime_get(),
   };
   k_msgq_put(&button_msgq, &evt, K_NO_WAIT);
@@ -51,6 +51,16 @@ static void debounce_expiry(struct k_timer *timer) {
 
 bool buttons_get_event(button_event_t *event, k_timeout_t timeout) {
   return k_msgq_get(&button_msgq, event, timeout) == 0;
+}
+
+uint32_t buttons_get_held_mask(void) {
+  uint32_t mask = 0;
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    if (gpio_pin_get_dt(&buttons[i]) == 1) { /* active-high: 1 = pressed */
+      mask |= (1U << i);
+    }
+  }
+  return mask;
 }
 
 static void button_isr(const struct device *dev, struct gpio_callback *cb,

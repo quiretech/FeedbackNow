@@ -49,6 +49,10 @@ extern atomic_t lora_joined_flag;
 /* Semaphore to signal join completion to waiting threads */
 extern struct k_sem lora_join_sem;
 
+/* First-boot: signal LoRa thread to start join (after Staff + 0+1+2) */
+extern struct k_sem lora_join_trigger_sem;
+void lora_request_join(void);
+
 /**
  * @brief Check if device has successfully joined the LoRaWAN network
  * @return true if joined, false otherwise

@@ -1,4 +1,5 @@
 #include "devnonce_store.h"
+#include "join_state_store.h"
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
@@ -89,7 +90,19 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                          .otaa.nwk_key = app_key,
                                          .otaa.dev_nonce = 0};
 
-  // Try to join until success
+  /* First boot: wait for user to trigger join (Staff + 0+1+2) when
+   * CLEAR_ON_BOOT or when has_joined_once is false in EEPROM. */
+  bool has_joined_once = false;
+  (void)join_state_store_init();
+  (void)join_state_store_has_joined_once(&has_joined_once);
+  LOG_INF("has_joined_once=%d (EEPROM_JOIN_STATE_CLEAR_ON_BOOT=%d)",
+          has_joined_once, EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
+  if (!has_joined_once) {
+    LOG_SECTION_INF("FIRST BOOT: waiting for deliberate join (Staff + 0+1+2)");
+    k_sem_take(&lora_join_trigger_sem, K_FOREVER);
+    LOG_INF("Join requested, starting join loop...");
+  }
+
   int attempt = 0;
   LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   do {
@@ -124,13 +137,11 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       /* Notify SMF so it can run counter-sync (Phase 2) */
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
 
-      /* Visual feedback: blink status LED 5 times on successful join */
-      for (int i = 0; i < 5; i++) {
-        (void)led_manager_set_led(0, true);
-        k_sleep(K_MSEC(200));
-        (void)led_manager_set_led(0, false);
-        k_sleep(K_MSEC(200));
-      }
+      /* Visual feedback: 5× 200ms blink (handled by LED UI thread) */
+      (void)led_manager_pattern_join_success(0);
+
+      /* Persist "has joined once" so next boot will auto-join */
+      (void)join_state_store_set_has_joined_once();
 
       /* Request network time and program RTC when DeviceTimeAns arrives */
       time_sync_request_and_update_rtc();

@@ -18,6 +18,13 @@ K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE, 4);
 atomic_t lora_joined_flag = ATOMIC_INIT(0);
 K_SEM_DEFINE(lora_join_sem, 0, 1);
 
+/* First-boot: LoRa thread blocks on this until user triggers join (Staff+0+1+2) */
+K_SEM_DEFINE(lora_join_trigger_sem, 0, 1);
+
+void lora_request_join(void) {
+  k_sem_give(&lora_join_trigger_sem);
+}
+
 /* Battery level callback for LoRaWAN MAC commands (0=external power, 1..254
  * level, 255=unknown). We return a random 1..254 value to see if the LNS
  * consumes it.

@@ -215,8 +215,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       continue;
     }
 
-    LOG_INF("[SMF] dequeue ev=%s button_id=%u ts=%lld",
-            smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms);
+    LOG_INF("[SMF] dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
+            smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms,
+            smf_mode_str(mode));
 
     switch (mode) {
     case MODE_NORMAL:
@@ -235,17 +236,12 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_mutex_unlock(&smf_dl_mutex);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         mode = MODE_STAFF;
-        LOG_INF("[SMF] Normal -> Staff (LED solid, 10s timeout)");
+        LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
         (void)led_manager_set_led(0, true);
         mode_timeout_ev = SMF_EVT_STAFF_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(STAFF_TIMEOUT_MS), K_NO_WAIT);
-      } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
-        mode = MODE_DEVICE_INFO;
-        LOG_INF("[SMF] Normal -> DeviceInfo (30s timeout)");
-        mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
-        k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
-                      K_NO_WAIT);
-      } else if (msg.ev_type == SMF_EVT_COMBO_JOIN ||
+      } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO ||
+                 msg.ev_type == SMF_EVT_COMBO_JOIN ||
                  msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         LOG_INF("[SMF] state=Normal -> %s ignored (enter Staff first)",
                 smf_ev_type_str(msg.ev_type));
@@ -262,13 +258,28 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_set_led(0, false);
-        LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger join stub)");
+        LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger LoRa join)");
+        lora_request_join();
       } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         mode = MODE_REBOOT;
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
         (void)led_manager_set_led(0, true);
         k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
+      } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
+        mode = MODE_DEVICE_INFO;
+        k_timer_stop(&mode_timeout_timer);
+        (void)led_manager_set_led(0, false);
+        LOG_INF("[SMF] Staff -> DeviceInfo (30s timeout)");
+        mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
+        k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
+                      K_NO_WAIT);
+      } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
+        LOG_INF("[SMF] Staff mode: COMBO_STAFF re-entry ignored (already in "
+                "Staff)");
+      } else {
+        LOG_INF("[SMF] Staff mode: event %s ignored",
+                smf_ev_type_str(msg.ev_type));
       }
       break;
 
