@@ -24,6 +24,7 @@
 #include "payload_gen.h"
 #include "power_ctrl.h"
 #include "rtc.h"
+#include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
 
@@ -136,38 +137,16 @@ int main(void) {
     return 0;
   }
 
-  /* Start the LoRa thread for join and message processing */
+  /* Start the LoRa thread (no blocking join; orchestration via SMF in Phase 2+) */
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started");
 
-  /* Wait for actual join completion (timeout after 2 minutes) */
-  LOG_INF("Waiting for LoRa join to complete...");
-  ret = lora_wait_for_join(K_SECONDS(120));
-  if (ret != 0) {
-    LOG_ERR("LoRa join did not complete within timeout!");
-#if LORA_REBOOT_ON_JOIN_TIMEOUT
-    LOG_ERR("LORA_REBOOT_ON_JOIN_TIMEOUT=1; rebooting");
-    sys_reboot(SYS_REBOOT_COLD);
-#endif
-    /* Continue anyway - the thread will keep trying to join (if reboot
-     * disabled) */
-  } else {
-    LOG_INF("LoRa join confirmed!");
-  }
-
-#if RTC_REQUIRE_LNS_TIME_SYNC
-  LOG_SECTION_INF("RTC SYNC REQUIRED: requesting LoRaWAN network time");
-  time_sync_request_and_update_rtc();
-  ret = time_sync_wait(K_SECONDS(RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS));
-  if (ret != 0) {
-    LOG_ERR("RTC time sync did not complete successfully (%d) - rebooting",
-            ret);
-    sys_reboot(SYS_REBOOT_COLD);
-  }
-#endif
+  /* Start SMF thread (system mode FSM); it blocks on its input queue */
+  k_thread_start(smf_thread_id);
+  LOG_INF("SMF thread started");
 
   if (DEMO_USE_REAL_BUTTON_UPLINK) {
-    LOG_INF("Demo mode: REAL BUTTON uplinks");
+    LOG_INF("Demo mode: REAL BUTTON uplinks (Input -> SMF -> app logic)");
 
     ret = buttons_init();
     if (ret != 0) {
@@ -175,17 +154,14 @@ int main(void) {
       return 0;
     }
 
+    /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
     k_thread_start(button_uplink_thread_id);
-    LOG_INF("Button uplink thread started");
+    LOG_INF("Input thread started");
 
-    /* Buttons are interrupt-driven, so main thread can sleep indefinitely.
-     * Button presses wake the system via GPIO interrupts, and the button
-     * thread handles all uplink processing. This allows maximum deep sleep
-     * time and minimal power consumption.
-     */
-    LOG_INF("Main thread entering deep sleep (buttons wake via interrupt)");
+    /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink */
+    LOG_INF("Main thread sleeping (orchestration via SMF)");
     while (1) {
-      k_sleep(K_FOREVER); /* Sleep indefinitely - buttons wake via interrupt */
+      k_sleep(K_FOREVER);
     }
   }
 

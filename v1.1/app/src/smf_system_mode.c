@@ -1,0 +1,329 @@
+/**
+ * System mode FSM: single thread, single input queue (per architecture).
+ * States: Normal, Staff, NFCScan, DeviceInfo, Reboot, ProcessAction.
+ * Implements: timeouts (Staff 10s, DeviceInfo 30s), Staff-first for
+ * Join/Reboot.
+ */
+#include "smf_system_mode.h"
+#include "app_logic.h"
+#include "button_counter_store.h"
+#include "led_manager.h"
+#include "lora_app.h"
+#include "payload_gen.h"
+#include "rtc.h"
+#include "sys_config.h"
+
+#include <string.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
+
+LOG_MODULE_REGISTER(smf, LOG_LEVEL_INF);
+
+enum system_mode {
+  MODE_NORMAL,
+  MODE_STAFF,
+  MODE_NFC_SCAN,
+  MODE_DEVICE_INFO,
+  MODE_REBOOT,
+  MODE_PROCESS_ACTION,
+  MODE_COUNT
+};
+
+#define SMF_MSGQ_SIZE 16
+#define SMF_MSGQ_ALIGN 4
+
+K_MSGQ_DEFINE(smf_msgq, sizeof(smf_msg_t), SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN);
+
+/* Downlink payload copy (written by smf_post_downlink, read by SMF handler) */
+static uint8_t smf_dl_payload[LORA_MAX_PAYLOAD_SIZE];
+static struct k_mutex smf_dl_mutex;
+
+#define SMF_THREAD_STACK_SIZE 1536
+#define SMF_THREAD_PRIORITY 6
+
+/* Downlink command codes (FRD 4.5) */
+#define DL_CMD_EPD_UPDATE 0x01
+#define DL_CMD_EPD_REFRESH 0x02
+#define DL_CMD_STATUS_REQ 0x03
+#define DL_CMD_RESET_COUNTERS 0x04
+
+/* Counter-sync: small delay between uplinks to avoid congestion */
+#define COUNTER_SYNC_DELAY_MS 200
+
+/* Mode timeout: timer posts this event so SMF returns to Normal */
+static volatile uint8_t mode_timeout_ev;
+
+static void mode_timeout_expiry(struct k_timer *timer) {
+  ARG_UNUSED(timer);
+  if (mode_timeout_ev != SMF_EVT_NONE) {
+    (void)smf_post_event(mode_timeout_ev, 0, k_uptime_get());
+    mode_timeout_ev = SMF_EVT_NONE;
+  }
+}
+
+static void reboot_expiry(struct k_timer *timer) {
+  ARG_UNUSED(timer);
+  LOG_INF("[SMF] rebooting now");
+  sys_reboot(SYS_REBOOT_COLD);
+}
+
+K_TIMER_DEFINE(mode_timeout_timer, mode_timeout_expiry, NULL);
+K_TIMER_DEFINE(reboot_timer, reboot_expiry, NULL);
+
+static const char *smf_ev_type_str(uint8_t ev_type) {
+  switch (ev_type) {
+  case SMF_EVT_NONE:
+    return "NONE";
+  case SMF_EVT_BUTTON_SINGLE_0:
+    return "BUTTON_SINGLE_0";
+  case SMF_EVT_BUTTON_SINGLE_1:
+    return "BUTTON_SINGLE_1";
+  case SMF_EVT_BUTTON_SINGLE_2:
+    return "BUTTON_SINGLE_2";
+  case SMF_EVT_BUTTON_SINGLE_3:
+    return "BUTTON_SINGLE_3";
+  case SMF_EVT_BUTTON_SINGLE_4:
+    return "BUTTON_SINGLE_4";
+  case SMF_EVT_BUTTON_SINGLE_5:
+    return "BUTTON_SINGLE_5";
+  case SMF_EVT_COMBO_STAFF:
+    return "COMBO_STAFF";
+  case SMF_EVT_COMBO_DEVICE_INFO:
+    return "COMBO_DEVICE_INFO";
+  case SMF_EVT_COMBO_JOIN:
+    return "COMBO_JOIN";
+  case SMF_EVT_COMBO_REBOOT:
+    return "COMBO_REBOOT";
+  case SMF_EVT_STAFF_TIMEOUT:
+    return "STAFF_TIMEOUT";
+  case SMF_EVT_NFC_TIMEOUT:
+    return "NFC_TIMEOUT";
+  case SMF_EVT_DEVICE_INFO_TIMEOUT:
+    return "DEVICE_INFO_TIMEOUT";
+  case SMF_EVT_JOINED:
+    return "JOINED";
+  case SMF_EVT_DISCONNECTED:
+    return "DISCONNECTED";
+  case SMF_EVT_DOWNLINK:
+    return "DOWNLINK";
+  case SMF_EVT_NFC_RESULT:
+    return "NFC_RESULT";
+  default:
+    return "?";
+  }
+}
+
+static const char *smf_mode_str(enum system_mode mode) {
+  switch (mode) {
+  case MODE_NORMAL:
+    return "Normal";
+  case MODE_STAFF:
+    return "Staff";
+  case MODE_NFC_SCAN:
+    return "NFCScan";
+  case MODE_DEVICE_INFO:
+    return "DeviceInfo";
+  case MODE_REBOOT:
+    return "Reboot";
+  case MODE_PROCESS_ACTION:
+    return "ProcessAction";
+  default:
+    return "?";
+  }
+}
+
+static void smf_do_counter_sync(void) {
+  uint32_t epoch_s = 0;
+
+  (void)rtc_get_epoch_seconds(&epoch_s);
+  if (epoch_s == 0) {
+    epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+  }
+
+  LOG_INF("[SMF] JOINED -> counter_sync: sending Event 0x07 per button");
+
+  for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
+    uint8_t payload[PAYLOAD_LEN_BYTES];
+    int ret = payload_gen_build_counter_sync(btn, epoch_s, payload);
+    if (ret != 0) {
+      LOG_WRN("[SMF] counter_sync btn=%u build failed: %d", btn, ret);
+      continue;
+    }
+    lora_uplink_msg_t msg = {0};
+    msg.port = FPORT_BUTTON;
+    msg.confirmed = false;
+    msg.len = PAYLOAD_LEN_BYTES;
+    memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
+    ret = lora_put_event(&msg, K_MSEC(500));
+    if (ret == 0) {
+      LOG_INF("[SMF] counter_sync: queued button %u", btn);
+    } else {
+      LOG_WRN("[SMF] counter_sync: lora_put_event btn=%u failed: %d", btn, ret);
+    }
+    k_msleep(COUNTER_SYNC_DELAY_MS);
+  }
+
+  LOG_INF("[SMF] counter_sync done");
+}
+
+static void smf_handle_downlink(uint8_t port, uint8_t len,
+                                const uint8_t *data) {
+  if (len == 0 || data == NULL) {
+    return;
+  }
+  uint8_t cmd = data[0];
+  LOG_INF("[SMF] DOWNLINK -> dispatch: port=%u len=%u cmd=0x%02X", port, len,
+          cmd);
+
+  switch (cmd) {
+  case DL_CMD_EPD_UPDATE:
+    LOG_INF("[SMF] cmd 0x01 EPD update (no-op until Phase 4)");
+    break;
+  case DL_CMD_EPD_REFRESH:
+    LOG_INF("[SMF] cmd 0x02 EPD refresh (no-op until Phase 4)");
+    break;
+  case DL_CMD_STATUS_REQ:
+    LOG_INF("[SMF] cmd 0x03 status request (trigger status uplink; stub)");
+    break;
+  case DL_CMD_RESET_COUNTERS:
+    LOG_INF("[SMF] cmd 0x04 reset counters");
+    if (button_counter_store_factory_reset() == 0) {
+      LOG_INF("[SMF] counters reset done");
+    } else {
+      LOG_ERR("[SMF] counters reset failed");
+    }
+    break;
+  default:
+    LOG_WRN("[SMF] unknown downlink cmd 0x%02X", cmd);
+    break;
+  }
+}
+
+static void smf_thread_fn(void *a, void *b, void *c) {
+  smf_msg_t msg;
+  enum system_mode mode = MODE_NORMAL;
+
+  ARG_UNUSED(a);
+  ARG_UNUSED(b);
+  ARG_UNUSED(c);
+
+  LOG_INF("[SMF] thread started, state=%s", smf_mode_str(mode));
+
+  while (1) {
+    if (k_msgq_get(&smf_msgq, &msg, K_FOREVER) != 0) {
+      continue;
+    }
+
+    LOG_INF("[SMF] dequeue ev=%s button_id=%u ts=%lld",
+            smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms);
+
+    switch (mode) {
+    case MODE_NORMAL:
+      if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
+          msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
+        LOG_INF("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
+                msg.button_id);
+        app_logic_public_vote(msg.button_id);
+      } else if (msg.ev_type == SMF_EVT_JOINED) {
+        LOG_INF("[SMF] state=Normal -> JOINED -> counter_sync");
+        smf_do_counter_sync();
+      } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
+        k_mutex_lock(&smf_dl_mutex, K_FOREVER);
+        smf_handle_downlink(msg.payload.downlink.port, msg.payload.downlink.len,
+                            smf_dl_payload);
+        k_mutex_unlock(&smf_dl_mutex);
+      } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
+        mode = MODE_STAFF;
+        LOG_INF("[SMF] Normal -> Staff (LED solid, 10s timeout)");
+        (void)led_manager_set_led(0, true);
+        mode_timeout_ev = SMF_EVT_STAFF_TIMEOUT;
+        k_timer_start(&mode_timeout_timer, K_MSEC(STAFF_TIMEOUT_MS), K_NO_WAIT);
+      } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
+        mode = MODE_DEVICE_INFO;
+        LOG_INF("[SMF] Normal -> DeviceInfo (30s timeout)");
+        mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
+        k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
+                      K_NO_WAIT);
+      } else if (msg.ev_type == SMF_EVT_COMBO_JOIN ||
+                 msg.ev_type == SMF_EVT_COMBO_REBOOT) {
+        LOG_INF("[SMF] state=Normal -> %s ignored (enter Staff first)",
+                smf_ev_type_str(msg.ev_type));
+      }
+      break;
+
+    case MODE_STAFF:
+      if (msg.ev_type == SMF_EVT_STAFF_TIMEOUT) {
+        mode = MODE_NORMAL;
+        k_timer_stop(&mode_timeout_timer);
+        (void)led_manager_set_led(0, false);
+        LOG_INF("[SMF] Staff -> Normal (timeout)");
+      } else if (msg.ev_type == SMF_EVT_COMBO_JOIN) {
+        mode = MODE_NORMAL;
+        k_timer_stop(&mode_timeout_timer);
+        (void)led_manager_set_led(0, false);
+        LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger join stub)");
+      } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
+        mode = MODE_REBOOT;
+        k_timer_stop(&mode_timeout_timer);
+        LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
+        (void)led_manager_set_led(0, true);
+        k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
+      }
+      break;
+
+    case MODE_DEVICE_INFO:
+      if (msg.ev_type == SMF_EVT_DEVICE_INFO_TIMEOUT) {
+        mode = MODE_NORMAL;
+        k_timer_stop(&mode_timeout_timer);
+        LOG_INF("[SMF] DeviceInfo -> Normal (timeout)");
+      }
+      break;
+
+    case MODE_REBOOT:
+      /* Reboot timer will fire; ignore other events */
+      break;
+
+    case MODE_NFC_SCAN:
+    case MODE_PROCESS_ACTION:
+      LOG_DBG("[SMF] state=%s (stub), ev=%s", smf_mode_str(mode),
+              smf_ev_type_str(msg.ev_type));
+      break;
+
+    default:
+      break;
+    }
+  }
+}
+
+K_THREAD_DEFINE(smf_thread_id, SMF_THREAD_STACK_SIZE, smf_thread_fn, NULL, NULL,
+                NULL, SMF_THREAD_PRIORITY, 0, -1);
+
+int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms) {
+  smf_msg_t msg = {
+      .ev_type = ev_type,
+      .button_id = button_id,
+      .timestamp_ms = timestamp_ms,
+  };
+  return k_msgq_put(&smf_msgq, &msg, K_NO_WAIT) == 0 ? 0 : -ENOMEM;
+}
+
+int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
+  if (data == NULL || len > LORA_MAX_PAYLOAD_SIZE) {
+    return -EINVAL;
+  }
+  k_mutex_lock(&smf_dl_mutex, K_FOREVER);
+  memcpy(smf_dl_payload, data, len);
+  k_mutex_unlock(&smf_dl_mutex);
+
+  smf_msg_t msg = {
+      .ev_type = SMF_EVT_DOWNLINK,
+      .button_id = 0,
+      .timestamp_ms = k_uptime_get(),
+  };
+  msg.payload.downlink.port = port;
+  msg.payload.downlink.len = len;
+
+  int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
+  return ret == 0 ? 0 : -ENOMEM;
+}

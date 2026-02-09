@@ -10,7 +10,7 @@
 
 LOG_MODULE_REGISTER(payload_gen, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define BUTTON_ID_MAX 6
+#define BUTTON_ID_MAX 5
 #define BUTTON_COUNTER_ROLLOVER (1U << 24) /* 24-bit counter */
 #define BATTERY_MIN 0
 #define BATTERY_MAX 100
@@ -113,6 +113,24 @@ int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
   }
 
   k_mutex_unlock(&ctx.lock);
+  return 0;
+}
+
+int payload_gen_build_counter_sync(uint8_t button_id, uint32_t epoch_s,
+                                   uint8_t *out_buf) {
+  if (!out_buf || button_id > BUTTON_ID_MAX) {
+    return -EINVAL;
+  }
+  uint32_t c = 0;
+  (void)button_counter_store_get(button_id, &c);
+  write_be32(out_buf, epoch_s);
+  out_buf[4] = EVT_COUNTER_SYNC;
+  out_buf[5] = button_id;
+  out_buf[6] = (uint8_t)(c >> 16);
+  out_buf[7] = (uint8_t)(c >> 8);
+  out_buf[8] = (uint8_t)(c);
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
   return 0;
 }
 

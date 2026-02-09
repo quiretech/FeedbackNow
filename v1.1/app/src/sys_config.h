@@ -30,7 +30,7 @@
 #define LORA_SEND_INTERVAL_SECONDS 900
 
 /* Button configuration (gpio-keys aliases in DT overlay) */
-#define NUM_BUTTONS 7
+#define NUM_BUTTONS 6
 #define BUTTON_QUEUE_SIZE 16
 #define BUTTON_QUEUE_ALIGNMENT 4
 #define BUTTON_THREAD_STACK_SIZE 1536
@@ -42,6 +42,18 @@
 #define BUTTON_DEBOUNCE_MS 50
 /* After any accepted press, ignore all further presses for this duration */
 #define BUTTON_COOLDOWN_MS 5000
+
+/* Combo hold durations (ms) — FRD 3.1; extend by adding entries in input layer
+ */
+#define COMBO_STAFF_HOLD_MS 2000       /* 0+1: enter Staff */
+#define COMBO_DEVICE_INFO_HOLD_MS 3000 /* 0+1+5: Device Info */
+#define COMBO_JOIN_HOLD_MS 3000        /* 0+1+2 in Staff: deliberate join */
+#define COMBO_REBOOT_HOLD_MS 10000     /* 0+1+2+3 in Staff: reboot */
+
+/* Mode timeouts (FRD 3.3, 3.4) — return to Normal when elapsed */
+#define STAFF_TIMEOUT_MS 10000       /* Staff: 10s then Normal */
+#define DEVICE_INFO_TIMEOUT_MS 30000 /* Device Info: 30s then Normal */
+#define REBOOT_LED_MS 3000           /* Reboot: LED solid 3s then reboot */
 
 /* LED configuration */
 #define NUM_LEDS 1

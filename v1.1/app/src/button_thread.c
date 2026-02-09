@@ -1,102 +1,134 @@
+/**
+ * Input layer: consumes raw press/release from buttons.c, tracks held set,
+ * detects combos via configurable table, posts single-button or combo events to
+ * SMF.
+ *
+ * To extend: add a row to combo_table[] and (if needed) a new SMF_EVT_COMBO_*
+ * in smf_system_mode.h; add hold time to sys_config.h.
+ */
 #include "button_thread.h"
-
 #include "buttons.h"
-#include "led_manager.h"
-#include "lora_app.h"
-#include "log_fmt.h"
-#include "payload_gen.h"
-#include "rtc.h"
+#include "smf_system_mode.h"
 #include "sys_config.h"
 
-#include <errno.h>
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(button_uplink, CONFIG_LOG_DEFAULT_LEVEL);
+LOG_MODULE_REGISTER(input, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* Map driver button index (0..NUM_BUTTONS-1) -> payload button_id */
-static const uint8_t button_id_map[NUM_BUTTONS] = {0, 1, 2, 3, 4, 5, 6};
+#define BUTTON_MASK(b) (1U << (b))
+#define COMBO_SCAN_INTERVAL_MS 50
 
-static void button_uplink_thread_fn(void *a, void *b, void *c) {
+/* Combo definition: mask of buttons that must be held, hold time (ms), SMF
+ * event */
+typedef struct {
+  uint32_t mask;
+  uint32_t hold_ms;
+  uint8_t ev_type;
+} combo_def_t;
+
+/* Order: more specific (more buttons) first so longest match wins */
+static const combo_def_t combo_table[] = {
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2) | BUTTON_MASK(3),
+     COMBO_REBOOT_HOLD_MS, SMF_EVT_COMBO_REBOOT},
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(5),
+     COMBO_DEVICE_INFO_HOLD_MS, SMF_EVT_COMBO_DEVICE_INFO},
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2), COMBO_JOIN_HOLD_MS,
+     SMF_EVT_COMBO_JOIN},
+    {BUTTON_MASK(0) | BUTTON_MASK(1), COMBO_STAFF_HOLD_MS, SMF_EVT_COMBO_STAFF},
+};
+#define NUM_COMBOS ((int)(sizeof(combo_table) / sizeof(combo_table[0])))
+
+static int popcount(uint32_t x) {
+  int n = 0;
+  for (; x; x &= x - 1)
+    n++;
+  return n;
+}
+
+static const combo_def_t *combo_lookup(uint32_t held) {
+  for (int i = 0; i < NUM_COMBOS; i++) {
+    if (combo_table[i].mask == held) {
+      return &combo_table[i];
+    }
+  }
+  return NULL;
+}
+
+static void button_input_thread_fn(void *a, void *b, void *c) {
   button_event_t btn_evt;
-  uint32_t last_press_ms[NUM_BUTTONS] = {0};
-  uint32_t last_accepted_any_press_ms = 0;
+  uint32_t held = 0;
+  uint32_t session_buttons = 0;
+  bool session_combo_fired = false;
+  const combo_def_t *combo_being_timed = NULL;
+  int64_t combo_start_ms = 0;
+  uint32_t last_fired_combo_mask =
+      0; /* avoid re-firing same combo while held */
 
   ARG_UNUSED(a);
   ARG_UNUSED(b);
   ARG_UNUSED(c);
 
-  LOG_SECTION_INF("BUTTON UPLINK THREAD ENTRY");
+  LOG_INF("Input thread started (single + combo -> SMF)");
 
   while (1) {
-    (void)buttons_get_event(&btn_evt, K_FOREVER);
+    bool got = buttons_get_event(&btn_evt, K_MSEC(COMBO_SCAN_INTERVAL_MS));
 
-    if (btn_evt.button_id >= NUM_BUTTONS) {
-      continue;
+    if (got && btn_evt.button_id < NUM_BUTTONS) {
+      if (btn_evt.type == BUTTON_EVENT_PRESS) {
+        held |= BUTTON_MASK(btn_evt.button_id);
+        session_buttons |= BUTTON_MASK(btn_evt.button_id);
+      } else {
+        held &= ~BUTTON_MASK(btn_evt.button_id);
+      }
     }
 
-    if (btn_evt.type != BUTTON_EVENT_PRESS) {
-      continue; /* demo cares only about presses */
-    }
-
-    /* Simple debounce in thread context */
-    uint32_t now_ms = (uint32_t)k_uptime_get_32();
-    if ((now_ms - last_press_ms[btn_evt.button_id]) < BUTTON_DEBOUNCE_MS) {
-      continue;
-    }
-    last_press_ms[btn_evt.button_id] = now_ms;
-
-    /* Global anti-spam cooldown: ignore all presses for a while after any press */
-    if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
-      LOG_DBG("Button press ignored due to cooldown (%u ms remaining)",
-              (uint32_t)(BUTTON_COOLDOWN_MS -
-                         (now_ms - last_accepted_any_press_ms)));
-      continue;
-    }
-
-    /* Blink LED for 1 second on press */
-    (void)led_manager_blink_once(0);
-
-    uint32_t epoch_s = 0;
-    int ret = rtc_get_epoch_seconds(&epoch_s);
-    if (ret != 0) {
-      /* Fallback: still send something monotonic if RTC isn't available */
-      epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-      LOG_WRN("RTC read failed (%d); using uptime seconds=%u", ret, epoch_s);
-    }
-
-    uint8_t payload[PAYLOAD_LEN_BYTES] = {0};
-    uint8_t payload_button_id = button_id_map[btn_evt.button_id];
-
-    uint32_t new_counter = 0;
-    ret = payload_gen_build_button(payload_button_id, epoch_s, payload,
-                                   &new_counter);
-    if (ret != 0) {
-      LOG_ERR("Failed to build button payload: %d", ret);
-      continue;
-    }
-
-    lora_uplink_msg_t msg = {0};
-    msg.port = FPORT_BUTTON;
-    msg.confirmed = false;
-    msg.len = PAYLOAD_LEN_BYTES;
-    memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
-
-    ret = lora_put_event(&msg, K_NO_WAIT);
-    if (ret == -ENOTCONN) {
-      LOG_WRN("Not joined yet; dropped button press id=%u", payload_button_id);
-    } else if (ret != 0) {
-      LOG_ERR("Failed to queue button uplink: %d", ret);
+    /* Update combo timing: if held matches a combo, start/continue; else cancel
+     */
+    const combo_def_t *match = combo_lookup(held);
+    if (match != NULL && held != last_fired_combo_mask) {
+      if (combo_being_timed != match) {
+        combo_being_timed = match;
+        combo_start_ms = k_uptime_get();
+      }
     } else {
-      last_accepted_any_press_ms = now_ms;
-      LOG_INF("Queued button uplink: btn=%u ctr=%u ts=%u", payload_button_id,
-              new_counter, epoch_s);
+      combo_being_timed = NULL;
+    }
+
+    /* Check if combo hold duration reached */
+    if (combo_being_timed != NULL && held == combo_being_timed->mask) {
+      int64_t elapsed = k_uptime_get() - combo_start_ms;
+      if (elapsed >= (int64_t)combo_being_timed->hold_ms) {
+        LOG_INF("[Input] combo fired: ev=%u", combo_being_timed->ev_type);
+        (void)smf_post_event(combo_being_timed->ev_type, 0, k_uptime_get());
+        session_combo_fired = true;
+        last_fired_combo_mask =
+            combo_being_timed->mask; /* prevent re-fire while held */
+        combo_being_timed = NULL;
+      }
+    }
+
+    /* On all released: emit single-button if exactly one in session and no
+     * combo */
+    if (got && btn_evt.type == BUTTON_EVENT_RELEASE && held == 0) {
+      if (!session_combo_fired && popcount(session_buttons) == 1) {
+        for (int i = 0; i < NUM_BUTTONS; i++) {
+          if (session_buttons & BUTTON_MASK(i)) {
+            uint8_t ev_type = SMF_EVT_BUTTON_SINGLE_0 + (uint8_t)i;
+            LOG_INF("[Input] single button %d -> SMF", i);
+            (void)smf_post_event(ev_type, (uint8_t)i, btn_evt.timestamp_ms);
+            break;
+          }
+        }
+      }
+      session_buttons = 0;
+      session_combo_fired = false;
+      last_fired_combo_mask = 0;
     }
   }
 }
 
-/* Don't autostart; main.c starts it only in button demo mode */
 K_THREAD_DEFINE(button_uplink_thread_id, BUTTON_THREAD_STACK_SIZE,
-                button_uplink_thread_fn, NULL, NULL, NULL,
+                button_input_thread_fn, NULL, NULL, NULL,
                 BUTTON_THREAD_PRIORITY, 0, -1);

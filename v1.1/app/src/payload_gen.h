@@ -8,12 +8,15 @@
 /* Fixed payload size for DR0 US915 */
 #define PAYLOAD_LEN_BYTES 11
 
-/* Event types */
+/* Event types (FRD 4.5) */
 enum payload_event_type {
   EVT_BUTTON = 0x00,
   EVT_NFC = 0x01,
   EVT_BATTERY = 0x02,
-  EVT_FUTURE = 0xFF, /* placeholder for future extensions */
+  EVT_HEARTBEAT = 0x04,
+  EVT_LOW_BATTERY = 0x05,
+  EVT_COUNTER_SYNC = 0x07, /* rejoin: send current counter per button */
+  EVT_FUTURE = 0xFF,
 };
 
 /* LoRaWAN FPorts */
@@ -63,6 +66,13 @@ void payload_decode_log(const uint8_t *buf, size_t len);
  */
 int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
                              uint8_t *out_buf, uint32_t *out_counter);
+
+/**
+ * @brief Build counter-sync payload (Event 0x07) for one button after rejoin.
+ * Does not increment; uses current counter from store.
+ */
+int payload_gen_build_counter_sync(uint8_t button_id, uint32_t epoch_s,
+                                   uint8_t *out_buf);
 
 /* To extend with new event types:
  * 1) Add a new enum payload_event_type value and FPort define.

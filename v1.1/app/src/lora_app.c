@@ -7,6 +7,7 @@
 
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "smf_system_mode.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -102,6 +103,11 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
   }
 
   LOG_HEXDUMP_INF(hex_data, len, "Payload:");
+
+  /* Post to SMF for command dispatch (Phase 2) */
+  if (smf_post_downlink(port, len, hex_data) != 0) {
+    LOG_WRN("smf_post_downlink failed");
+  }
 }
 
 /**

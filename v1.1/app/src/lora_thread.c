@@ -3,6 +3,7 @@
 #include "log_fmt.h"
 #include "lora_app.h"
 #include "power_ctrl.h"
+#include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
 #include <stdbool.h>
@@ -15,7 +16,8 @@
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
-/* Class A RX windows: RX1 at ~1s, RX2 at ~2s after TX. Wait 3s before power down */
+/* Class A RX windows: RX1 at ~1s, RX2 at ~2s after TX. Wait 3s before power
+ * down */
 #define LORA_RX_WINDOWS_DELAY_MS 3000
 
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
@@ -119,6 +121,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       atomic_set(&lora_joined_flag, 1);
       k_sem_give(&lora_join_sem);
 
+      /* Notify SMF so it can run counter-sync (Phase 2) */
+      (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
+
       /* Visual feedback: blink status LED 5 times on successful join */
       for (int i = 0; i < 5; i++) {
         (void)led_manager_set_led(0, true);
@@ -129,8 +134,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
 
       /* Request network time and program RTC when DeviceTimeAns arrives */
       time_sync_request_and_update_rtc();
-      
-      /* Power down LoRa radio domain after successful join (will power up for TX) */
+
+      /* Power down LoRa radio domain after successful join (will power up for
+       * TX) */
       LOG_INF("Powering down LoRa domain after join (will power up for TX)");
       power_ctrl_lora_power_down();
     }
