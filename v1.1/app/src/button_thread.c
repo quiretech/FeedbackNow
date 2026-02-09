@@ -1,7 +1,7 @@
 /**
- * Input layer: consumes raw press/release from buttons.c, tracks held set,
- * detects combos via configurable table, posts single-button or combo events to
- * SMF.
+ * Input layer (implementation file: button_thread).
+ * Consumes raw press/release from buttons.c, tracks held set, detects combos
+ * via configurable table, posts single-button or combo events to SMF.
  *
  * To extend: add a row to combo_table[] and (if needed) a new SMF_EVT_COMBO_*
  * in smf_system_mode.h; add hold time to sys_config.h.
@@ -18,7 +18,6 @@
 LOG_MODULE_REGISTER(input, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define BUTTON_MASK(b) (1U << (b))
-#define COMBO_SCAN_INTERVAL_MS 50
 
 /* Combo definition: mask of buttons that must be held, hold time (ms), SMF
  * event */
@@ -74,7 +73,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
   LOG_INF("Input thread started (single + combo -> SMF)");
 
   while (1) {
-    bool got = buttons_get_event(&btn_evt, K_MSEC(COMBO_SCAN_INTERVAL_MS));
+    bool got = buttons_get_event(&btn_evt, K_MSEC(INPUT_COMBO_SCAN_INTERVAL_MS));
 
     if (got && btn_evt.button_id < NUM_BUTTONS) {
       const char *evt_str =
@@ -94,7 +93,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
       uint32_t held_before_sync = held;
       held = buttons_get_held_mask();
       if (held != held_before_sync) {
-        LOG_INF("[Input] GPIO sync (timeout): held 0x%x -> 0x%x",
+        LOG_DBG("[Input] GPIO sync (timeout): held 0x%x -> 0x%x",
                 held_before_sync, held);
       }
     }
@@ -118,7 +117,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
       }
     } else {
       if (combo_being_timed != NULL) {
-        LOG_INF(
+        LOG_DBG(
             "[Input] Stop timing combo (held=0x%x, match=%p, last_fired=0x%x)",
             held, match, last_fired_combo_mask);
       }
@@ -162,7 +161,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
           for (int i = 0; i < NUM_BUTTONS; i++) {
             if (session_buttons & BUTTON_MASK(i)) {
               uint8_t ev_type = SMF_EVT_BUTTON_SINGLE_0 + (uint8_t)i;
-              LOG_INF("[Input] SINGLE BUTTON %d -> SMF (session=0x%x)", i,
+              LOG_DBG("[Input] SINGLE BUTTON %d -> SMF (session=0x%x)", i,
                       session_buttons);
               (void)smf_post_event(ev_type, (uint8_t)i, btn_evt.timestamp_ms);
               break;
@@ -170,7 +169,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
           }
         }
       } else if (held_zero_at_ms > 0 &&
-                 (k_uptime_get() - held_zero_at_ms) >= 300) {
+                 (k_uptime_get() - held_zero_at_ms) >= INPUT_SESSION_RECOVERY_MS) {
         /* Recovery path: held has been 0 for 300ms, but we still have session
          * state */
         should_reset_session = true;
@@ -183,7 +182,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
     if (should_reset_session) {
       if (session_buttons != 0 || session_combo_fired ||
           last_fired_combo_mask != 0) {
-        LOG_INF("[Input] SESSION END: will_post=%d, session=0x%x, "
+        LOG_DBG("[Input] SESSION END: will_post=%d, session=0x%x, "
                 "combo_fired=%d, last_fired=0x%x",
                 will_post_single, session_buttons, session_combo_fired,
                 last_fired_combo_mask);

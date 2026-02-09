@@ -44,11 +44,4 @@ int led_set(int led_idx, bool val) {
   return gpio_pin_set_dt(&leds[led_idx], val);
 }
 
-int led_toggle(int led_idx) {
-  if (led_idx < 0 || led_idx >= NUM_LEDS) {
-    return -EINVAL;
-  }
-  return gpio_pin_toggle_dt(&leds[led_idx]);
-}
-
-// LED command functions are now in led_manager.c
+/* LED timing and patterns are in led_manager (event-driven). */

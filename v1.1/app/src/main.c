@@ -1,11 +1,10 @@
 /*
- * LoRaWAN Application
- *
+ * FlexBox v1.2 — Main entry. Initializes hardware, starts LoRa + SMF + Input
+ * threads; main then sleeps. Orchestration is via SMF (system mode FSM).
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <stdbool.h>
-#include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
@@ -31,8 +30,6 @@
 #include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
-
-#define SEND_INTERVAL K_SECONDS(LORA_SEND_INTERVAL_SECONDS)
 
 int main(void) {
   int ret;
@@ -104,7 +101,8 @@ int main(void) {
   }
 
 #if EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT
-  /* One-shot maintenance: erase DevNonce and reinitialize with random value, then reboot. */
+  /* One-shot maintenance: erase DevNonce and reinitialize with random value,
+   * then reboot. */
   ret = devnonce_store_factory_reset();
   if (ret != 0) {
     LOG_ERR("DevNonce factory reset failed (%d) - rebooting", ret);
@@ -137,7 +135,8 @@ int main(void) {
     return 0;
   }
 
-  /* Start the LoRa thread (no blocking join; orchestration via SMF in Phase 2+) */
+  /* Start the LoRa thread (no blocking join; orchestration via SMF in Phase 2+)
+   */
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started");
 
@@ -145,71 +144,18 @@ int main(void) {
   k_thread_start(smf_thread_id);
   LOG_INF("SMF thread started");
 
-  if (DEMO_USE_REAL_BUTTON_UPLINK) {
-    LOG_INF("Demo mode: REAL BUTTON uplinks (Input -> SMF -> app logic)");
-
-    ret = buttons_init();
-    if (ret != 0) {
-      LOG_ERR("buttons_init failed: %d", ret);
-      return 0;
-    }
-
-    /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
-    k_thread_start(button_uplink_thread_id);
-    LOG_INF("Input thread started");
-
-    /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink */
-    LOG_INF("Main thread sleeping (orchestration via SMF)");
-    while (1) {
-      k_sleep(K_FOREVER);
-    }
+  ret = buttons_init();
+  if (ret != 0) {
+    LOG_ERR("buttons_init failed: %d", ret);
+    return 0;
   }
 
-  LOG_INF("Demo mode: PSEUDO simulation; sending every %d seconds",
-          LORA_SEND_INTERVAL_SECONDS);
+  /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
+  k_thread_start(button_uplink_thread_id);
+  LOG_INF("Input thread started");
 
-  /* Main loop - generate + queue payloads every interval.
-   * With tickless kernel enabled, k_sleep() allows CPU to enter deep sleep
-   * during the 15-minute interval, providing maximum power savings.
-   */
+  /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink */
   while (1) {
-    lora_uplink_msg_t msg = {0};
-    uint8_t fport = 0;
-    uint8_t payload[PAYLOAD_LEN_BYTES] = {0};
-
-    /* Generate next rotating payload */
-    ret = payload_gen_next(payload, &fport);
-    if (ret != 0) {
-      LOG_ERR("Failed to generate payload: %d", ret);
-      /* Deep sleep during interval - tickless kernel handles this */
-      k_sleep(SEND_INTERVAL);
-      continue;
-    }
-
-    /* Prepare uplink message */
-    msg.port = fport;
-    msg.confirmed = false;
-    msg.len = PAYLOAD_LEN_BYTES;
-    memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
-    payload_hex_dump(payload, PAYLOAD_LEN_BYTES);
-    payload_decode_log(payload, PAYLOAD_LEN_BYTES);
-
-    /* Queue the message for sending */
-    ret = lora_put_event(&msg, K_NO_WAIT);
-    if (ret == -ENOTCONN) {
-      LOG_WRN("Not joined to network yet, skipping message");
-    } else if (ret != 0) {
-      LOG_ERR("Failed to queue LoRa message: %d", ret);
-    } else {
-      LOG_INF("Message queued successfully");
-    }
-
-    /* Deep sleep during interval - tickless kernel allows CPU to enter
-     * System ON sleep mode, waking only when the timer expires.
-     * This provides maximum power savings between transmissions.
-     */
-    k_sleep(SEND_INTERVAL);
+    k_sleep(K_FOREVER);
   }
-
-  return 0;
 }

@@ -32,5 +32,3 @@ int devnonce_store_next(uint16_t *out_nonce);
 int devnonce_store_factory_reset(void);
 
 #endif /* DEVNONCE_STORE_H */
-
-

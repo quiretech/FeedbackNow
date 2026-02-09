@@ -38,5 +38,3 @@ int button_counter_store_get(uint8_t button_id, uint32_t *out_counter);
 int button_counter_store_factory_reset(void);
 
 #endif /* BUTTON_COUNTER_STORE_H */
-
-

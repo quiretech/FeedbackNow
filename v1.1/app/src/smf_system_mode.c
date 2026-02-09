@@ -141,7 +141,7 @@ static void smf_do_counter_sync(void) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
   }
 
-  LOG_INF("[SMF] JOINED -> counter_sync: sending Event 0x07 per button");
+  LOG_DBG("[SMF] JOINED -> counter_sync: sending Event 0x07 per button");
 
   for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
     uint8_t payload[PAYLOAD_LEN_BYTES];
@@ -164,7 +164,7 @@ static void smf_do_counter_sync(void) {
     k_msleep(COUNTER_SYNC_DELAY_MS);
   }
 
-  LOG_INF("[SMF] counter_sync done");
+  LOG_DBG("[SMF] counter_sync done");
 }
 
 static void smf_handle_downlink(uint8_t port, uint8_t len,
@@ -215,7 +215,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       continue;
     }
 
-    LOG_INF("[SMF] dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
+    LOG_DBG("[SMF] dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
             smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms,
             smf_mode_str(mode));
 
@@ -223,11 +223,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     case MODE_NORMAL:
       if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
           msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
-        LOG_INF("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
+        LOG_DBG("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
                 msg.button_id);
         app_logic_public_vote(msg.button_id);
       } else if (msg.ev_type == SMF_EVT_JOINED) {
-        LOG_INF("[SMF] state=Normal -> JOINED -> counter_sync");
+        LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
         smf_do_counter_sync();
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
@@ -237,7 +237,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         mode = MODE_STAFF;
         LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
-        (void)led_manager_set_led(0, true);
+        (void)led_manager_show(0, LED_PATTERN_ON);
         mode_timeout_ev = SMF_EVT_STAFF_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(STAFF_TIMEOUT_MS), K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO ||
@@ -252,33 +252,33 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       if (msg.ev_type == SMF_EVT_STAFF_TIMEOUT) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
-        (void)led_manager_set_led(0, false);
+        (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] Staff -> Normal (timeout)");
       } else if (msg.ev_type == SMF_EVT_COMBO_JOIN) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
-        (void)led_manager_set_led(0, false);
+        (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger LoRa join)");
         lora_request_join();
       } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         mode = MODE_REBOOT;
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
-        (void)led_manager_set_led(0, true);
+        (void)led_manager_show(0, LED_PATTERN_ON);
         k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
         mode = MODE_DEVICE_INFO;
         k_timer_stop(&mode_timeout_timer);
-        (void)led_manager_set_led(0, false);
+        (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] Staff -> DeviceInfo (30s timeout)");
         mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
                       K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
-        LOG_INF("[SMF] Staff mode: COMBO_STAFF re-entry ignored (already in "
+        LOG_DBG("[SMF] Staff mode: COMBO_STAFF re-entry ignored (already in "
                 "Staff)");
       } else {
-        LOG_INF("[SMF] Staff mode: event %s ignored",
+        LOG_DBG("[SMF] Staff mode: event %s ignored",
                 smf_ev_type_str(msg.ev_type));
       }
       break;

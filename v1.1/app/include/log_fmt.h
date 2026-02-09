@@ -30,5 +30,3 @@
   } while (0)
 
 #endif /* LOG_FMT_H */
-
-

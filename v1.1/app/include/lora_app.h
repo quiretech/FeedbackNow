@@ -61,13 +61,6 @@ static inline bool lora_is_joined(void) {
   return atomic_get(&lora_joined_flag) != 0;
 }
 
-/**
- * @brief Wait for LoRaWAN join to complete
- * @param timeout Maximum time to wait
- * @return 0 on success, -EAGAIN on timeout
- */
-int lora_wait_for_join(k_timeout_t timeout);
-
 /* Message queue API */
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout);
 int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout);

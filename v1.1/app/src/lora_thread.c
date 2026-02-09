@@ -138,7 +138,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
 
       /* Visual feedback: 5× 200ms blink (handled by LED UI thread) */
-      (void)led_manager_pattern_join_success(0);
+      (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
 
       /* Persist "has joined once" so next boot will auto-join */
       (void)join_state_store_set_has_joined_once();

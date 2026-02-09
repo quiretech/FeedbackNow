@@ -120,7 +120,7 @@
 
 ## Testing (combos, timeouts, Staff-first)
 
-**Build and flash:** From `app/`: `west build -b nrf52840dk/nrf52840`, `west flash --runner nrfjprog`. Open a serial console (e.g. 115200 8N1) to see logs.
+**Build and flash:** From `app/`: `west build -b nrf52840dk/nrf52840`, `west flash --runner nrfjprog`. Open a serial console (e.g. 115200 8N1) to see logs. With default log level (INFO) you see mode transitions (e.g. Normal → Staff); for full [Input]/[SMF] per-event traces set `CONFIG_LOG_DEFAULT_LEVEL_DBG` in prj.conf.
 
 **What the framework implements now:**
 
@@ -138,13 +138,19 @@
 
 ---
 
+## Production build
+
+Default build is production-oriented: real buttons only (no demo path), single boot path (init → LoRa + SMF + Input threads → main sleeps). Logging: INFO shows mode transitions and errors; per-event/combo details are at DBG. For full `[Input]` / `[SMF]` traces, set `CONFIG_LOG_DEFAULT_LEVEL_DBG` in `prj.conf`. Compile-time flags that affect behavior (e.g. `EEPROM_JOIN_STATE_CLEAR_ON_BOOT`, `EEPROM_*_FACTORY_RESET_ON_BOOT`, `SYS_CONFIG_EEPROM_PROBE_LOG`) are documented in `app/BUILD.md` and `include/sys_config.h`.
+
+---
+
 ## Suggested next steps (priority order)
 
 | Priority | Area | What to do | Why |
 |----------|------|------------|-----|
 | 1 | **Device Info content** | Implement what Device Info mode actually shows/does (e.g. LED pattern, or EPD "Device Info" screen when EPD exists) | Right now it’s a 30s timeout only; no user-visible behavior. |
 | 2 | ~~Deliberate join~~ | Done | First-boot join logic + EEPROM has_joined_once implemented. |
-| 3 | **Reduce/remove debug logs** | Turn down `[Input]` / `[SMF]` verbosity (e.g. LOG_DBG or compile-time switch) for production | Keeps serial quiet and saves a bit of runtime. |
+| 3 | ~~Reduce/remove debug logs~~ | Done | `[Input]` / `[SMF]` per-event logs moved to LOG_DBG; mode transitions stay at INFO. |
 | 4 | **Downlink 0x03 status request** | When SMF receives downlink 0x03, trigger a status/heartbeat-style uplink (Event 0x04 or similar) | Backend can poll device status. |
 | 5 | **Heartbeat / rejoin** | Add daily Event 0x04 heartbeat and (e.g. hourly) rejoin when disconnected | FRD compliance and network reliability. |
 | 6 | **NFC + ProcessAction** | Implement NFC Scan mode (PN5180, ISO15693), ProcessAction, and check-in/check-out/registered vote uplinks | Full staff workflow. |

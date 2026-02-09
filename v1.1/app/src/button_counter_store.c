@@ -64,7 +64,8 @@ static struct {
 
 static uint32_t record_crc32(const struct counter_record *rec) {
   /* CRC over everything except the crc32 field */
-  return crc32_ieee((const uint8_t *)rec, offsetof(struct counter_record, crc32));
+  return crc32_ieee((const uint8_t *)rec,
+                    offsetof(struct counter_record, crc32));
 }
 
 static int eeprom_read_rec(off_t off, struct counter_record *out) {
@@ -136,7 +137,8 @@ static int load_from_eeprom(void) {
   const bool v1 = record_is_valid(&r1);
 
   if ((blank0 && blank1) || (!v0 && !v1)) {
-    LOG_WRN("Counter store not initialized; starting fresh (blank=%d/%d valid=%d/%d)",
+    LOG_WRN("Counter store not initialized; starting fresh (blank=%d/%d "
+            "valid=%d/%d)",
             blank0, blank1, v0, v1);
     ctx.active_slot = 0;
     ctx.seq = 0;
@@ -151,11 +153,11 @@ static int load_from_eeprom(void) {
     if (ret != 0) {
       return ret;
     }
-    LOG_INF("Counter store initialized in EEPROM (slot=%u seq=%u)", ctx.active_slot,
-            ctx.seq);
-    LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u b6=%u",
+    LOG_INF("Counter store initialized in EEPROM (slot=%u seq=%u)",
+            ctx.active_slot, ctx.seq);
+    LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u",
             ctx.counters[0], ctx.counters[1], ctx.counters[2], ctx.counters[3],
-            ctx.counters[4], ctx.counters[5], ctx.counters[6]);
+            ctx.counters[4], ctx.counters[5]);
     return 0;
   }
 
@@ -184,9 +186,9 @@ static int load_from_eeprom(void) {
   }
 
   LOG_INF("Counter store loaded: slot=%u seq=%u", ctx.active_slot, ctx.seq);
-  LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u b6=%u",
+  LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u",
           ctx.counters[0], ctx.counters[1], ctx.counters[2], ctx.counters[3],
-          ctx.counters[4], ctx.counters[5], ctx.counters[6]);
+          ctx.counters[4], ctx.counters[5]);
   return 0;
 }
 
@@ -212,8 +214,8 @@ static void flush_work_handler(struct k_work *work) {
 
   k_mutex_lock(&ctx.lock, K_FOREVER);
   if (ret != 0) {
-    LOG_ERR("EEPROM counter flush failed (slot=%u off=0x%x): %d",
-            next_slot, (unsigned)off, ret);
+    LOG_ERR("EEPROM counter flush failed (slot=%u off=0x%x): %d", next_slot,
+            (unsigned)off, ret);
     /* Keep dirty=true so we retry on next schedule */
     k_mutex_unlock(&ctx.lock);
     return;
@@ -354,5 +356,3 @@ int button_counter_store_get(uint8_t button_id, uint32_t *out_counter) {
   k_mutex_unlock(&ctx.lock);
   return 0;
 }
-
-

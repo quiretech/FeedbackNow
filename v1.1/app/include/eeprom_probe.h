@@ -9,5 +9,3 @@
 void eeprom_probe_log(void);
 
 #endif /* EEPROM_PROBE_H */
-
-

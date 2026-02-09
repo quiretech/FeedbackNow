@@ -1,13 +1,10 @@
 /*
  * External EEPROM bring-up probe (AT24 compatible).
- *
- * This is only a connectivity/readiness check so we can confidently move on to
- * persistent counter storage later.
+ * Connectivity/readiness check only. Verbose hex dump when SYS_CONFIG_EEPROM_PROBE_LOG=1.
  */
 
 #include "eeprom_probe.h"
-
-#include "log_fmt.h"
+#include "sys_config.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/eeprom.h>
@@ -39,9 +36,12 @@ void eeprom_probe_log(void) {
     return;
   }
 
-  LOG_SECTION_INF("EEPROM PROBE OK");
-  LOG_INF("Read first %u bytes from EEPROM @0x56:", (unsigned)sizeof(buf));
+#if SYS_CONFIG_EEPROM_PROBE_LOG
+  LOG_INF("EEPROM probe OK (first %u bytes):", (unsigned)sizeof(buf));
   LOG_HEXDUMP_INF(buf, sizeof(buf), "EEPROM[0x0000..]");
+#else
+  LOG_INF("EEPROM probe OK");
+#endif
 }
 
 

@@ -30,20 +30,11 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize generator state (counters, epoch seed).
+ * @brief Initialize payload generator (mutex, etc.).
  */
 void payload_gen_init(void);
 
-/**
- * @brief Build next payload in rotating event order.
- *
- * @param out_buf   Buffer of at least PAYLOAD_LEN_BYTES.
- * @param out_fport Returns selected FPort.
- * @return 0 on success, -EINVAL on invalid arguments.
- */
-int payload_gen_next(uint8_t *out_buf, uint8_t *out_fport);
-
-/* Debug helpers */
+/* Debug helpers (optional, for bring-up or tests) */
 void payload_hex_dump(const uint8_t *buf, size_t len);
 void payload_decode_log(const uint8_t *buf, size_t len);
 
@@ -57,7 +48,7 @@ void payload_decode_log(const uint8_t *buf, size_t len);
  *  - [6..8] per-button counter (24-bit, big-endian)
  *  - [9..10] reserved
  *
- * @param button_id    Button ID to encode (0..6 expected by backend).
+ * @param button_id    Button ID to encode (0..5 per FRD).
  * @param epoch_s      Timestamp to encode (epoch seconds).
  * @param out_buf      Output buffer (>= PAYLOAD_LEN_BYTES).
  * @param out_counter  Optional; receives new counter value.
@@ -74,11 +65,7 @@ int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
 int payload_gen_build_counter_sync(uint8_t button_id, uint32_t epoch_s,
                                    uint8_t *out_buf);
 
-/* To extend with new event types:
- * 1) Add a new enum payload_event_type value and FPort define.
- * 2) Implement a build_* helper that fills bytes 5..10.
- * 3) Add a case in payload_gen_next to call your builder and set the FPort.
- */
+/* To extend: add enum payload_event_type, FPort, and a build_* function. */
 
 #ifdef __cplusplus
 }

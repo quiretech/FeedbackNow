@@ -35,21 +35,6 @@ static uint8_t lora_battery_level_cb(void) {
   return (uint8_t)(1 + (r % 254U)); /* 1..254 */
 }
 
-int lora_wait_for_join(k_timeout_t timeout) {
-  /* If already joined, return immediately */
-  if (lora_is_joined()) {
-    return 0;
-  }
-
-  /* Wait for join semaphore */
-  int ret = k_sem_take(&lora_join_sem, timeout);
-  if (ret == 0) {
-    /* Give back the semaphore so other waiters can also proceed */
-    k_sem_give(&lora_join_sem);
-  }
-  return ret;
-}
-
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (msg == NULL) {
     LOG_ERR("lora_get_event: NULL message pointer");
