@@ -1,0 +1,64 @@
+/ {
+    enables {
+        compatible = "gpio-leds";
+
+        en3v3: en3v3 {
+            gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V3";
+        };
+
+        en1v8: en1v8 {
+            gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            label = "EN 1V8";
+        };
+
+        en3v3a: en3v3a {
+            gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V3A";
+        };
+
+        en3v6: en3v6 {
+            gpios = <&gpio1 2 GPIO_ACTIVE_HIGH>;
+            label = "EN 3V6";
+        };
+    };
+
+    aliases {
+        sw0 = &button0;
+        sw1 = &button1;
+        sw2 = &button2;
+        sw3 = &button3;
+        sw4 = &button4;
+        sw5 = &button5;
+        led0 = &led1;
+    };
+
+    buttons {
+        compatible = "gpio-keys";
+
+        button4: button_4 {
+            label = "Button 4";
+            gpios = <&gpio1 1 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+        button5: button_5 {
+            label = "Button 5";
+            gpios = <&gpio0 28 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        };
+
+    };
+
+leds {
+		compatible = "gpio-leds";
+
+		led1: led_1 {
+			gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+			label = "LED1 Status";
+		};
+	};
+};
+
+// &uart0 {	
+// 	status="enabled";
+// };	
+
