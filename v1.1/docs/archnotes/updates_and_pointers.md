@@ -41,4 +41,3 @@ will be changed to:
 
 
 periodically we also need to send LinkCheckReq to verify the network resiliency, if it doesnt get answer then we know there's an issue and we initate the lora rejoin loop/thread. 
-

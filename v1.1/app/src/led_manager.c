@@ -78,7 +78,6 @@ static void run_timeout(uint8_t id, int64_t now_ms) {
   }
   switch (led_state[id].pattern) {
   case LED_PATTERN_BUTTON_ACCEPTED:
-    /* Step 1 = solid on started; after timeout turn off */
     if (led_state[id].step != 0) {
       led_apply(id, false);
       led_state[id].pattern = LED_PATTERN_OFF;

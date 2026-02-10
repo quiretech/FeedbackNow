@@ -33,7 +33,11 @@ LOG_MODULE_REGISTER(time_sync, CONFIG_LOG_DEFAULT_LEVEL);
 #define TIME_SYNC_MAX_POLLS 15 /* ~30 seconds */
 #endif
 
-static struct k_work_delayable time_sync_work;
+static void time_sync_work_handler(struct k_work *work);
+
+/* Static definition so handler is never re-inited; avoids use-after-init races. */
+K_WORK_DELAYABLE_DEFINE(time_sync_work, time_sync_work_handler);
+
 static atomic_t time_sync_inflight = ATOMIC_INIT(0);
 static int time_sync_poll_count;
 static atomic_t time_sync_last_result = ATOMIC_INIT(-EAGAIN);
@@ -124,7 +128,6 @@ void time_sync_request_and_update_rtc(void) {
   }
 
   time_sync_poll_count = 0;
-  k_work_init_delayable(&time_sync_work, time_sync_work_handler);
   atomic_set(&time_sync_last_result, -EINPROGRESS);
   k_sem_reset(&time_sync_done_sem);
 

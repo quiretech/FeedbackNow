@@ -1,6 +1,7 @@
 /*
  * External EEPROM bring-up probe (AT24 compatible).
- * Connectivity/readiness check only. Verbose hex dump when SYS_CONFIG_EEPROM_PROBE_LOG=1.
+ * Connectivity/readiness check only. Verbose hex dump when
+ * SYS_CONFIG_EEPROM_PROBE_LOG=1.
  */
 
 #include "eeprom_probe.h"
@@ -43,5 +44,3 @@ void eeprom_probe_log(void) {
   LOG_INF("EEPROM probe OK");
 #endif
 }
-
-

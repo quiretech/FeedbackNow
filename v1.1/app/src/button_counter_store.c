@@ -8,6 +8,7 @@
  */
 
 #include "button_counter_store.h"
+#include "rail_manager.h"
 
 #include "log_fmt.h"
 #include "sys_config.h"
@@ -210,7 +211,9 @@ static void flush_work_handler(struct k_work *work) {
 
   k_mutex_unlock(&ctx.lock);
 
+  rail_manager_request_3v3a();
   int ret = eeprom_write_rec(off, &rec);
+  rail_manager_release_3v3a();
 
   k_mutex_lock(&ctx.lock, K_FOREVER);
   if (ret != 0) {

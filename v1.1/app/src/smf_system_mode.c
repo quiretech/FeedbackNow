@@ -3,6 +3,11 @@
  * States: Normal, Staff, NFCScan, DeviceInfo, Reboot, ProcessAction.
  * Implements: timeouts (Staff 10s, DeviceInfo 30s), Staff-first for
  * Join/Reboot.
+ *
+ * Power gating: SMF owns 3.3A (peripheral rail) for all flows it dispatches.
+ * request_3v3a() before LED/EEPROM/RTC work, release_3v3a() when leaving the
+ * activity or mode. LoRa thread and async EEPROM flush keep their own
+ * request/release where they are not driven by SMF.
  */
 #include "smf_system_mode.h"
 #include "app_logic.h"
@@ -10,6 +15,7 @@
 #include "led_manager.h"
 #include "lora_app.h"
 #include "payload_gen.h"
+#include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
 
@@ -188,11 +194,13 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
     break;
   case DL_CMD_RESET_COUNTERS:
     LOG_INF("[SMF] cmd 0x04 reset counters");
+    rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
       LOG_INF("[SMF] counters reset done");
     } else {
       LOG_ERR("[SMF] counters reset failed");
     }
+    rail_manager_release_3v3a();
     break;
   default:
     LOG_WRN("[SMF] unknown downlink cmd 0x%02X", cmd);
@@ -225,10 +233,14 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
         LOG_DBG("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
                 msg.button_id);
+        rail_manager_request_3v3a();
         app_logic_public_vote(msg.button_id);
+        rail_manager_release_3v3a();
       } else if (msg.ev_type == SMF_EVT_JOINED) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
+        rail_manager_request_3v3a();
         smf_do_counter_sync();
+        rail_manager_release_3v3a();
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
         smf_handle_downlink(msg.payload.downlink.port, msg.payload.downlink.len,
@@ -237,6 +249,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         mode = MODE_STAFF;
         LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
+        rail_manager_request_3v3a();
         (void)led_manager_show(0, LED_PATTERN_ON);
         mode_timeout_ev = SMF_EVT_STAFF_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(STAFF_TIMEOUT_MS), K_NO_WAIT);
@@ -264,7 +277,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_REBOOT;
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
-        (void)led_manager_show(0, LED_PATTERN_ON);
+        (void)led_manager_show(0, LED_PATTERN_POWER_ON);
         k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
         mode = MODE_DEVICE_INFO;

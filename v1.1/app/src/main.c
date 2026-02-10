@@ -22,6 +22,7 @@
 #include "lora_app.h"
 #include "payload_gen.h"
 #include "power_ctrl.h"
+#include "rail_manager.h"
 #include "rtc.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
@@ -153,6 +154,10 @@ int main(void) {
   /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
   k_thread_start(button_uplink_thread_id);
   LOG_INF("Input thread started");
+
+  /* Enter idle: turn off 3.3V, 3.3A, 3.6V. 1.8V stays on for LoRa + buttons. */
+  rail_manager_enter_idle();
+  LOG_INF("Rails released (idle); 3.3V/3.3A/3.6V off until requested");
 
   /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink */
   while (1) {

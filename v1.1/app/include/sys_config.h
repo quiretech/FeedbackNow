@@ -120,4 +120,11 @@
 #define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 40
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18
 
+/* =============================================================================
+ * Power gating (rail manager)
+ * =============================================================================
+ */
+/** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can run. */
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 6000
+
 #endif /* SYS_CONFIG_H */

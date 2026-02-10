@@ -17,6 +17,7 @@ target_sources(app PRIVATE
   src/join_state_store.c
   src/payload_gen.c
   src/power_ctrl.c
+  src/rail_manager.c
   src/buttons.c
   src/button_thread.c
   src/leds.c
