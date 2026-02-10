@@ -15,6 +15,7 @@
 #include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
+#include "housekeeping.h"
 #include "devnonce_store.h"
 #include "eeprom_probe.h"
 #include "led_manager.h"
@@ -154,6 +155,11 @@ int main(void) {
   /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
   k_thread_start(button_uplink_thread_id);
   LOG_INF("Input thread started");
+
+  /* Housekeeping: periodic RTC sync (and later link check, battery + heartbeat) */
+  (void)housekeeping_init();
+  k_thread_start(housekeeping_thread_id);
+  LOG_INF("Housekeeping thread started");
 
   /* Enter idle: turn off 3.3V, 3.3A, 3.6V. 1.8V stays on for LoRa + buttons. */
   rail_manager_enter_idle();

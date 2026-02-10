@@ -30,9 +30,15 @@ enum smf_ev_type {
   SMF_EVT_DEVICE_INFO_TIMEOUT,
   /* LoRa / NFC (Phase 2+) */
   SMF_EVT_JOINED,
+  SMF_EVT_JOIN_STARTED,   /* LoRa thread started join (orchestration visibility)
+                           */
+  SMF_EVT_TIME_SYNC_DONE, /* LoRa thread finished time sync (button_id: 0=ok,
+                             1=fail) */
   SMF_EVT_DISCONNECTED,
   SMF_EVT_DOWNLINK,
   SMF_EVT_NFC_RESULT,
+  SMF_EVT_HOUSEKEEPING_TICK, /* Periodic housekeeping (time sync, later link
+                                check, battery) */
   SMF_EVT_COUNT
 };
 

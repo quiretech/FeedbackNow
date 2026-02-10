@@ -19,12 +19,13 @@
 #include "rtc.h"
 #include "sys_config.h"
 
+#include <stdbool.h>
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/reboot.h>
 
-LOG_MODULE_REGISTER(smf, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(smf, CONFIG_LOG_DEFAULT_LEVEL);
 
 enum system_mode {
   MODE_NORMAL,
@@ -59,6 +60,10 @@ static struct k_mutex smf_dl_mutex;
 
 /* Mode timeout: timer posts this event so SMF returns to Normal */
 static volatile uint8_t mode_timeout_ev;
+
+/* Set when SMF requested time sync from housekeeping; release 3.3A on
+ * TIME_SYNC_DONE */
+static bool housekeeping_holding_3v3a;
 
 static void mode_timeout_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
@@ -109,12 +114,18 @@ static const char *smf_ev_type_str(uint8_t ev_type) {
     return "DEVICE_INFO_TIMEOUT";
   case SMF_EVT_JOINED:
     return "JOINED";
+  case SMF_EVT_JOIN_STARTED:
+    return "JOIN_STARTED";
+  case SMF_EVT_TIME_SYNC_DONE:
+    return "TIME_SYNC_DONE";
   case SMF_EVT_DISCONNECTED:
     return "DISCONNECTED";
   case SMF_EVT_DOWNLINK:
     return "DOWNLINK";
   case SMF_EVT_NFC_RESULT:
     return "NFC_RESULT";
+  case SMF_EVT_HOUSEKEEPING_TICK:
+    return "HOUSEKEEPING_TICK";
   default:
     return "?";
   }
@@ -241,6 +252,23 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_request_3v3a();
         smf_do_counter_sync();
         rail_manager_release_3v3a();
+      } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
+        LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
+      } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
+        LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));
+        if (housekeeping_holding_3v3a) {
+          housekeeping_holding_3v3a = false;
+          rail_manager_release_3v3a();
+        }
+      } else if (msg.ev_type == SMF_EVT_HOUSEKEEPING_TICK) {
+        /* Housekeeping runs under SMF rail arbitration; hold 3.3A until
+         * TIME_SYNC_DONE. Then link check (MAC command). */
+        if (lora_is_joined()) {
+          housekeeping_holding_3v3a = true;
+          rail_manager_request_3v3a();
+          lora_request_time_sync();
+          lora_request_link_check(true); /* force = send empty frame now */
+        }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
         smf_handle_downlink(msg.payload.downlink.port, msg.payload.downlink.len,

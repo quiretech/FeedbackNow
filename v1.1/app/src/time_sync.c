@@ -35,7 +35,8 @@ LOG_MODULE_REGISTER(time_sync, CONFIG_LOG_DEFAULT_LEVEL);
 
 static void time_sync_work_handler(struct k_work *work);
 
-/* Static definition so handler is never re-inited; avoids use-after-init races. */
+/* Static definition so handler is never re-inited; avoids use-after-init races.
+ */
 K_WORK_DELAYABLE_DEFINE(time_sync_work, time_sync_work_handler);
 
 static atomic_t time_sync_inflight = ATOMIC_INIT(0);
@@ -75,7 +76,8 @@ static void time_sync_work_handler(struct k_work *work) {
       LOG_ERR("Time conversion failed (gps=%u): %d", gps_time, ret);
     } else {
       LOG_INF("Converting GPS->UTC->Unix:");
-      LOG_INF("  - GPS epoch->Unix epoch offset: %u s", GPS_TO_UNIX_EPOCH_OFFSET);
+      LOG_INF("  - GPS epoch->Unix epoch offset: %u s",
+              GPS_TO_UNIX_EPOCH_OFFSET);
       LOG_INF("  - GPS-UTC leap seconds: %d", LORAWAN_GPS_UTC_LEAP_SECONDS);
       LOG_INF("  - Resulting Unix epoch seconds: %u", epoch_s);
 
@@ -90,8 +92,7 @@ static void time_sync_work_handler(struct k_work *work) {
         uint32_t verify_epoch_s = 0;
         int vret = rtc_get_epoch_seconds(&verify_epoch_s);
         if (vret == 0) {
-          LOG_INF("RTC readback epoch=%u (delta=%d s)",
-                  verify_epoch_s,
+          LOG_INF("RTC readback epoch=%u (delta=%d s)", verify_epoch_s,
                   (int32_t)verify_epoch_s - (int32_t)epoch_s);
         } else {
           LOG_WRN("RTC readback failed: %d", vret);
@@ -172,5 +173,3 @@ int time_sync_wait(k_timeout_t timeout) {
   }
   return (int)atomic_get(&time_sync_last_result);
 }
-
-

@@ -127,4 +127,15 @@
 /** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can run. */
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS 6000
 
+/* =============================================================================
+ * Housekeeping / Heartbeat (FRD 4.9)
+ * =============================================================================
+ * Periodic worker runs RTC sync (DeviceTimeReq), and later: link check, battery
+ * sample + heartbeat uplink. Interval is configurable for test (short) or
+ * production (e.g. daily with jitter).
+ */
+/** Housekeeping run interval in seconds. Short for testing time sync; use
+ * 86400 for daily heartbeat (FRD); add DevEUI jitter in future. */
+#define HOUSEKEEPING_INTERVAL_SECONDS 60
+
 #endif /* SYS_CONFIG_H */

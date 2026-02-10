@@ -14,15 +14,44 @@ LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 // Ensure proper alignment for the message queue
 K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE, 4);
 
+/* Command queue: SMF (or bootstrap) posts JOIN/TIME_SYNC; LoRa thread consumes
+ * only. */
+#define LORA_CMDQ_SIZE 4
+K_MSGQ_DEFINE(lora_cmdq, sizeof(uint8_t), LORA_CMDQ_SIZE, 4);
+
 /* Join status tracking */
 atomic_t lora_joined_flag = ATOMIC_INIT(0);
 K_SEM_DEFINE(lora_join_sem, 0, 1);
 
-/* First-boot: LoRa thread blocks on this until user triggers join (Staff+0+1+2) */
-K_SEM_DEFINE(lora_join_trigger_sem, 0, 1);
+int lora_cmd_put(uint8_t cmd) {
+  if (cmd >= LORA_CMD_COUNT) {
+    return -EINVAL;
+  }
+  int ret = k_msgq_put(&lora_cmdq, &cmd, K_NO_WAIT);
+  if (ret != 0) {
+    LOG_WRN("lora_cmd_put: queue full, cmd=%u", cmd);
+  }
+  return ret;
+}
 
-void lora_request_join(void) {
-  k_sem_give(&lora_join_trigger_sem);
+void lora_request_join(void) { (void)lora_cmd_put(LORA_CMD_JOIN); }
+
+void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
+
+void lora_request_link_check(bool force_request) {
+  (void)lora_cmd_put(force_request ? LORA_CMD_LINK_CHECK_FORCE
+                                   : LORA_CMD_LINK_CHECK);
+}
+
+bool lora_get_cmd(uint8_t *cmd_out, k_timeout_t timeout) {
+  if (cmd_out == NULL) {
+    return false;
+  }
+  int ret = k_msgq_get(&lora_cmdq, cmd_out, timeout);
+  if (ret != 0) {
+    return false;
+  }
+  return true;
 }
 
 /* Battery level callback for LoRaWAN MAC commands (0=external power, 1..254

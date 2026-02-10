@@ -28,4 +28,5 @@ target_sources(app PRIVATE
   src/rtc.c
   src/smf_system_mode.c
   src/app_logic.c
+  src/housekeeping.c
 )
