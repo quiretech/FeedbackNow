@@ -10,24 +10,25 @@
 
 /* Event types (FRD 4.5) */
 enum payload_event_type {
-  EVT_BUTTON = 0x00,
-
-  EVT_NFC_IN = 0x01, // ts + event_id + 4 byte UID
-  EVT_NFC_OUT = 0x02,
+  /* User actions */
+  EVT_BUTTON = 0x00,   // ts + button_id(1) + counter(3)
+  EVT_NFC_IN = 0x01,   // ts + uid(4)
+  EVT_NFC_OUT = 0x02,  // ts + uid(4)
   EVT_NFC_VOTE = 0x03, // ts + button_id(2) + card_data(4)
 
-  EVT_HEARTBEAT = 0x10,
-  EVT_LOW_BATTERY = 0x11,
-  EVT_COUNTER_SYNC = 0x12,
+  /* System / housekeeping */
+  EVT_BATTERY_STATUS = 0x10, // ts + battery_mv(2) + percent(1) + flags(1)
+  EVT_LOW_BATTERY = 0x11,    // ts + battery_mv(2) [+ optional threshold]
+  EVT_COUNTER_SYNC = 0x12,   // ts + button_id(1) + counter(3)
+
+  /* Reserved */
   EVT_FUTURE = 0xFF,
 };
-
-/* LoRaWAN FPorts */
+/* LoRaWAN FPorts (semantic routing) */
 #define FPORT_BUTTON 10
 #define FPORT_NFC 11
-
-#define FPORT_HEARTBEAT 20
-#define FPORT_COUNTER_SYNC 30
+#define FPORT_HOUSEKEEPING 20
+#define FPORT_ALARMS 30
 #define FPORT_FUTURE 13
 
 #ifdef __cplusplus

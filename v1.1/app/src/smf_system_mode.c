@@ -168,7 +168,7 @@ static void smf_do_counter_sync(void) {
       continue;
     }
     lora_uplink_msg_t msg = {0};
-    msg.port = FPORT_COUNTER_SYNC;
+    msg.port = FPORT_HOUSEKEEPING;
     msg.confirmed = true; // CONFIRMED UP on boot
     msg.len = PAYLOAD_LEN_BYTES;
     memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
