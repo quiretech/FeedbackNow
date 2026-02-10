@@ -1,6 +1,6 @@
 # FlexBox v1.2 — Implementation Status (vs FRD & Architecture)
 
-**As of:** Post Phase 1 + Phase 2 + combos (SMF, LoRa→SMF, counter-sync, downlink, combo detection, Staff/DeviceInfo/Reboot with timeouts and Staff-first).
+**As of:** Post Phase 1 + Phase 2 + combos + **LoRa command interface, housekeeping/heartbeat, battery ADC, link check**.
 
 ---
 
@@ -35,7 +35,8 @@
 | Event 0x00 Button Press (timestamp, button ID, counter) | Done | `payload_gen_build_button`, FPORT_BUTTON. |
 | Event 0x07 Counter Sync on rejoin | Done | On `SMF_EVT_JOINED`, SMF runs `smf_do_counter_sync()` (Event 0x07 per button, rate-limited). |
 | Downlink: 0x01 EPD update, 0x02 EPD refresh, 0x03 status request, 0x04 reset counters | Done (dispatch only) | `lora_app_dl_callback` → `smf_post_downlink` → SMF `smf_handle_downlink`. 0x01/0x02/0x03 logged or no-op; **0x04** calls `button_counter_store_factory_reset()`. |
-| Heartbeat 0x04, Low Battery 0x05, Events 0x01/0x02/0x03 (NFC) | Not done | Payload event types defined; no heartbeat/rejoin timers, no NFC. |
+| Heartbeat / battery status (Event 0x10), LinkCheckReq, time sync in housekeeping | Done | Housekeeping thread posts SMF_EVT_HOUSEKEEPING_TICK; SMF runs battery ADC, EVT_BATTERY_STATUS uplink (FPORT 20), time sync, link check. Interval configurable (HOUSEKEEPING_INTERVAL_SECONDS). |
+| Low Battery 0x11 (Event 0x05 in FRD), Events 0x01/0x02/0x03 (NFC) | Not done | EVT_LOW_BATTERY defined; no threshold check or uplink. No NFC. |
 
 ### FRD 4.6 Storage
 
@@ -61,8 +62,11 @@
 | **App logic invoked from SMF** | Done | In Normal, single-button event → `app_logic_public_vote()`; JOINED → counter-sync; DOWNLINK → command dispatch. |
 | **LoRa posts joined / downlink to SMF** | Done | `lora_thread`: `smf_post_event(SMF_EVT_JOINED, …)`. `lora_app_dl_callback`: `smf_post_downlink(port, len, data)`. |
 | **Counters & storage** | Done | Single owner; app logic calls increment/get; EEPROM, CRC. |
-| **RTC / time** | Done | `rtc.c`, `time_sync.c`; timestamps in payloads; time sync after join. |
+| **RTC / time** | Done | `rtc.c`, `time_sync.c`; timestamps in payloads; time sync after join and on housekeeping. |
 | **LED** | Done (subset) | `led_manager`: set_led, blink_once; pattern timing in LED layer. |
+| **LoRa command interface** | Done | SMF requests join, time sync, link check via `lora_request_*`; LoRa thread owns all `lorawan_*`; command queue (`lora_cmdq`) + events JOIN_STARTED, TIME_SYNC_DONE. |
+| **Housekeeping / heartbeat** | Done | Dedicated thread posts SMF_EVT_HOUSEKEEPING_TICK; SMF holds 3.3A, runs battery ADC → EVT_BATTERY_STATUS (0x10) uplink, time sync, LinkCheckReq. |
+| **Battery ADC** | Done | `battery_adc.c` (refactored from adc.c): AIN3, init + `battery_adc_read_mv()`; used in housekeeping for heartbeat payload. |
 
 ---
 
@@ -84,10 +88,10 @@
 
 ### LoRa / system behavior
 
-- **Heartbeat:** Daily Event 0x04, DevEUI jitter, battery %, RTC sync.
-- **Rejoin:** Hourly when disconnected; post “disconnected” to SMF (optional); rejoin attempts.
-- **Low battery:** ADC, threshold, Event 0x05 uplink.
-- **Status request (0x03):** Trigger status/heartbeat uplink (currently only logged).
+- **Heartbeat timing:** Fixed HOUSEKEEPING_INTERVAL_SECONDS; FRD daily + DevEUI jitter not yet.
+- **Rejoin:** Hourly when disconnected not implemented; post “disconnected” to SMF (optional); rejoin attempts.
+- **Low battery:** ADC done; no threshold or EVT_LOW_BATTERY (0x11) uplink yet.
+- **Status request (0x03):** Downlink 0x03 logged only; does not trigger status uplink yet.
 
 ### Power / boot
 
@@ -111,9 +115,9 @@
 | SMF + single queue + LoRa→SMF | Yes | — |
 | Combo detection + Staff/DeviceInfo/Reboot (timeouts, Staff-first) | Yes | NFC Scan, ProcessAction |
 | has_joined_once / deliberate first join | Yes | join_state_store in EEPROM; first boot waits for Staff+0+1+2, then LoRa join; on success flag persisted for auto-join on next boot. |
-| Heartbeat / rejoin timers | — | Yes |
+| Heartbeat (battery status 0x10, time sync, link check) | Yes (configurable interval) | Daily + DevEUI jitter, rejoin when disconnected |
 | EPD (Variant A) | — | Yes |
-| Low battery Event 0x05 | — | Yes |
+| Low battery Event 0x11 | — | Yes |
 | Full LED table (Staff, NFC, etc.) | Partial | Yes |
 
 ---

@@ -11,9 +11,11 @@
  */
 #include "smf_system_mode.h"
 #include "app_logic.h"
+#include "battery_adc.h"
 #include "button_counter_store.h"
 #include "led_manager.h"
 #include "lora_app.h"
+#include "nfc_service.h"
 #include "payload_gen.h"
 #include "rail_manager.h"
 #include "rtc.h"
@@ -45,6 +47,11 @@ K_MSGQ_DEFINE(smf_msgq, sizeof(smf_msg_t), SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN);
 /* Downlink payload copy (written by smf_post_downlink, read by SMF handler) */
 static uint8_t smf_dl_payload[LORA_MAX_PAYLOAD_SIZE];
 static struct k_mutex smf_dl_mutex;
+
+/* NFC result: 4-byte card data (written by smf_post_nfc_result, read by SMF) */
+#define SMF_NFC_DATA_SIZE 4
+static uint8_t smf_nfc_data[SMF_NFC_DATA_SIZE];
+static struct k_mutex smf_nfc_mutex;
 
 #define SMF_THREAD_STACK_SIZE 1536
 #define SMF_THREAD_PRIORITY 6
@@ -262,12 +269,60 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         }
       } else if (msg.ev_type == SMF_EVT_HOUSEKEEPING_TICK) {
         /* Housekeeping runs under SMF rail arbitration; hold 3.3A until
-         * TIME_SYNC_DONE. Then link check (MAC command). */
+         * TIME_SYNC_DONE. Within this window:
+         *  - sample battery via ADC and enqueue EVT_BATTERY_STATUS (0x10)
+         *  - request time sync (DeviceTimeReq/Ans)
+         *  - request LinkCheckReq MAC command
+         *
+         * LoRa thread and time_sync module own lorawan_* and RTC writes; SMF
+         * just sequences requests and owns the 3.3A rail.
+         */
         if (lora_is_joined()) {
           housekeeping_holding_3v3a = true;
           rail_manager_request_3v3a();
+
+          k_msleep(500);
+          /* 3) Link check MAC command (empty frame now). */
+          lora_request_link_check(true);
+
+          /* 2) Time sync (LoRa thread will post TIME_SYNC_DONE). */
           lora_request_time_sync();
-          lora_request_link_check(true); /* force = send empty frame now */
+
+          /* 1) Battery status heartbeat uplink (EVT_BATTERY_STATUS). */
+          int32_t battery_mv = 0;
+          if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
+            uint32_t epoch_s = 0;
+            (void)rtc_get_epoch_seconds(&epoch_s);
+            if (epoch_s == 0) {
+              epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+            }
+
+            uint8_t payload[PAYLOAD_LEN_BYTES];
+            int pret = payload_gen_build_battery_status(
+                epoch_s, (uint16_t)battery_mv, 0 /* percent */, 0 /* flags */,
+                payload);
+            if (pret == 0) {
+              lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
+              msg_hk.port = FPORT_HOUSEKEEPING;
+              msg_hk.confirmed =
+                  false; /* heartbeat battery status can be unconfirmed */
+              msg_hk.len = PAYLOAD_LEN_BYTES;
+              memcpy(msg_hk.data, payload, PAYLOAD_LEN_BYTES);
+              int qret = lora_put_event(&msg_hk, K_MSEC(500));
+              if (qret == 0) {
+                LOG_INF("[SMF] housekeeping: queued battery status %d mV",
+                        battery_mv);
+              } else {
+                LOG_WRN("[SMF] housekeeping: lora_put_event battery failed: %d",
+                        qret);
+              }
+            } else {
+              LOG_WRN("[SMF] housekeeping: build battery status failed: %d",
+                      pret);
+            }
+          } else {
+            LOG_WRN("[SMF] housekeeping: ADC battery read failed");
+          }
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
@@ -318,6 +373,27 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         LOG_DBG("[SMF] Staff mode: COMBO_STAFF re-entry ignored (already in "
                 "Staff)");
+      } else if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
+                 msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
+        uint8_t bid = (uint8_t)(msg.ev_type - SMF_EVT_BUTTON_SINGLE_0);
+        uint8_t intent;
+        if (bid == 0) {
+          intent = NFC_INTENT_CHECK_IN;
+        } else if (bid == 1) {
+          intent = NFC_INTENT_CHECK_OUT;
+        } else {
+          intent = NFC_INTENT_VOTE;
+        }
+        mode = MODE_NFC_SCAN;
+        k_timer_stop(&mode_timeout_timer);
+        rail_manager_request_3v3a();
+        rail_manager_request_3v6();
+        (void)led_manager_show(0, LED_PATTERN_NFC_WAITING);
+        mode_timeout_ev = SMF_EVT_NFC_TIMEOUT;
+        k_timer_start(&mode_timeout_timer, K_MSEC(NFC_SCAN_TIMEOUT_MS),
+                      K_NO_WAIT);
+        nfc_scan_start(intent, bid);
+        LOG_INF("[SMF] Staff -> NFCScan (button %u, intent %u)", bid, intent);
       } else {
         LOG_DBG("[SMF] Staff mode: event %s ignored",
                 smf_ev_type_str(msg.ev_type));
@@ -337,6 +413,57 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       break;
 
     case MODE_NFC_SCAN:
+      if (msg.ev_type == SMF_EVT_NFC_TIMEOUT) {
+        nfc_scan_cancel();
+        LOG_DBG("[SMF] NFC scan timeout (worker will post result)");
+      } else if (msg.ev_type == SMF_EVT_NFC_RESULT) {
+        k_timer_stop(&mode_timeout_timer);
+        rail_manager_release_3v6();
+        rail_manager_release_3v3a();
+
+        uint8_t ok = msg.payload.nfc.ok;
+        uint8_t intent = msg.payload.nfc.intent;
+        uint8_t bid = msg.payload.nfc.button_id;
+
+        if (ok) {
+          uint32_t epoch_s = 0;
+          (void)rtc_get_epoch_seconds(&epoch_s);
+          if (epoch_s == 0) {
+            epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+          }
+          uint8_t payload[PAYLOAD_LEN_BYTES];
+          uint8_t data_4[SMF_NFC_DATA_SIZE];
+          k_mutex_lock(&smf_nfc_mutex, K_FOREVER);
+          memcpy(data_4, smf_nfc_data, SMF_NFC_DATA_SIZE);
+          k_mutex_unlock(&smf_nfc_mutex);
+
+          int pret = -EINVAL;
+          if (intent == NFC_INTENT_CHECK_IN) {
+            pret = payload_gen_build_nfc_in(epoch_s, data_4, payload);
+          } else if (intent == NFC_INTENT_CHECK_OUT) {
+            pret = payload_gen_build_nfc_out(epoch_s, data_4, payload);
+          } else {
+            pret = payload_gen_build_nfc_vote(epoch_s, bid, data_4, payload);
+          }
+          if (pret == 0) {
+            lora_uplink_msg_t uplink = {0};
+            uplink.port = FPORT_NFC;
+            uplink.confirmed = false;
+            uplink.len = PAYLOAD_LEN_BYTES;
+            memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
+            if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
+              LOG_INF("[SMF] NFC uplink queued (intent=%u)", intent);
+            }
+          }
+          (void)led_manager_show(0, LED_PATTERN_CONFIRM);
+        } else {
+          (void)led_manager_show(0, LED_PATTERN_NFC_FAIL);
+        }
+        mode = MODE_NORMAL;
+        LOG_INF("[SMF] NFCScan -> Normal (ok=%u)", ok);
+      }
+      break;
+
     case MODE_PROCESS_ACTION:
       LOG_DBG("[SMF] state=%s (stub), ev=%s", smf_mode_str(mode),
               smf_ev_type_str(msg.ev_type));
@@ -375,6 +502,27 @@ int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
   };
   msg.payload.downlink.port = port;
   msg.payload.downlink.len = len;
+
+  int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
+  return ret == 0 ? 0 : -ENOMEM;
+}
+
+int smf_post_nfc_result(uint8_t ok, uint8_t intent, uint8_t button_id,
+                        const uint8_t *data_4) {
+  if (data_4 != NULL) {
+    k_mutex_lock(&smf_nfc_mutex, K_FOREVER);
+    memcpy(smf_nfc_data, data_4, SMF_NFC_DATA_SIZE);
+    k_mutex_unlock(&smf_nfc_mutex);
+  }
+
+  smf_msg_t msg = {
+      .ev_type = SMF_EVT_NFC_RESULT,
+      .button_id = 0,
+      .timestamp_ms = k_uptime_get(),
+  };
+  msg.payload.nfc.ok = ok;
+  msg.payload.nfc.intent = intent;
+  msg.payload.nfc.button_id = button_id;
 
   int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
   return ret == 0 ? 0 : -ENOMEM;

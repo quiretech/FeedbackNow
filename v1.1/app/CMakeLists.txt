@@ -2,11 +2,20 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
+
+list(APPEND EXTRA_ZEPHYR_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/pn5180)
+
+
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(lorawan)
 
+
+
 # Headers in include/; sources in src/
 target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+zephyr_include_directories(pn5180/include)
+
 
 # Explicit sources to ensure sysbuild picks up new files
 target_sources(app PRIVATE
@@ -27,6 +36,8 @@ target_sources(app PRIVATE
   src/button_counter_store.c
   src/rtc.c
   src/smf_system_mode.c
+  src/nfc_service.c
   src/app_logic.c
   src/housekeeping.c
+  src/adc.c
 )

@@ -55,6 +55,12 @@ typedef struct smf_msg {
       uint8_t port;
       uint8_t len;
     } downlink;
+    struct {
+      uint8_t ok;        /* 1 = read success, 0 = timeout/error */
+      uint8_t intent;    /* nfc_intent_t: CHECK_IN, CHECK_OUT, NFC_VOTE */
+      uint8_t button_id; /* 0..5 for vote / check-in(0) / check-out(1) */
+      uint8_t pad;
+    } nfc;
   } payload;
 } smf_msg_t;
 
@@ -70,6 +76,14 @@ int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms);
  * SMF-owned buffer; len must be <= LORA_MAX_PAYLOAD_SIZE.
  */
 int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data);
+
+/**
+ * Post NFC scan result to SMF. Copies data_4 into SMF-owned buffer.
+ * ok=1 success, ok=0 timeout/error; intent = check-in/check-out/vote;
+ * button_id = 0..5 (for vote); data_4 = 4 bytes from tag block.
+ */
+int smf_post_nfc_result(uint8_t ok, uint8_t intent, uint8_t button_id,
+                        const uint8_t *data_4);
 
 /**
  * Start the SMF thread (or use K_THREAD_DEFINE and start from main).

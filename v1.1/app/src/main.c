@@ -12,6 +12,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
+#include "battery_adc.h"
 #include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
@@ -21,6 +22,7 @@
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "nfc_service.h"
 #include "payload_gen.h"
 #include "power_ctrl.h"
 #include "rail_manager.h"
@@ -128,6 +130,19 @@ int main(void) {
     LOG_WRN("RTC init not available (%d); button timestamps may fall back",
             ret);
     sys_reboot(SYS_REBOOT_COLD);
+  }
+
+  /* Initialize battery ADC (AIN3) for heartbeat / battery status uplink. */
+  ret = battery_adc_init();
+  if (ret != 0) {
+    LOG_WRN("battery_adc_init failed (%d); heartbeat battery status disabled",
+            ret);
+  }
+
+  /* NFC service (PN5180 ISO15693) for Staff check-in/out/vote */
+  ret = nfc_service_init();
+  if (ret != 0) {
+    LOG_WRN("nfc_service_init failed (%d); Staff NFC disabled", ret);
   }
 
   /* Initialize LoRaWAN stack */

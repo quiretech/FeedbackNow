@@ -124,7 +124,8 @@
  * Power gating (rail manager)
  * =============================================================================
  */
-/** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can run. */
+/** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
+ * run. */
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS 6000
 
 /* =============================================================================
@@ -136,6 +137,15 @@
  */
 /** Housekeeping run interval in seconds. Short for testing time sync; use
  * 86400 for daily heartbeat (FRD); add DevEUI jitter in future. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 60
+#define HOUSEKEEPING_INTERVAL_SECONDS 120
+
+/* =============================================================================
+ * NFC (PN5180, ISO15693) — FRD 4.x Staff check-in/out/registered vote
+ * =============================================================================
+ */
+/** Block number to read for 4-byte card data (e.g. user ID or custom data). */
+#define NFC_READ_BLOCK 5
+/** Max time to wait for card read before posting timeout (ms). */
+#define NFC_SCAN_TIMEOUT_MS 5000
 
 #endif /* SYS_CONFIG_H */

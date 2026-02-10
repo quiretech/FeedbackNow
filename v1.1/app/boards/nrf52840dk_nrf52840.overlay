@@ -168,6 +168,19 @@ enables {
 
 	};
 
+
+	pn5180: pn5180@1 {
+ 		compatible = "nxp,pn5180";
+		reg = <1>;
+		spi-max-frequency = <400000>;
+		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
+		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
+		nss-gpios = <&gpio0 29 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)	>;
+		timeout-ms = <1000>;
+	};
+
+
 };
 
 /* PCF8523 RTC on I2C (address 0x68).
@@ -199,4 +212,19 @@ enables {
 		/* Binding requires a timeout (ms) for write-cycle completion polling */
 		timeout = <5>;
 	};
+};
+
+&adc {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    channel@3 {
+        reg = <3>;
+        zephyr,gain = "ADC_GAIN_1_3";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN3>;
+        zephyr,resolution = <10>;
+    };
 };

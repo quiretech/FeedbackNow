@@ -8,6 +8,7 @@
 #include "sys_config.h"
 
 #include <errno.h>
+#include <string.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
@@ -78,6 +79,72 @@ int payload_gen_build_counter_sync(uint8_t button_id, uint32_t epoch_s,
   out_buf[7] = (uint8_t)(c >> 8);
   out_buf[8] = (uint8_t)(c);
   out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+  return 0;
+}
+
+int payload_gen_build_battery_status(uint32_t epoch_s, uint16_t battery_mv,
+                                     uint8_t percent, uint8_t flags,
+                                     uint8_t *out_buf) {
+  if (!out_buf) {
+    return -EINVAL;
+  }
+
+  k_mutex_lock(&ctx.lock, K_FOREVER);
+
+  /* Timestamp */
+  write_be32(out_buf, epoch_s);
+  /* Event type */
+  out_buf[4] = EVT_BATTERY_STATUS;
+  /* Battery millivolts (big-endian) */
+  out_buf[5] = (uint8_t)(battery_mv >> 8);
+  out_buf[6] = (uint8_t)(battery_mv & 0xFF);
+  /* Percent and flags (caller can pass 0 for now) */
+  out_buf[7] = percent;
+  out_buf[8] = flags;
+  /* Reserved */
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+
+  k_mutex_unlock(&ctx.lock);
+  return 0;
+}
+
+int payload_gen_build_nfc_in(uint32_t epoch_s, const uint8_t *data_4,
+                             uint8_t *out_buf) {
+  if (!out_buf || !data_4) {
+    return -EINVAL;
+  }
+  write_be32(out_buf, epoch_s);
+  out_buf[4] = EVT_NFC_IN;
+  memcpy(&out_buf[5], data_4, 4);
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+  return 0;
+}
+
+int payload_gen_build_nfc_out(uint32_t epoch_s, const uint8_t *data_4,
+                              uint8_t *out_buf) {
+  if (!out_buf || !data_4) {
+    return -EINVAL;
+  }
+  write_be32(out_buf, epoch_s);
+  out_buf[4] = EVT_NFC_OUT;
+  memcpy(&out_buf[5], data_4, 4);
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+  return 0;
+}
+
+int payload_gen_build_nfc_vote(uint32_t epoch_s, uint8_t button_id,
+                               const uint8_t *data_4, uint8_t *out_buf) {
+  if (!out_buf || !data_4) {
+    return -EINVAL;
+  }
+  write_be32(out_buf, epoch_s);
+  out_buf[4] = EVT_NFC_VOTE;
+  out_buf[5] = button_id;
+  memcpy(&out_buf[6], data_4, 4);
   out_buf[10] = 0x00;
   return 0;
 }

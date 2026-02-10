@@ -71,6 +71,44 @@ int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
 int payload_gen_build_counter_sync(uint8_t button_id, uint32_t epoch_s,
                                    uint8_t *out_buf);
 
+/**
+ * @brief Build battery status payload (Event 0x10) for housekeeping.
+ *
+ * Payload format (11 bytes):
+ *  - [0..3] timestamp (epoch seconds, big-endian)
+ *  - [4]    event type (EVT_BATTERY_STATUS)
+ *  - [5..6] battery millivolts (big-endian)
+ *  - [7]    battery percent (0..100, caller-provided; 0 if unknown)
+ *  - [8]    flags (bitfield; 0 for now)
+ *  - [9..10] reserved
+ */
+int payload_gen_build_battery_status(uint32_t epoch_s, uint16_t battery_mv,
+                                     uint8_t percent, uint8_t flags,
+                                     uint8_t *out_buf);
+
+/**
+ * @brief Build NFC check-in payload (Event 0x01).
+ * Format: [0..3] ts, [4] EVT_NFC_IN, [5..8] 4-byte card data, [9..10] reserved.
+ */
+int payload_gen_build_nfc_in(uint32_t epoch_s, const uint8_t *data_4,
+                             uint8_t *out_buf);
+
+/**
+ * @brief Build NFC check-out payload (Event 0x02).
+ * Format: [0..3] ts, [4] EVT_NFC_OUT, [5..8] 4-byte card data, [9..10]
+ * reserved.
+ */
+int payload_gen_build_nfc_out(uint32_t epoch_s, const uint8_t *data_4,
+                              uint8_t *out_buf);
+
+/**
+ * @brief Build NFC vote payload (Event 0x03).
+ * Format: [0..3] ts, [4] EVT_NFC_VOTE, [5] button_id, [6..9] 4-byte data,
+ * [10] reserved.
+ */
+int payload_gen_build_nfc_vote(uint32_t epoch_s, uint8_t button_id,
+                               const uint8_t *data_4, uint8_t *out_buf);
+
 /* To extend: add enum payload_event_type, FPort, and a build_* function. */
 
 #ifdef __cplusplus
