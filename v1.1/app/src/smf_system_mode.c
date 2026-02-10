@@ -141,7 +141,7 @@ static void smf_do_counter_sync(void) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
   }
 
-  LOG_DBG("[SMF] JOINED -> counter_sync: sending Event 0x07 per button");
+  LOG_DBG("[SMF] JOINED -> counter_sync: sending Event 0x12 per button");
 
   for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
     uint8_t payload[PAYLOAD_LEN_BYTES];
@@ -151,8 +151,8 @@ static void smf_do_counter_sync(void) {
       continue;
     }
     lora_uplink_msg_t msg = {0};
-    msg.port = FPORT_BUTTON;
-    msg.confirmed = false;
+    msg.port = FPORT_COUNTER_SYNC;
+    msg.confirmed = true; // CONFIRMED UP on boot
     msg.len = PAYLOAD_LEN_BYTES;
     memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
     ret = lora_put_event(&msg, K_MSEC(500));

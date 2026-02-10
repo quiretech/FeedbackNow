@@ -73,7 +73,8 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
   LOG_INF("Input thread started (single + combo -> SMF)");
 
   while (1) {
-    bool got = buttons_get_event(&btn_evt, K_MSEC(INPUT_COMBO_SCAN_INTERVAL_MS));
+    bool got =
+        buttons_get_event(&btn_evt, K_MSEC(INPUT_COMBO_SCAN_INTERVAL_MS));
 
     if (got && btn_evt.button_id < NUM_BUTTONS) {
       const char *evt_str =
@@ -168,8 +169,8 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
             }
           }
         }
-      } else if (held_zero_at_ms > 0 &&
-                 (k_uptime_get() - held_zero_at_ms) >= INPUT_SESSION_RECOVERY_MS) {
+      } else if (held_zero_at_ms > 0 && (k_uptime_get() - held_zero_at_ms) >=
+                                            INPUT_SESSION_RECOVERY_MS) {
         /* Recovery path: held has been 0 for 300ms, but we still have session
          * state */
         should_reset_session = true;

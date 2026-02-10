@@ -96,7 +96,7 @@ int power_ctrl_lora_power_up(void) {
     LOG_ERR("Failed to power up LoRa domain: %d", ret);
     return ret;
   }
-  
+
   /* Allow power rail to stabilize before using radio */
   k_msleep(LORA_POWER_STABILIZATION_MS);
   LOG_DBG("LoRa power domain (3V6) powered up");
@@ -109,7 +109,7 @@ int power_ctrl_lora_power_down(void) {
     LOG_ERR("Failed to power down LoRa domain: %d", ret);
     return ret;
   }
-  
+
   LOG_DBG("LoRa power domain (3V6) powered down");
   return 0;
 }
