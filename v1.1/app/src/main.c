@@ -16,9 +16,9 @@
 #include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
-#include "housekeeping.h"
 #include "devnonce_store.h"
 #include "eeprom_probe.h"
+#include "housekeeping.h"
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
@@ -30,6 +30,7 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
+
 
 #include <zephyr/sys/reboot.h>
 
@@ -171,7 +172,8 @@ int main(void) {
   k_thread_start(button_uplink_thread_id);
   LOG_INF("Input thread started");
 
-  /* Housekeeping: periodic RTC sync (and later link check, battery + heartbeat) */
+  /* Housekeeping: periodic RTC sync (and later link check, battery + heartbeat)
+   */
   (void)housekeeping_init();
   k_thread_start(housekeeping_thread_id);
   LOG_INF("Housekeeping thread started");
@@ -180,7 +182,8 @@ int main(void) {
   rail_manager_enter_idle();
   LOG_INF("Rails released (idle); 3.3V/3.3A/3.6V off until requested");
 
-  /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink */
+  /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink
+   */
   while (1) {
     k_sleep(K_FOREVER);
   }

@@ -2,22 +2,25 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
-
-list(APPEND EXTRA_ZEPHYR_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/pn5180)
-
-
+# 1. Modules should be defined BEFORE find_package(Zephyr)
+# Using Zephyr's native module system is cleaner than appending to a list
+set(ZEPHYR_EXTRA_MODULES 
+  ${CMAKE_CURRENT_SOURCE_DIR}/pn5180
+  ${CMAKE_CURRENT_SOURCE_DIR}/ssd1683
+)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(lorawan)
+project(feedbacknow1.2)
 
+# 2. Add application include directories
+# PRIVATE ensures these headers don't leak to other modules
+target_include_directories(app PRIVATE 
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts
+)
 
-
-# Headers in include/; sources in src/
-target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-zephyr_include_directories(pn5180/include)
-
-
-# Explicit sources to ensure sysbuild picks up new files
+# 3. Use a file list for cleaner source management
+# This makes it much easier to read and maintain
 target_sources(app PRIVATE
   src/main.c
   src/lora_app.c

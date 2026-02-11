@@ -448,7 +448,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           if (pret == 0) {
             lora_uplink_msg_t uplink = {0};
             uplink.port = FPORT_NFC;
-            uplink.confirmed = false;
+            uplink.confirmed = true; // NFC should be confirmed
             uplink.len = PAYLOAD_LEN_BYTES;
             memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
             if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
