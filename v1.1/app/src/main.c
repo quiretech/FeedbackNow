@@ -17,8 +17,10 @@
 #include "button_thread.h"
 #include "buttons.h"
 #include "devnonce_store.h"
+#include "display_manager.h"
 #include "eeprom_probe.h"
 #include "housekeeping.h"
+#include "last_cleaned_store.h"
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
@@ -30,7 +32,6 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
-
 
 #include <zephyr/sys/reboot.h>
 
@@ -133,6 +134,13 @@ int main(void) {
     sys_reboot(SYS_REBOOT_COLD);
   }
 
+  /* Last cleaned display store (EEPROM); ensure non-empty for first boot */
+  (void)last_cleaned_store_init();
+  uint32_t rtc_epoch = 0;
+  if (rtc_get_epoch_seconds(&rtc_epoch) == 0) {
+    (void)last_cleaned_store_ensure_non_empty(rtc_epoch);
+  }
+
   /* Initialize battery ADC (AIN3) for heartbeat / battery status uplink. */
   ret = battery_adc_init();
   if (ret != 0) {
@@ -145,6 +153,10 @@ int main(void) {
   if (ret != 0) {
     LOG_WRN("nfc_service_init failed (%d); Staff NFC disabled", ret);
   }
+
+  /* Display manager (EPD); show logo at boot */
+  (void)display_manager_init();
+  display_show_logo();
 
   /* Initialize LoRaWAN stack */
   ret = lora_app_init();

@@ -2,6 +2,7 @@
  * Application logic: public vote (Normal mode single button).
  */
 #include "app_logic.h"
+#include "display_manager.h"
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
@@ -42,6 +43,7 @@ void app_logic_public_vote(uint8_t button_id) {
   }
 
   (void)led_manager_show(0, LED_PATTERN_BUTTON_ACCEPTED);
+  display_show_thanks();
 
   uint32_t epoch_s = 0;
   int ret = rtc_get_epoch_seconds(&epoch_s);

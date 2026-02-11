@@ -1,4 +1,8 @@
 / {
+    chosen {
+        zephyr,display = &ssd1683;
+    };
+
     aliases {
         sw0 = &button0;
         sw1 = &button1;

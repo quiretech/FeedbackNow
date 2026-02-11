@@ -65,8 +65,8 @@
 #define LED_BUTTON_ACCEPTED_MS 1000
 /* Join success: 3 quick flashes ~300ms total */
 #define LED_JOIN_BLINKS 3
-#define LED_JOIN_ON_MS 50
-#define LED_JOIN_OFF_MS 50
+#define LED_JOIN_ON_MS 100
+#define LED_JOIN_OFF_MS 100
 /* NFC waiting: 1 Hz until next command */
 #define LED_NFC_1HZ_ON_MS 500
 #define LED_NFC_1HZ_OFF_MS 500
@@ -102,6 +102,9 @@
   ((uint32_t)EEPROM_DEVNONCE_SLOT0_OFF + (uint32_t)EEPROM_DEVNONCE_SLOT_SIZE)
 #define EEPROM_JOIN_STATE_OFF 0x0240U
 #define EEPROM_JOIN_STATE_SIZE 8U
+/** Last cleaned display store (epoch for EPD "last cleaned" screen). */
+#define EEPROM_LAST_CLEANED_OFF 0x0250U
+#define EEPROM_LAST_CLEANED_SIZE 4U
 
 /* =============================================================================
  * RTC / time sync
@@ -109,15 +112,15 @@
  */
 #define RTC_SET_TIME_ON_BOOT 1
 #define RTC_FORCE_SET_TIME_ON_BOOT 0
-#define RTC_SET_YEAR 2025
-#define RTC_SET_MONTH 12
-#define RTC_SET_DAY 24
-#define RTC_SET_HOUR 21
-#define RTC_SET_MINUTE 49
+#define RTC_SET_YEAR 2026
+#define RTC_SET_MONTH 1
+#define RTC_SET_DAY 1
+#define RTC_SET_HOUR 00
+#define RTC_SET_MINUTE 00
 #define RTC_SET_SECOND 00
-#define RTC_VALID_YEAR_MIN 2024
+#define RTC_VALID_YEAR_MIN 2026
 #define RTC_REQUIRE_LNS_TIME_SYNC 0
-#define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 40
+#define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 10
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18
 
 /* =============================================================================
@@ -137,7 +140,7 @@
  */
 /** Housekeeping run interval in seconds. Short for testing time sync; use
  * 86400 for daily heartbeat (FRD); add DevEUI jitter in future. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 120
+#define HOUSEKEEPING_INTERVAL_SECONDS 3600
 
 /* =============================================================================
  * NFC (PN5180, ISO15693) — FRD 4.x Staff check-in/out/registered vote
@@ -147,5 +150,16 @@
 #define NFC_READ_BLOCK 5
 /** Max time to wait for card read before posting timeout (ms). */
 #define NFC_SCAN_TIMEOUT_MS 5000
+
+/* =============================================================================
+ * EPD (Variant A vs B) — set to 0 for build without display
+ * =============================================================================
+ */
+#define EPD_ENABLED 0
+/** Thanks screen duration before returning to last cleaned (ms). */
+#define EPD_THANKS_DISPLAY_MS 5000
+/** Cleaning screen auto-revert to last cleaned if no check-out (ms). */
+#define EPD_CLEANING_REVERT_MINUTES 45
+#define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60 * 1000)
 
 #endif /* SYS_CONFIG_H */

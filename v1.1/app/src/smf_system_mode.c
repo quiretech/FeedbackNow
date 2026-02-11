@@ -13,6 +13,8 @@
 #include "app_logic.h"
 #include "battery_adc.h"
 #include "button_counter_store.h"
+#include "display_manager.h"
+#include "last_cleaned_store.h"
 #include "led_manager.h"
 #include "lora_app.h"
 #include "nfc_service.h"
@@ -202,10 +204,18 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
 
   switch (cmd) {
   case DL_CMD_EPD_UPDATE:
-    LOG_INF("[SMF] cmd 0x01 EPD update (no-op until Phase 4)");
+    if (len >= 5) {
+      uint32_t epoch = ((uint32_t)data[1] << 24) | ((uint32_t)data[2] << 16) |
+                       ((uint32_t)data[3] << 8) | (uint32_t)data[4];
+      display_set_pending_last_cleaned_and_apply(epoch);
+      LOG_INF("[SMF] cmd 0x01 EPD update epoch=%u", (unsigned)epoch);
+    } else {
+      LOG_WRN("[SMF] cmd 0x01 EPD update: len %u < 5", len);
+    }
     break;
   case DL_CMD_EPD_REFRESH:
-    LOG_INF("[SMF] cmd 0x02 EPD refresh (no-op until Phase 4)");
+    display_request_full_refresh();
+    LOG_INF("[SMF] cmd 0x02 EPD refresh");
     break;
   case DL_CMD_STATUS_REQ:
     LOG_INF("[SMF] cmd 0x03 status request (trigger status uplink; stub)");
@@ -259,7 +269,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_request_3v3a();
         smf_do_counter_sync();
         rail_manager_release_3v3a();
+        display_show_last_cleaned();
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
+        display_show_connecting();
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
         LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));
@@ -355,6 +367,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger LoRa join)");
+        display_show_connecting();
         lora_request_join();
       } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         mode = MODE_REBOOT;
@@ -366,6 +379,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_DEVICE_INFO;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
+        display_show_device_info();
         LOG_INF("[SMF] Staff -> DeviceInfo (30s timeout)");
         mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
@@ -436,6 +450,13 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           k_mutex_lock(&smf_nfc_mutex, K_FOREVER);
           memcpy(data_4, smf_nfc_data, SMF_NFC_DATA_SIZE);
           k_mutex_unlock(&smf_nfc_mutex);
+
+          if (intent == NFC_INTENT_CHECK_IN) {
+            display_show_cleaning();
+          } else if (intent == NFC_INTENT_CHECK_OUT) {
+            (void)last_cleaned_store_set(epoch_s);
+            display_show_last_cleaned();
+          }
 
           int pret = -EINVAL;
           if (intent == NFC_INTENT_CHECK_IN) {
