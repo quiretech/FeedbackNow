@@ -1,0 +1,184 @@
+/*
+ * RTC access helper for demo payload timestamps.
+ *
+ * Uses Zephyr RTC API when an RTC node is present in the device tree.
+ * If no RTC exists, rtc_app_init()/rtc_get_epoch_seconds() return -ENODEV.
+ */
+
+#include "rtc.h"
+#include "sys_config.h"
+
+#include <errno.h>
+#include <time.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/rtc.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/timeutil.h>
+
+LOG_MODULE_REGISTER(rtc_app, CONFIG_LOG_DEFAULT_LEVEL);
+
+#if DT_NODE_EXISTS(DT_NODELABEL(pcf8523))
+#define RTC_NODE DT_NODELABEL(pcf8523)
+static const struct device *rtc_dev = DEVICE_DT_GET(RTC_NODE);
+#else
+static const struct device *rtc_dev = NULL;
+#endif
+
+static int rtc_should_set_time(const struct rtc_time *t) {
+  /* rtc_time.tm_year is years since 1900 */
+  int year = t->tm_year + 1900;
+  if (year < RTC_VALID_YEAR_MIN) {
+    return 1;
+  }
+  if (t->tm_mon < 0 || t->tm_mon > 11) {
+    return 1;
+  }
+  if (t->tm_mday < 1 || t->tm_mday > 31) {
+    return 1;
+  }
+  if (t->tm_hour < 0 || t->tm_hour > 23 || t->tm_min < 0 || t->tm_min > 59 ||
+      t->tm_sec < 0 || t->tm_sec > 59) {
+    return 1;
+  }
+  return 0;
+}
+
+static int rtc_set_time_from_config(void) {
+  struct rtc_time t = {0};
+
+  t.tm_sec = RTC_SET_SECOND;
+  t.tm_min = RTC_SET_MINUTE;
+  t.tm_hour = RTC_SET_HOUR;
+  t.tm_mday = RTC_SET_DAY;
+  t.tm_mon = RTC_SET_MONTH - 1;    /* rtc_time uses 0-11 */
+  t.tm_year = RTC_SET_YEAR - 1900; /* years since 1900 */
+  t.tm_wday = -1;
+  t.tm_yday = -1;
+  t.tm_isdst = -1;
+  t.tm_nsec = 0;
+
+  int ret = rtc_set_time(rtc_dev, &t);
+  if (ret != 0) {
+    return ret;
+  }
+
+  LOG_INF("RTC programmed to %04d-%02d-%02d %02d:%02d:%02d (UTC)", RTC_SET_YEAR,
+          RTC_SET_MONTH, RTC_SET_DAY, RTC_SET_HOUR, RTC_SET_MINUTE,
+          RTC_SET_SECOND);
+  return 0;
+}
+
+int rtc_app_init(void) {
+
+  if (rtc_dev == NULL) {
+    return -ENODEV;
+  }
+  if (!device_is_ready(rtc_dev)) {
+    return -ENODEV;
+  }
+
+#if RTC_SET_TIME_ON_BOOT
+  struct rtc_time cur = {0};
+  int ret = rtc_get_time(rtc_dev, &cur);
+  if (RTC_FORCE_SET_TIME_ON_BOOT) {
+    LOG_WRN("RTC_FORCE_SET_TIME_ON_BOOT=1; overwriting RTC time from config");
+    ret = rtc_set_time_from_config();
+    if (ret != 0) {
+      LOG_ERR("Failed to set RTC time: %d", ret);
+      return ret;
+    }
+  } else if (ret != 0) {
+    LOG_WRN("RTC read failed (%d); setting time from config", ret);
+    ret = rtc_set_time_from_config();
+    if (ret != 0) {
+      LOG_ERR("Failed to set RTC time: %d", ret);
+      return ret;
+    }
+  } else if (rtc_should_set_time(&cur)) {
+    LOG_WRN("RTC time looks uninitialized; setting time from config");
+    ret = rtc_set_time_from_config();
+    if (ret != 0) {
+      LOG_ERR("Failed to set RTC time: %d", ret);
+      return ret;
+    }
+  } else {
+    LOG_INF("RTC already initialized (%04d-%02d-%02d %02d:%02d:%02d)",
+            cur.tm_year + 1900, cur.tm_mon + 1, cur.tm_mday, cur.tm_hour,
+            cur.tm_min, cur.tm_sec);
+  }
+#endif
+
+  return 0;
+}
+
+int rtc_get_epoch_seconds(uint32_t *out_epoch_s) {
+  if (out_epoch_s == NULL) {
+    return -EINVAL;
+  }
+  if (rtc_dev == NULL || !device_is_ready(rtc_dev)) {
+    return -ENODEV;
+  }
+
+  struct rtc_time t = {0};
+  int ret = rtc_get_time(rtc_dev, &t);
+  if (ret != 0) {
+    return ret;
+  }
+
+  /* Convert rtc_time -> epoch seconds */
+  struct tm tm_utc = {
+      .tm_sec = t.tm_sec,
+      .tm_min = t.tm_min,
+      .tm_hour = t.tm_hour,
+      .tm_mday = t.tm_mday,
+      .tm_mon = t.tm_mon,
+      .tm_year = t.tm_year,
+      .tm_wday = t.tm_wday,
+      .tm_yday = t.tm_yday,
+      .tm_isdst = t.tm_isdst,
+  };
+
+  int64_t epoch = timeutil_timegm64(&tm_utc);
+  if (epoch < 0) {
+    return -EINVAL;
+  }
+  *out_epoch_s = (uint32_t)epoch;
+  return 0;
+}
+
+int rtc_set_epoch_seconds(uint32_t epoch_s) {
+  if (rtc_dev == NULL || !device_is_ready(rtc_dev)) {
+    return -ENODEV;
+  }
+
+  time_t tt = (time_t)epoch_s;
+  struct tm tm_utc = {0};
+  if (gmtime_r(&tt, &tm_utc) == NULL) {
+    return -EINVAL;
+  }
+
+  LOG_INF("Programming RTC from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
+          epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+          tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+
+  struct rtc_time t = {0};
+  t.tm_sec = tm_utc.tm_sec;
+  t.tm_min = tm_utc.tm_min;
+  t.tm_hour = tm_utc.tm_hour;
+  t.tm_mday = tm_utc.tm_mday;
+  t.tm_mon = tm_utc.tm_mon;
+  t.tm_year = tm_utc.tm_year;
+  t.tm_wday = tm_utc.tm_wday;
+  t.tm_yday = tm_utc.tm_yday;
+  t.tm_isdst = tm_utc.tm_isdst;
+  t.tm_nsec = 0;
+
+  int ret = rtc_set_time(rtc_dev, &t);
+  if (ret == 0) {
+    LOG_INF("RTC updated from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
+            epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+            tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+  }
+  return ret;
+}
