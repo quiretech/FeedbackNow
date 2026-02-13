@@ -2,12 +2,15 @@
  * Display manager: EPD screen jobs and work queue. When EPD_ENABLED=0, no-ops.
  */
 #include "display_manager.h"
+#include "button_counter_store.h"
+#include "eui_keys.h"
 #include "last_cleaned_store.h"
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
 
 #include <stdio.h>
+#include <time.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/display.h>
@@ -19,7 +22,9 @@
 #include <lvgl.h>
 
 /* Font declarations */
+LV_FONT_DECLARE(roboto_20);
 LV_FONT_DECLARE(roboto_28);
+LV_FONT_DECLARE(roboto_32);
 LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
 #endif
@@ -51,7 +56,7 @@ struct display_job {
 K_MSGQ_DEFINE(display_jobq, sizeof(struct display_job), DISPLAY_JOB_QUEUE_SIZE,
               DISPLAY_JOB_ALIGN);
 
-static struct k_work display_work;
+static struct k_work_delayable display_work;
 static volatile uint32_t pending_last_cleaned_epoch; /* 0 = none */
 static bool cleaning_timer_active;
 static enum display_screen_id current_screen = DISPLAY_SCREEN_LOGO;
@@ -66,6 +71,16 @@ static lv_obj_t *screen_cleaning;
 static lv_obj_t *screen_connecting;
 static lv_obj_t *screen_device_info;
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
+/* Device Info screen labels */
+static lv_obj_t *dev_info_heading;
+static lv_obj_t *dev_info_deveui;
+static lv_obj_t *dev_info_fw;
+static lv_obj_t *dev_info_counters;
+/* Device Info screen labels */
+static lv_obj_t *dev_info_heading;
+static lv_obj_t *dev_info_deveui;
+static lv_obj_t *dev_info_fw;
+static lv_obj_t *dev_info_counters;
 
 /* LVGL draw buffers (monochrome: +8 bytes for palette)
  * For DIRECT mode: need full screen buffer
@@ -203,11 +218,38 @@ static void create_lvgl_screens(void) {
   screen_device_info = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_device_info, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_device_info, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_device_info);
-  lv_label_set_text(label, "Device Info");
-  lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+
+  /* Heading: "FeedBackNow FlexBox" */
+  dev_info_heading = lv_label_create(screen_device_info);
+  lv_label_set_text(dev_info_heading, "FeedBackNow FlexBox");
+  lv_obj_set_style_text_font(dev_info_heading, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_heading, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(dev_info_heading, LV_ALIGN_TOP_MID, 0, 10);
+
+  /* DevEUI label */
+  dev_info_deveui = lv_label_create(screen_device_info);
+  lv_label_set_text(dev_info_deveui, "DevEUI: 00:00:00:00:00:00:00:00");
+  lv_obj_set_style_text_font(dev_info_deveui, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_deveui, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(dev_info_deveui, dev_info_heading, LV_ALIGN_OUT_BOTTOM_MID, 0,
+                  15);
+
+  /* FW version label */
+  dev_info_fw = lv_label_create(screen_device_info);
+  lv_label_set_text(dev_info_fw, "FW: " FW_VERSION_STRING);
+  lv_obj_set_style_text_font(dev_info_fw, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align_to(dev_info_fw, dev_info_deveui, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+  /* Button counters label */
+  dev_info_counters = lv_label_create(screen_device_info);
+  lv_label_set_text(dev_info_counters, "B0:0 B1:0 B2:0 B3:0 B4:0 B5:0");
+  lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_align_to(dev_info_counters, dev_info_fw, LV_ALIGN_OUT_BOTTOM_MID, 0,
+                  10);
+
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -220,23 +262,15 @@ static void format_epoch_yyyymmdd_hhmm(uint32_t epoch_s, char *buf,
     }
     return;
   }
-  uint32_t d = epoch_s / 86400U;
-  uint32_t t = epoch_s % 86400U;
-  uint32_t h = t / 3600U;
-  uint32_t m = (t % 3600U) / 60U;
-  /* Simple day to y/m/d (approximate from 1970-01-01). */
-  uint32_t y = 1970 + (d / 365U);
-  uint32_t rem = d % 365U;
-  uint32_t mo = 1 + (rem / 31U);
-  uint32_t day = 1 + (rem % 31U);
-  if (mo > 12) {
-    mo = 12;
+  time_t tt = (time_t)epoch_s;
+  struct tm tm_utc = {0};
+  if (gmtime_r(&tt, &tm_utc) == NULL) {
+    buf[0] = '\0';
+    return;
   }
-  if (day > 28) {
-    day = 28;
-  }
-  (void)snprintf(buf, buf_len, "%04u/%02u/%02u %02u:%02u", (unsigned)y,
-                 (unsigned)mo, (unsigned)day, (unsigned)h, (unsigned)m);
+  (void)snprintf(buf, buf_len, "%04d/%02d/%02d %02d:%02d",
+                 tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+                 tm_utc.tm_hour, tm_utc.tm_min);
 }
 
 static void do_render(const struct device *display, enum display_job_type type,
@@ -303,10 +337,39 @@ static void do_render(const struct device *display, enum display_job_type type,
     LOG_INF("[EPD] show CONNECTING");
     scr_to_show = screen_connecting;
     break;
-  case JOB_SHOW_DEVICE_INFO:
+  case JOB_SHOW_DEVICE_INFO: {
     LOG_INF("[EPD] show DEVICE_INFO");
+    /* Format DevEUI */
+    if (dev_info_deveui) {
+      static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
+      char deveui_str[32];
+      (void)snprintf(deveui_str, sizeof(deveui_str),
+                     "DevEUI: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
+                     dev_eui[0], dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4],
+                     dev_eui[5], dev_eui[6], dev_eui[7]);
+      lv_label_set_text(dev_info_deveui, deveui_str);
+    }
+    /* FW version is static text, already set in create_lvgl_screens */
+    /* Format button counters */
+    if (dev_info_counters) {
+      char counters_str[64];
+      uint32_t cnt[6];
+      int pos = 0;
+      for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+        (void)button_counter_store_get(i, &cnt[i]);
+      }
+      pos = snprintf(counters_str, sizeof(counters_str), "B0:%x",
+                     (unsigned)cnt[0]);
+      for (uint8_t i = 1;
+           i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 8); i++) {
+        pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
+                        " B%u:%x", (unsigned)i, (unsigned)cnt[i]);
+      }
+      lv_label_set_text(dev_info_counters, counters_str);
+    }
     scr_to_show = screen_device_info;
     break;
+  }
   case JOB_FULL_REFRESH:
     LOG_INF("[EPD] full refresh");
     /* Show current screen again to force refresh */
@@ -414,6 +477,8 @@ static void display_work_handler(struct k_work *work) {
     do_render(display, JOB_SHOW_DEVICE_INFO, 0);
     break;
   case JOB_FULL_REFRESH:
+    /* Use slow refresh for full refresh (clear ghosting); restore fast after */
+    ssd1683_set_fast_update(display, false);
     do_render(display, JOB_FULL_REFRESH, 0);
     break;
   default:
@@ -424,11 +489,16 @@ static void display_work_handler(struct k_work *work) {
   /* Process LVGL tasks after rendering to flush display */
   lv_task_handler();
 
+  /* Restore fast update after a full (slow) refresh */
+  if (job.type == JOB_FULL_REFRESH) {
+    ssd1683_set_fast_update(display, true);
+  }
+
   rail_manager_release_3v3a();
 
-  /* If more jobs, resubmit work */
+  /* If more jobs, reschedule work after delay so LoRa RX can complete first */
   if (k_msgq_num_used_get(&display_jobq) > 0) {
-    k_work_submit(&display_work);
+    (void)k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
   }
 }
 
@@ -438,7 +508,8 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
     LOG_WRN("[EPD] job queue full, drop type=%u", type);
     return;
   }
-  k_work_submit(&display_work);
+  /* Delay before running so LoRa can use SPI for RX1/RX2 after uplinks */
+  (void)k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
 }
 
 #endif /* EPD_ENABLED */
@@ -447,7 +518,7 @@ int display_manager_init(void) {
 #if EPD_ENABLED
   struct display_capabilities caps;
 
-  k_work_init(&display_work, display_work_handler);
+  k_work_init_delayable(&display_work, display_work_handler);
   pending_last_cleaned_epoch = 0;
   cleaning_timer_active = false;
 

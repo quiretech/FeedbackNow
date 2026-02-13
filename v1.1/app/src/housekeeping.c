@@ -1,13 +1,15 @@
 /*
  * Housekeeping / heartbeat worker (FRD 4.9).
  *
- * Dedicated thread runs every HOUSEKEEPING_INTERVAL_SECONDS and posts
- * SMF_EVT_HOUSEKEEPING_TICK to the SMF queue. SMF owns rail arbitration and
- * runs housekeeping tasks (time sync, later link check, battery + uplink).
+ * Dedicated thread runs at configured interval and posts SMF_EVT_HOUSEKEEPING_TICK
+ * to the SMF queue. With HEARTBEAT_USE_DEVEUI_JITTER=1, runs once per day at
+ * 00:00 UTC + (DevEUI[7]*256+DevEUI[6]) % 1440 minutes to spread load (FRD 4.9).
  * This thread does not call lora_* or rail_manager; it only posts events.
  */
+#include "eui_keys.h"
 #include "housekeeping.h"
 #include "lora_app.h"
+#include "rtc.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include <zephyr/kernel.h>
@@ -18,6 +20,22 @@ LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
 #define HOUSEKEEPING_STACK_SIZE 1024
 #define HOUSEKEEPING_PRIORITY 9
 
+/** Compute seconds until next daily heartbeat time (00:00 UTC + offset_minutes). */
+static uint32_t seconds_until_next_heartbeat(uint32_t now_epoch,
+                                              uint32_t offset_minutes) {
+  uint32_t offset_sec = offset_minutes * 60U;
+  uint32_t sec_since_midnight = now_epoch % SECONDS_PER_DAY;
+  uint32_t next_run_epoch;
+
+  if (offset_sec > sec_since_midnight) {
+    next_run_epoch = (now_epoch / SECONDS_PER_DAY) * SECONDS_PER_DAY + offset_sec;
+  } else {
+    next_run_epoch =
+        (now_epoch / SECONDS_PER_DAY + 1U) * SECONDS_PER_DAY + offset_sec;
+  }
+  return next_run_epoch - now_epoch;
+}
+
 static void housekeeping_run_tasks(void) {
   /* Post tick to SMF so it can run housekeeping with proper rail arbitration.
    * Only when joined so we don't flood SMF with no-op ticks. */
@@ -25,7 +43,6 @@ static void housekeeping_run_tasks(void) {
     LOG_DBG("[housekeeping] posting HOUSEKEEPING_TICK to SMF");
     (void)smf_post_event(SMF_EVT_HOUSEKEEPING_TICK, 0, k_uptime_get());
   }
-  /* Future: SMF will also run link check, battery sample + heartbeat uplink. */
 }
 
 static void housekeeping_thread_fn(void *a, void *b, void *c) {
@@ -33,11 +50,36 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(b);
   ARG_UNUSED(c);
 
-  LOG_INF("[housekeeping] thread started, interval=%ds",
-          HOUSEKEEPING_INTERVAL_SECONDS);
+  static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
+  uint32_t offset_minutes =
+      (uint32_t)(dev_eui[7] * 256U + dev_eui[6]) % (uint32_t)MINUTES_PER_DAY;
+
+  LOG_INF("[housekeeping] thread started, jitter=%d offset_min=%u",
+          HEARTBEAT_USE_DEVEUI_JITTER, (unsigned)offset_minutes);
 
   for (;;) {
+#if HEARTBEAT_USE_DEVEUI_JITTER
+    uint32_t now_epoch = 0;
+    int r = rtc_get_epoch_seconds(&now_epoch);
+    if (r != 0 || now_epoch == 0) {
+      /* RTC not set or unavailable: fallback to fixed interval */
+      k_sleep(K_SECONDS(HOUSEKEEPING_INTERVAL_SECONDS));
+      housekeeping_run_tasks();
+      continue;
+    }
+    uint32_t sleep_sec = seconds_until_next_heartbeat(now_epoch, offset_minutes);
+    /* Cap sleep to avoid overflow / unreasonable delay */
+    if (sleep_sec > SECONDS_PER_DAY) {
+      sleep_sec = HOUSEKEEPING_INTERVAL_SECONDS;
+    }
+    if (sleep_sec == 0) {
+      sleep_sec = 1;
+    }
+    LOG_DBG("[housekeeping] sleeping %u s until next heartbeat", (unsigned)sleep_sec);
+    k_sleep(K_SECONDS(sleep_sec));
+#else
     k_sleep(K_SECONDS(HOUSEKEEPING_INTERVAL_SECONDS));
+#endif
     housekeeping_run_tasks();
   }
 }

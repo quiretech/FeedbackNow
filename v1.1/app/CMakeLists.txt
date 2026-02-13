@@ -45,6 +45,8 @@ target_sources(app PRIVATE
   src/app_logic.c
   src/housekeeping.c
   src/adc.c
+  assets/fonts/roboto_20.c
+  assets/fonts/roboto_32.c
   assets/fonts/roboto_28.c
   assets/fonts/roboto_36.c
   assets/fonts/roboto_bold_42.c

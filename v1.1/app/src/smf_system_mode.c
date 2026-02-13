@@ -159,7 +159,11 @@ static const char *smf_mode_str(enum system_mode mode) {
   }
 }
 
-static void smf_do_counter_sync(void) {
+/**
+ * Queue counter-sync payloads (Event 0x12) for all buttons. Used on rejoin
+ * (confirmed) and as part of heartbeat / on-demand status (unconfirmed).
+ */
+static void smf_do_counter_sync(bool confirmed) {
   uint32_t epoch_s = 0;
 
   (void)rtc_get_epoch_seconds(&epoch_s);
@@ -167,7 +171,8 @@ static void smf_do_counter_sync(void) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
   }
 
-  LOG_DBG("[SMF] JOINED -> counter_sync: sending Event 0x12 per button");
+  LOG_DBG("[SMF] counter_sync: Event 0x12 per button (confirmed=%d)",
+          (int)confirmed);
 
   for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
     uint8_t payload[PAYLOAD_LEN_BYTES];
@@ -178,7 +183,7 @@ static void smf_do_counter_sync(void) {
     }
     lora_uplink_msg_t msg = {0};
     msg.port = FPORT_HOUSEKEEPING;
-    msg.confirmed = true; // CONFIRMED UP on boot
+    msg.confirmed = confirmed;
     msg.len = PAYLOAD_LEN_BYTES;
     memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
     ret = lora_put_event(&msg, K_MSEC(500));
@@ -218,7 +223,8 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
     LOG_INF("[SMF] cmd 0x02 EPD refresh");
     break;
   case DL_CMD_STATUS_REQ:
-    LOG_INF("[SMF] cmd 0x03 status request (trigger status uplink; stub)");
+    LOG_INF("[SMF] cmd 0x03 status request (trigger heartbeat on demand)");
+    (void)smf_post_event(SMF_EVT_HOUSEKEEPING_TICK, 0, k_uptime_get());
     break;
   case DL_CMD_RESET_COUNTERS:
     LOG_INF("[SMF] cmd 0x04 reset counters");
@@ -267,7 +273,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_JOINED) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
         rail_manager_request_3v3a();
-        smf_do_counter_sync();
+        smf_do_counter_sync(true); /* confirmed on rejoin */
         rail_manager_release_3v3a();
         display_show_last_cleaned();
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
@@ -335,6 +341,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           } else {
             LOG_WRN("[SMF] housekeeping: ADC battery read failed");
           }
+
+          /* Counter-sync payloads (same as on rejoin, unconfirmed in
+           * heartbeat). */
+          smf_do_counter_sync(false);
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
@@ -419,6 +429,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] DeviceInfo -> Normal (timeout)");
+        display_show_last_cleaned();
       }
       break;
 

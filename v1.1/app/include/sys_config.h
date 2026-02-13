@@ -53,7 +53,7 @@
  */
 /* Staff: 20s (longer than FRD 10s* to allow Reboot combo 0+1+2+3 hold 10s). */
 #define STAFF_TIMEOUT_MS 20000
-#define DEVICE_INFO_TIMEOUT_MS 30000
+#define DEVICE_INFO_TIMEOUT_MS 10000
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -134,13 +134,20 @@
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
  * =============================================================================
- * Periodic worker runs RTC sync (DeviceTimeReq), and later: link check, battery
- * sample + heartbeat uplink. Interval is configurable for test (short) or
- * production (e.g. daily with jitter).
+ * Periodic worker runs RTC sync (DeviceTimeReq), link check, battery sample +
+ * heartbeat uplink. When HEARTBEAT_USE_DEVEUI_JITTER=1, run is daily at
+ * 00:00 UTC + (DevEUI[7]*256+DevEUI[6]) % 1440 minutes (FRD 4.9).
  */
-/** Housekeeping run interval in seconds. Short for testing time sync; use
- * 86400 for daily heartbeat (FRD); add DevEUI jitter in future. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 30
+/** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
+ * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
+ */
+#define HEARTBEAT_USE_DEVEUI_JITTER 1
+/** Fallback interval (seconds) when jitter is off or RTC unavailable. */
+#define HOUSEKEEPING_INTERVAL_SECONDS 120
+/** Seconds per day (for daily schedule). */
+#define SECONDS_PER_DAY 86400
+/** Minutes per day (for offset modulo). */
+#define MINUTES_PER_DAY (24 * 60)
 
 /* =============================================================================
  * NFC (PN5180, ISO15693) — FRD 4.x Staff check-in/out/registered vote
@@ -161,5 +168,21 @@
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms). */
 #define EPD_CLEANING_REVERT_MINUTES 45
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60 * 1000)
+/**
+ * Delay (ms) before running display work. EPD and LoRa share SPI; holding the
+ * bus for EPD refresh blocks the radio during RX windows and drops downlinks.
+ * Delay allows RX1/RX2 (~1–2 s after uplink) to complete before we use SPI.
+ * Set to 0 to disable delay (e.g. if SPI is not shared).
+ */
+#define DISPLAY_WORK_DELAY_MS 3000
+
+/* =============================================================================
+ * Firmware Version
+ * =============================================================================
+ */
+#define FW_VERSION_MAJOR 1
+#define FW_VERSION_MINOR 2
+#define FW_VERSION_PATCH 0
+#define FW_VERSION_STRING "1.2.0"
 
 #endif /* SYS_CONFIG_H */
