@@ -158,7 +158,7 @@ static void create_lvgl_screens(void) {
   lv_obj_set_style_bg_color(screen_logo, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_logo, LV_OPA_COVER, LV_PART_MAIN);
   label = lv_label_create(screen_logo);
-  lv_label_set_text(label, "FeedbackNow\nFlexBox");
+  lv_label_set_text(label, "FeedbackNow\nFlexBox v2");
   lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
   lv_obj_center(label);

@@ -14,6 +14,7 @@
 #include "battery_adc.h"
 #include "button_counter_store.h"
 #include "display_manager.h"
+#include "join_state_store.h"
 #include "last_cleaned_store.h"
 #include "led_manager.h"
 #include "lora_app.h"
@@ -62,9 +63,11 @@ static struct k_mutex smf_nfc_mutex;
 /* Downlink command codes (FRD 4.5) */
 #define DL_CMD_EPD_UPDATE 0x01
 #define DL_CMD_EPD_REFRESH 0x02
-#define DL_CMD_STATUS_REQ 0x03
-#define DL_CMD_RESET_COUNTERS 0x04
-#define DL_CMD_TIMEZONE_OFFSET 0x05
+#define DL_CMD_TIMEZONE_OFFSET 0x03
+
+#define DL_CMD_STATUS_REQ 0x04
+#define DL_CMD_RESET_COUNTERS 0x05
+#define DL_CMD_FACTORY_RESET 0x06
 
 /* Counter-sync: small delay between uplinks to avoid congestion */
 #define COUNTER_SYNC_DELAY_MS 200
@@ -236,6 +239,23 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
     } else {
       LOG_ERR("[SMF] counters reset failed");
     }
+    rail_manager_release_3v3a();
+    break;
+  case DL_CMD_FACTORY_RESET:
+    LOG_INF("[SMF] cmd 0x06 factory reset (counters + has_joined_once)");
+    rail_manager_request_3v3a();
+    if (button_counter_store_factory_reset() == 0) {
+      LOG_INF("[SMF] factory reset: counters done");
+    } else {
+      LOG_ERR("[SMF] factory reset: counters failed");
+    }
+    if (join_state_store_clear_has_joined_once() == 0) {
+      LOG_INF("[SMF] factory reset: has_joined_once cleared");
+    } else {
+      LOG_WRN("[SMF] factory reset: clear has_joined_once failed");
+    }
+    (void)led_manager_show(0, LED_PATTERN_POWER_ON);
+    k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
     rail_manager_release_3v3a();
     break;
   case DL_CMD_TIMEZONE_OFFSET:

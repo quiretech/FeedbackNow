@@ -125,3 +125,30 @@ int join_state_store_set_has_joined_once(void) {
   LOG_INF("Join state: set has_joined_once = 1 (persisted)");
   return 0;
 }
+
+int join_state_store_clear_has_joined_once(void) {
+  if (!ctx.initialized) {
+    (void)join_state_store_init();
+  }
+#if EEPROM_JOIN_STATE_CLEAR_ON_BOOT
+  ctx.has_joined_once = false;
+  LOG_INF("Join state: clear has_joined_once (RAM only, CLEAR_ON_BOOT=1)");
+  return 0;
+#endif
+  if (eeprom_dev == NULL || !device_is_ready(eeprom_dev)) {
+    return -ENODEV;
+  }
+
+  struct join_state_record rec = {0};
+  rec.magic = JOIN_STATE_MAGIC;
+  rec.has_joined_once = 0;
+
+  int ret = eeprom_write_join_state(&rec);
+  if (ret != 0) {
+    LOG_ERR("Join state clear write failed: %d", ret);
+    return ret;
+  }
+  ctx.has_joined_once = false;
+  LOG_INF("Join state: clear has_joined_once = 0 (persisted)");
+  return 0;
+}

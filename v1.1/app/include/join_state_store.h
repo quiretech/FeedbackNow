@@ -18,4 +18,7 @@ int join_state_store_has_joined_once(bool *out);
 /** Set has_joined_once = true and persist to EEPROM. */
 int join_state_store_set_has_joined_once(void);
 
+/** Clear has_joined_once = false and persist to EEPROM (e.g. factory reset via downlink 0x06). */
+int join_state_store_clear_has_joined_once(void);
+
 #endif /* JOIN_STATE_STORE_H */
