@@ -23,12 +23,14 @@ LOG_MODULE_REGISTER(ssd1683, LOG_LEVEL_INF);
  * @return 0 on success, -ETIMEDOUT on timeout
  */
 static int _ssd1683_wait_busy(const struct ssd1683_config *cfg) {
-  LOG_DBG("Waiting for BUSY pin...");
-
+  int64_t timeout = k_uptime_get() + 5000; // 5 second watchdog
   while (gpio_pin_get_dt(&cfg->busy)) {
-    k_msleep(10);
+    if (k_uptime_get() > timeout) {
+      LOG_ERR("EPD Busy Timeout!");
+      return -ETIMEDOUT;
+    }
+    k_msleep(1); // Yield to other threads
   }
-  LOG_DBG("BUSY pin ready");
   return 0;
 }
 
@@ -99,12 +101,25 @@ static int _ssd1683_write_data(const struct ssd1683_config *cfg, uint8_t data) {
  * @return 0 on success, negative error code on failure
  */
 static int _ssd1683_reset(const struct ssd1683_config *cfg) {
+  int ret;
+
+  // 1. Force Reset Pin LOW
+  ret = gpio_pin_set_dt(&cfg->rst, 0);
+  if (ret < 0)
+    return ret;
+  k_msleep(20); // Hold low for 20ms
+
+  // 2. Pulse HIGH-LOW-HIGH (Specific to GDEY series and many SSD1683 modules)
+  // This triggers the power-on-reset circuit reliably.
+  gpio_pin_set_dt(&cfg->rst, 1);
+  k_msleep(5);
   gpio_pin_set_dt(&cfg->rst, 0);
   k_msleep(10);
   gpio_pin_set_dt(&cfg->rst, 1);
-  k_msleep(10);
-  LOG_INF("Hardware reset completed");
-  return 0;
+  k_msleep(20);
+
+  // 3. Wait for the controller to wake up and signal ready
+  return _ssd1683_wait_busy(cfg);
 }
 
 // ============================================================================
@@ -212,13 +227,27 @@ static int _ssd1683_init_display(const struct device *dev) {
       return ret;
   }
 
-  k_msleep(10); // 10ms according to specs (like reference)
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
+  ret = _ssd1683_reset(cfg);
   if (ret < 0)
     return ret;
 
   k_msleep(10); // 10ms according to specs (like reference)
+
+  // Software Reset
+  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
+  ret |= _ssd1683_wait_busy(cfg);
+  if (ret < 0)
+    return ret;
+
+  k_msleep(10); // 10ms according to specs (like reference)
+
+  // Bulletproof Step: Soft Start Control (Command 0x0C)
+  // This prevents high inrush current that can crash low-power MCUs
+  _ssd1683_write_cmd(cfg, 0x0C);
+  _ssd1683_write_data(cfg, 0x8B);
+  _ssd1683_write_data(cfg, 0x9C);
+  _ssd1683_write_data(cfg, 0x96);
+  _ssd1683_write_data(cfg, 0x0F);
 
   // Set MUX as 300 (like reference)
   ret = _ssd1683_write_cmd(cfg, 0x01);
@@ -298,14 +327,22 @@ static int _ssd1683_write_screen_buffer(const struct device *dev,
   if (ret < 0)
     return ret;
 
-  // Fill screen with value
-  uint32_t total_bytes = (uint32_t)cfg->width * (uint32_t)cfg->height / 8;
-  for (uint32_t i = 0; i < total_bytes; i++) {
-    ret = _ssd1683_write_data(cfg, value);
-    if (ret < 0)
-      return ret;
-  }
+  // Prepare a small burst buffer (e.g., 64 bytes)
+  uint8_t burst[64];
+  memset(burst, value, sizeof(burst));
 
+  struct spi_buf buf = {.buf = burst, .len = sizeof(burst)};
+  struct spi_buf_set tx = {.buffers = &buf, .count = 1};
+
+  gpio_pin_set_dt(&cfg->dc, 1); // Set to Data mode once
+
+  uint32_t total_bytes = (uint32_t)cfg->width * (uint32_t)cfg->height / 8;
+  for (uint32_t i = 0; i < total_bytes; i += sizeof(burst)) {
+    uint32_t chunk =
+        (total_bytes - i) < sizeof(burst) ? (total_bytes - i) : sizeof(burst);
+    buf.len = chunk;
+    spi_write_dt(&cfg->bus, &tx); // Direct SPI write is much faster
+  }
   return 0;
 }
 

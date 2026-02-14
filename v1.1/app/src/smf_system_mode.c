@@ -301,6 +301,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         smf_do_counter_sync(true); /* confirmed on rejoin */
         rail_manager_release_3v3a();
         display_show_last_cleaned();
+        // rail_manager_release_3v3a();
+
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         display_show_connecting();
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
