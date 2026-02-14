@@ -16,7 +16,7 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 10
+#define LORA_JOIN_RETRY_DELAY_SECONDS 2
 #define LORA_MAX_RETRIES 3
 #define LORA_SEND_BUSY_RETRY_MS 1000
 #define LORA_BUTTON_PORT 2
@@ -105,6 +105,23 @@
 /** Last cleaned display store (epoch for EPD "last cleaned" screen). */
 #define EEPROM_LAST_CLEANED_OFF 0x0250U
 #define EEPROM_LAST_CLEANED_SIZE 4U
+/** Timezone offset store (minutes from UTC for EPD display). Layout: magic 2B +
+ * int16_t 2B. */
+#define EEPROM_TZ_OFFSET_OFF 0x0254U
+#define EEPROM_TZ_OFFSET_SIZE 4U
+
+/* =============================================================================
+ * Timezone (display only; all internals stay UTC)
+ * =============================================================================
+ * Offset in minutes from UTC. Written to EEPROM via downlink 0x05; used only
+ * when formatting timestamps for the EPD so users see local time.
+ */
+/** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
+ * is uninitialized. */
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-480)
+/** Clamp range: ±24 hours in minutes. */
+#define TZ_OFFSET_MIN_MINUTES (-1440)
+#define TZ_OFFSET_MAX_MINUTES 1440
 
 /* =============================================================================
  * RTC / time sync

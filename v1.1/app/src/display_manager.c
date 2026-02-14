@@ -8,6 +8,7 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
+#include "tz_offset_store.h"
 
 #include <stdio.h>
 #include <time.h>
@@ -317,7 +318,17 @@ static void do_render(const struct device *display, enum display_job_type type,
     scr_to_show = screen_logo;
     break;
   case JOB_SHOW_LAST_CLEANED: {
-    format_epoch_yyyymmdd_hhmm(epoch, ts, sizeof(ts));
+    /* Apply timezone offset for display only (all internals stay UTC). */
+    int16_t tz_min = 0;
+    (void)tz_offset_store_get(&tz_min);
+    int64_t display_epoch = (int64_t)epoch + (int64_t)tz_min * 60;
+    if (display_epoch < 0) {
+      display_epoch = 0;
+    }
+    if (display_epoch > (int64_t)UINT32_MAX) {
+      display_epoch = (int64_t)UINT32_MAX;
+    }
+    format_epoch_yyyymmdd_hhmm((uint32_t)display_epoch, ts, sizeof(ts));
     LOG_INF("[EPD] show LAST_CLEANED %s", ts);
     if (last_cleaned_label) {
       lv_label_set_text(last_cleaned_label, ts);
@@ -425,6 +436,7 @@ static void display_work_handler(struct k_work *work) {
     return;
   }
 
+  // ssd1683_set_fast_update(display, true);
   /* Process LVGL tasks before rendering */
   lv_task_handler();
 

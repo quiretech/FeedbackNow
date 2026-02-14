@@ -32,6 +32,7 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
+#include "tz_offset_store.h"
 
 #include <zephyr/sys/reboot.h>
 
@@ -136,6 +137,8 @@ int main(void) {
 
   /* Last cleaned display store (EEPROM); ensure non-empty for first boot */
   (void)last_cleaned_store_init();
+  /* Timezone offset (EEPROM); build-time default used if uninitialized */
+  (void)tz_offset_store_init();
   uint32_t rtc_epoch = 0;
   if (rtc_get_epoch_seconds(&rtc_epoch) == 0) {
     (void)last_cleaned_store_ensure_non_empty(rtc_epoch);

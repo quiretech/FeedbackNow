@@ -38,6 +38,7 @@ target_sources(app PRIVATE
   src/eeprom_probe.c
   src/button_counter_store.c
   src/last_cleaned_store.c
+  src/tz_offset_store.c
   src/rtc.c
   src/smf_system_mode.c
   src/display_manager.c

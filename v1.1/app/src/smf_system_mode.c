@@ -22,6 +22,7 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
+#include "tz_offset_store.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -63,6 +64,7 @@ static struct k_mutex smf_nfc_mutex;
 #define DL_CMD_EPD_REFRESH 0x02
 #define DL_CMD_STATUS_REQ 0x03
 #define DL_CMD_RESET_COUNTERS 0x04
+#define DL_CMD_TIMEZONE_OFFSET 0x05
 
 /* Counter-sync: small delay between uplinks to avoid congestion */
 #define COUNTER_SYNC_DELAY_MS 200
@@ -235,6 +237,29 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
       LOG_ERR("[SMF] counters reset failed");
     }
     rail_manager_release_3v3a();
+    break;
+  case DL_CMD_TIMEZONE_OFFSET:
+    if (len >= 3) {
+      int16_t offset_min =
+          (int16_t)((uint16_t)data[1] << 8 | (uint16_t)data[2]);
+      if (offset_min < TZ_OFFSET_MIN_MINUTES) {
+        offset_min = TZ_OFFSET_MIN_MINUTES;
+      }
+      if (offset_min > TZ_OFFSET_MAX_MINUTES) {
+        offset_min = TZ_OFFSET_MAX_MINUTES;
+      }
+      rail_manager_request_3v3a();
+      int ret = tz_offset_store_set(offset_min);
+      rail_manager_release_3v3a();
+      if (ret == 0) {
+        LOG_INF("[SMF] cmd 0x05 timezone offset %d min", (int)offset_min);
+        display_show_last_cleaned();
+      } else {
+        LOG_WRN("[SMF] cmd 0x05 timezone store failed: %d", ret);
+      }
+    } else {
+      LOG_WRN("[SMF] cmd 0x05 timezone: len %u < 3", len);
+    }
     break;
   default:
     LOG_WRN("[SMF] unknown downlink cmd 0x%02X", cmd);
