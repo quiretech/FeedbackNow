@@ -298,14 +298,14 @@ static void create_lvgl_screens(void) {
 
   /* Button counters next */
   dev_info_counters = lv_label_create(cont_devinfo);
-  lv_label_set_text(dev_info_counters, "B0:0 B1:0 B2:0 B3:0 B4:0 B5:0");
-  lv_obj_set_style_text_font(dev_info_counters, &roboto_28, LV_PART_MAIN);
+  lv_label_set_text(dev_info_counters, "0x0:0 0x1:0 0x2:0 0x3:0 0x4:0 0x5:0");
+  lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
                               LV_PART_MAIN);
 
   /* FW version last */
   dev_info_fw = lv_label_create(cont_devinfo);
-  lv_label_set_text(dev_info_fw, "FW: " FW_VERSION_STRING);
+  lv_label_set_text(dev_info_fw, "Version: " FW_VERSION_STRING);
   lv_obj_set_style_text_font(dev_info_fw, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
 
@@ -413,26 +413,27 @@ static void do_render(const struct device *display, enum display_job_type type,
       static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
       char deveui_str[32];
       (void)snprintf(deveui_str, sizeof(deveui_str),
-                     "DevEUI: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x",
-                     dev_eui[0], dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4],
-                     dev_eui[5], dev_eui[6], dev_eui[7]);
+                     "EUI: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0],
+                     dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5],
+                     dev_eui[6], dev_eui[7]);
       lv_label_set_text(dev_info_deveui, deveui_str);
     }
     /* FW version is static text, already set in create_lvgl_screens */
-    /* Format button counters */
+    /* Format button counters in hexadecimal */
     if (dev_info_counters) {
       char counters_str[64];
-      uint32_t cnt[6];
+      uint32_t cnt[NUM_BUTTONS];
       int pos = 0;
       for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
         (void)button_counter_store_get(i, &cnt[i]);
       }
-      pos = snprintf(counters_str, sizeof(counters_str), "B0:%x",
-                     (unsigned)cnt[0]);
+      /* Display values in hex (lowercase, as 0x%lx). */
+      pos = snprintf(counters_str, sizeof(counters_str), "B0:%lx",
+                     (unsigned long)cnt[0]);
       for (uint8_t i = 1;
            i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 8); i++) {
         pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
-                        " B%u:%x", (unsigned)i, (unsigned)cnt[i]);
+                        " B%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
       }
       lv_label_set_text(dev_info_counters, counters_str);
     }

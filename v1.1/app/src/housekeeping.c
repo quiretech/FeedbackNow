@@ -1,13 +1,14 @@
 /*
  * Housekeeping / heartbeat worker (FRD 4.9).
  *
- * Dedicated thread runs at configured interval and posts SMF_EVT_HOUSEKEEPING_TICK
- * to the SMF queue. With HEARTBEAT_USE_DEVEUI_JITTER=1, runs once per day at
- * 00:00 UTC + (DevEUI[7]*256+DevEUI[6]) % 1440 minutes to spread load (FRD 4.9).
- * This thread does not call lora_* or rail_manager; it only posts events.
+ * Dedicated thread runs at configured interval and posts
+ * SMF_EVT_HOUSEKEEPING_TICK to the SMF queue. With
+ * HEARTBEAT_USE_DEVEUI_JITTER=1, runs once per day at 00:00 UTC +
+ * (DevEUI[7]*256+DevEUI[6]) % 1440 minutes to spread load (FRD 4.9). This
+ * thread does not call lora_* or rail_manager; it only posts events.
  */
-#include "eui_keys.h"
 #include "housekeeping.h"
+#include "eui_keys.h"
 #include "lora_app.h"
 #include "rtc.h"
 #include "smf_system_mode.h"
@@ -20,15 +21,17 @@ LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
 #define HOUSEKEEPING_STACK_SIZE 1024
 #define HOUSEKEEPING_PRIORITY 9
 
-/** Compute seconds until next daily heartbeat time (00:00 UTC + offset_minutes). */
+/** Compute seconds until next daily heartbeat time (00:00 UTC +
+ * offset_minutes). */
 static uint32_t seconds_until_next_heartbeat(uint32_t now_epoch,
-                                              uint32_t offset_minutes) {
+                                             uint32_t offset_minutes) {
   uint32_t offset_sec = offset_minutes * 60U;
   uint32_t sec_since_midnight = now_epoch % SECONDS_PER_DAY;
   uint32_t next_run_epoch;
 
   if (offset_sec > sec_since_midnight) {
-    next_run_epoch = (now_epoch / SECONDS_PER_DAY) * SECONDS_PER_DAY + offset_sec;
+    next_run_epoch =
+        (now_epoch / SECONDS_PER_DAY) * SECONDS_PER_DAY + offset_sec;
   } else {
     next_run_epoch =
         (now_epoch / SECONDS_PER_DAY + 1U) * SECONDS_PER_DAY + offset_sec;
@@ -67,7 +70,8 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
       housekeeping_run_tasks();
       continue;
     }
-    uint32_t sleep_sec = seconds_until_next_heartbeat(now_epoch, offset_minutes);
+    uint32_t sleep_sec =
+        seconds_until_next_heartbeat(now_epoch, offset_minutes);
     /* Cap sleep to avoid overflow / unreasonable delay */
     if (sleep_sec > SECONDS_PER_DAY) {
       sleep_sec = HOUSEKEEPING_INTERVAL_SECONDS;
@@ -75,7 +79,8 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
     if (sleep_sec == 0) {
       sleep_sec = 1;
     }
-    LOG_DBG("[housekeeping] sleeping %u s until next heartbeat", (unsigned)sleep_sec);
+    LOG_DBG("[housekeeping] sleeping %u s until next heartbeat",
+            (unsigned)sleep_sec);
     k_sleep(K_SECONDS(sleep_sec));
 #else
     k_sleep(K_SECONDS(HOUSEKEEPING_INTERVAL_SECONDS));

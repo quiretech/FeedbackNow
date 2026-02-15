@@ -22,6 +22,9 @@ static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
 
+/* Last uplink completion time (ms) for rate limiting; 0 = never sent yet */
+static uint32_t last_uplink_ms;
+
 static void lora_log_join_ids(void) {
   LOG_INF("LoRaWAN OTAA identifiers in use:");
   LOG_HEXDUMP_INF(dev_eui, sizeof(dev_eui), "DevEUI");
@@ -193,8 +196,21 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       lora_uplink_msg_t msg = {0};
       if (lora_get_event(&msg, K_NO_WAIT)) {
         if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
+          /* Rate limit: ensure min interval between uplinks (LoRa Alliance /
+           * duty cycle). Wait if we sent too recently. */
+          if (LORA_UPLINK_MIN_INTERVAL_MS > 0) {
+            uint32_t now_ms = (uint32_t)k_uptime_get();
+            uint32_t elapsed = now_ms - last_uplink_ms;
+            if (last_uplink_ms != 0 && elapsed < (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) {
+              uint32_t wait_ms = (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS - elapsed;
+              LOG_DBG("LoRa rate limit: wait %u ms", (unsigned)wait_ms);
+              k_msleep(wait_ms);
+            }
+          }
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
-          if (ret < 0) {
+          if (ret == 0) {
+            last_uplink_ms = (uint32_t)k_uptime_get();
+          } else if (ret < 0) {
             LOG_ERR("Failed to send LoRa message: %d", ret);
           }
         } else {

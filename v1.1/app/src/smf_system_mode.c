@@ -348,7 +348,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
         display_show_last_cleaned();
-        display_request_full_refresh(); /* Force EPD full refresh so panel updates from LOGO */
+        display_request_full_refresh(); /* Force EPD full refresh so panel
+                                           updates from LOGO */
         LOG_INF("[SMF] Join cycle failed -> Last Cleaned (customer-facing)");
       } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
         LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));
@@ -369,14 +370,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         if (lora_is_joined()) {
           housekeeping_holding_3v3a = true;
           rail_manager_request_3v3a();
+          rail_manager_request_3v3();
+          rail_manager_request_1v8();
 
           k_msleep(500);
-          /* 3) Link check MAC command (empty frame now). */
-          lora_request_link_check(true);
-
-          /* 2) Time sync (LoRa thread will post TIME_SYNC_DONE). */
-          lora_request_time_sync();
-
           /* 1) Battery status heartbeat uplink (EVT_BATTERY_STATUS). */
           int32_t battery_mv = 0;
           if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
@@ -413,9 +410,15 @@ static void smf_thread_fn(void *a, void *b, void *c) {
             LOG_WRN("[SMF] housekeeping: ADC battery read failed");
           }
 
-          /* Counter-sync payloads (same as on rejoin, unconfirmed in
-           * heartbeat). */
+          /* 2. NOW trigger the async events that might signal "Done" */
+          k_msleep(100);
+          lora_request_link_check(true);
+          lora_request_time_sync();
+
+          /* 3. Counter sync (also slow, but uses its own delays) */
           smf_do_counter_sync(false);
+          rail_manager_release_3v3();
+          rail_manager_release_1v8();
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);

@@ -12,20 +12,24 @@
  * =============================================================================
  */
 #define LORA_MAX_PAYLOAD_SIZE 11
-#define LORA_MSGQ_SIZE 10
+#define LORA_MSGQ_SIZE 30
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 5
+#define LORA_JOIN_RETRY_DELAY_SECONDS 10
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
-#define LORA_JOIN_ATTEMPTS_PER_CYCLE 3
+#define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
  * (K_HOURS expects int). Use 0 for testing with 1-minute backoff. */
 #define LORA_JOIN_BACKOFF_HOURS 0
 #define LORA_MAX_RETRIES 3
 #define LORA_SEND_BUSY_RETRY_MS 1000
+/** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
+ * after each send to stay within duty cycle / LoRa Alliance fair use. Set to 0
+ * to disable. Typical: 2000–5000 ms (e.g. EU868 1% duty cycle). */
+#define LORA_UPLINK_MIN_INTERVAL_MS 2000
 #define LORA_BUTTON_PORT 2
 
 /* =============================================================================

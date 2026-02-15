@@ -25,19 +25,28 @@ LOG_MODULE_REGISTER(battery_adc, LOG_LEVEL_INF);
 #define ADC_NODE DT_NODELABEL(adc)
 #define ADC_RESOLUTION 10
 #define ADC_CHANNEL_ID 3 /* AIN3 = P0.05 */
+#define ADC_RAW_MAX                                                            \
+  1023 /* 10-bit ADC valid range; values outside are hardware garbage */
 
 /* Simple resistor divider gain from board: approx 3.120x from pin to VBAT. */
 #define BATTERY_DIVIDER_NUM 2956
 #define BATTERY_DIVIDER_DEN 1000
+#define ADC_SAMPLES 5
+#define ADC_SAMPLE_DELAY_MS 100 /* match reference: 100 ms between samples */
+
+/* nRF internal reference 0.6 V; use if adc_ref_internal() returns 0 at read
+ * time */
+#define ADC_REF_INTERNAL_MV 600
 
 static const struct device *adc_dev = DEVICE_DT_GET(ADC_NODE);
+static uint16_t cached_ref_mv;
 
 static int16_t sample_buffer;
 
 static struct adc_channel_cfg channel_cfg = {
     .gain = ADC_GAIN_1_3,
     .reference = ADC_REF_INTERNAL,
-    .acquisition_time = ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 20),
+    .acquisition_time = ADC_ACQ_TIME_DEFAULT,
     .channel_id = ADC_CHANNEL_ID,
     .input_positive = NRF_SAADC_INPUT_AIN3, /* AIN3 = P0.05 */
 };
@@ -63,14 +72,15 @@ int battery_adc_init(void) {
     return ret;
   }
 
-  uint16_t ref_mv = adc_ref_internal(adc_dev);
-
-  if (ref_mv > 0) {
-    LOG_INF("ADC internal reference voltage: %u mV", ref_mv);
+  cached_ref_mv = adc_ref_internal(adc_dev);
+  if (cached_ref_mv == 0) {
+    cached_ref_mv = ADC_REF_INTERNAL_MV;
+    LOG_WRN("ADC internal ref not available, using %u mV", cached_ref_mv);
   } else {
-    LOG_WRN("ADC internal reference voltage not available");
+    LOG_INF("ADC internal reference voltage: %u mV", cached_ref_mv);
   }
   nrf_saadc_task_trigger(NRF_SAADC, NRF_SAADC_TASK_CALIBRATEOFFSET);
+  k_msleep(20);
 
   LOG_INF("ADC initialized and calibrated");
 
@@ -82,26 +92,55 @@ int battery_adc_read_mv(int32_t *battery_mv) {
     return -EINVAL;
   }
 
-  int32_t millivolts = 0;
-  int ret = adc_read(adc_dev, &sequence);
-  if (ret < 0) {
-    LOG_ERR("ADC read failed (%d)", ret);
-    return ret;
+  /* Discard read(s): clear result register and let ADC settle (reference does
+   * one discard then 100 ms before first real read). */
+  (void)adc_read(adc_dev, &sequence);
+  k_msleep(ADC_SAMPLE_DELAY_MS);
+
+  uint16_t ref_mv = adc_ref_internal(adc_dev);
+  if (ref_mv == 0) {
+    ref_mv = cached_ref_mv;
   }
 
-  millivolts = (int32_t)sample_buffer;
+  int32_t battery_mv_sum = 0;
+  int valid_reads = 0;
+  int16_t first_raw = 0;
+  bool logged_first = false;
 
-  /* Convert raw value to millivolts at the ADC pin. */
-  ret = adc_raw_to_millivolts(adc_ref_internal(adc_dev), channel_cfg.gain,
-                              ADC_RESOLUTION, &millivolts);
-  if (ret < 0) {
-    LOG_WRN("Raw to mV conversion not supported");
-    return ret;
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    k_msleep(ADC_SAMPLE_DELAY_MS);
+    int ret = adc_read(adc_dev, &sequence);
+    if (ret != 0) {
+      continue;
+    }
+    if (sample_buffer < 0 || sample_buffer > ADC_RAW_MAX) {
+      LOG_DBG("ADC raw out of range, skip: %d", (int)sample_buffer);
+      continue;
+    }
+
+    if (!logged_first) {
+      first_raw = sample_buffer;
+      logged_first = true;
+    }
+
+    int32_t pin_mv = (int32_t)sample_buffer;
+    ret = adc_raw_to_millivolts(ref_mv, channel_cfg.gain, ADC_RESOLUTION,
+                                &pin_mv);
+    if (ret != 0) {
+      continue;
+    }
+    int32_t vbat = (pin_mv * BATTERY_DIVIDER_NUM) / BATTERY_DIVIDER_DEN;
+    battery_mv_sum += vbat;
+    valid_reads++;
   }
 
-  /* Scale up to battery voltage using board-specific divider. */
-  *battery_mv = (millivolts * BATTERY_DIVIDER_NUM) / BATTERY_DIVIDER_DEN;
-  LOG_DBG("ADC raw=%d, pin_mv=%d, battery_mv=%d", sample_buffer, millivolts,
-          *battery_mv);
+  if (valid_reads == 0) {
+    LOG_WRN("ADC: no valid readings");
+    return -EIO;
+  }
+
+  *battery_mv = battery_mv_sum / valid_reads;
+  LOG_INF("ADC ref=%u mV raw_first=%d valid=%d battery_mv=%d", ref_mv,
+          first_raw, valid_reads, *battery_mv);
   return 0;
 }
