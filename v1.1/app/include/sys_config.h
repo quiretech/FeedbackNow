@@ -16,7 +16,14 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 10
+#define LORA_JOIN_RETRY_DELAY_SECONDS 5
+/** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
+ * no gateway). */
+#define LORA_JOIN_ATTEMPTS_PER_CYCLE 3
+/** After all attempts in a cycle fail, wait this many hours before next join
+ * cycle (deployed device cannot be re-joined by human). Must be integer
+ * (K_HOURS expects int). Use 0 for testing with 1-minute backoff. */
+#define LORA_JOIN_BACKOFF_HOURS 0
 #define LORA_MAX_RETRIES 3
 #define LORA_SEND_BUSY_RETRY_MS 1000
 #define LORA_BUTTON_PORT 2
@@ -31,7 +38,7 @@
 #define BUTTON_THREAD_STACK_SIZE 1536
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_COOLDOWN_MS 5000
+#define BUTTON_COOLDOWN_MS 18000
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
  * reset). */
@@ -162,9 +169,9 @@
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
  */
-#define HEARTBEAT_USE_DEVEUI_JITTER 1
+#define HEARTBEAT_USE_DEVEUI_JITTER 0
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 120
+#define HOUSEKEEPING_INTERVAL_SECONDS 60
 /** Seconds per day (for daily schedule). */
 #define SECONDS_PER_DAY 86400
 /** Minutes per day (for offset modulo). */

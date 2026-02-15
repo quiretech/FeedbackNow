@@ -28,6 +28,8 @@ LV_FONT_DECLARE(roboto_28);
 LV_FONT_DECLARE(roboto_32);
 LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
+/* Boot logo image (from assets/logo/bootLogo.c) */
+LV_IMG_DECLARE(bootLogo);
 #endif
 
 LOG_MODULE_REGISTER(display_mgr, CONFIG_LOG_DEFAULT_LEVEL);
@@ -162,44 +164,71 @@ static void lvgl_flush_cb(lv_display_t *display, const lv_area_t *area,
 static void create_lvgl_screens(void) {
   lv_obj_t *label;
 
-  /* Screen: LOGO */
+  /* Screen: LOGO – boot logo image centered */
   screen_logo = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_logo, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_logo, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_logo);
-  lv_label_set_text(label, "FeedbackNow\nFlexBox v2");
-  lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+  lv_obj_t *img_logo = lv_img_create(screen_logo);
+  lv_img_set_src(img_logo, &bootLogo);
+  lv_obj_center(img_logo);
   lv_obj_add_flag(screen_logo, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: LAST_CLEANED */
+  /* Screen: LAST_CLEANED (400x300): top space, heading, gap, timestamp, bottom
+   * space */
   screen_last_cleaned = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_last_cleaned, lv_color_white(),
                             LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_last_cleaned, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_last_cleaned);
+
+  /* Container for flex layout; must have white background so it doesn't draw
+   * black */
+  lv_obj_t *cont = lv_obj_create(screen_last_cleaned);
+  lv_obj_set_size(cont, 400, 300);
+  lv_obj_center(cont);
+  lv_obj_set_style_bg_color(cont, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(cont, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(cont, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(cont, 0, LV_PART_MAIN);
+
+  lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(cont, 40, LV_PART_MAIN);
+
+  label = lv_label_create(cont);
   lv_label_set_text(label, "LAST CLEANED");
   lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 20);
-  last_cleaned_label = lv_label_create(screen_last_cleaned);
+
+  last_cleaned_label = lv_label_create(cont);
   lv_label_set_text(last_cleaned_label, "2026/01/01 00:00");
   lv_obj_set_style_text_font(last_cleaned_label, &roboto_36, LV_PART_MAIN);
   lv_obj_set_style_text_color(last_cleaned_label, lv_color_black(),
                               LV_PART_MAIN);
-  lv_obj_align_to(last_cleaned_label, label, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+
   lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: THANKS */
+  /* Screen: THANKS – message centered in middle of 400x300 */
   screen_thanks = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_thanks);
+
+  lv_obj_t *cont_thanks = lv_obj_create(screen_thanks);
+  lv_obj_set_size(cont_thanks, 400, 300);
+  lv_obj_center(cont_thanks);
+  lv_obj_set_style_bg_color(cont_thanks, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(cont_thanks, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(cont_thanks, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(cont_thanks, 0, LV_PART_MAIN);
+  lv_obj_set_flex_flow(cont_thanks, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(cont_thanks, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER);
+
+  label = lv_label_create(cont_thanks);
   lv_label_set_text(label, "Thanks\nfor your\nFeedback!");
   lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+
   lv_obj_add_flag(screen_thanks, LV_OBJ_FLAG_HIDDEN);
 
   /* Screen: CLEANING */
@@ -213,52 +242,72 @@ static void create_lvgl_screens(void) {
   lv_obj_center(label);
   lv_obj_add_flag(screen_cleaning, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: CONNECTING */
+  /* Screen: CONNECTING – text centered in middle of 400x300 */
   screen_connecting = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_connecting, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_connecting, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_connecting);
-  lv_label_set_text(label, "Connecting...");
+
+  lv_obj_t *cont_connecting = lv_obj_create(screen_connecting);
+  lv_obj_set_size(cont_connecting, 400, 300);
+  lv_obj_center(cont_connecting);
+  lv_obj_set_style_bg_color(cont_connecting, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(cont_connecting, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(cont_connecting, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(cont_connecting, 0, LV_PART_MAIN);
+  lv_obj_set_flex_flow(cont_connecting, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(cont_connecting, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+  label = lv_label_create(cont_connecting);
+  lv_label_set_text(label, "Joining network...");
   lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+
   lv_obj_add_flag(screen_connecting, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: DEVICE_INFO */
+  /* Screen: DEVICE_INFO – center aligned, flex, heading 32.c, info 28.c, order:
+   * heading, eui, counters, fw */
   screen_device_info = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_device_info, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_device_info, LV_OPA_COVER, LV_PART_MAIN);
 
-  /* Heading: "FeedBackNow FlexBox" */
-  dev_info_heading = lv_label_create(screen_device_info);
+  // Flex container for device info
+  lv_obj_t *cont_devinfo = lv_obj_create(screen_device_info);
+  lv_obj_set_size(cont_devinfo, 400, 300);
+  lv_obj_center(cont_devinfo);
+  lv_obj_set_style_bg_color(cont_devinfo, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(cont_devinfo, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(cont_devinfo, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(cont_devinfo, 0, LV_PART_MAIN);
+  lv_obj_set_flex_flow(cont_devinfo, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(cont_devinfo, LV_FLEX_ALIGN_CENTER,
+                        LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_row(cont_devinfo, 14, LV_PART_MAIN);
+
+  /* Heading */
+  dev_info_heading = lv_label_create(cont_devinfo);
   lv_label_set_text(dev_info_heading, "FeedBackNow FlexBox");
-  lv_obj_set_style_text_font(dev_info_heading, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_font(dev_info_heading, &roboto_32, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_heading, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(dev_info_heading, LV_ALIGN_TOP_MID, 0, 10);
 
-  /* DevEUI label */
-  dev_info_deveui = lv_label_create(screen_device_info);
+  /* DevEUI as second line */
+  dev_info_deveui = lv_label_create(cont_devinfo);
   lv_label_set_text(dev_info_deveui, "DevEUI: 00:00:00:00:00:00:00:00");
-  lv_obj_set_style_text_font(dev_info_deveui, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_font(dev_info_deveui, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_deveui, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align_to(dev_info_deveui, dev_info_heading, LV_ALIGN_OUT_BOTTOM_MID, 0,
-                  15);
 
-  /* FW version label */
-  dev_info_fw = lv_label_create(screen_device_info);
-  lv_label_set_text(dev_info_fw, "FW: " FW_VERSION_STRING);
-  lv_obj_set_style_text_font(dev_info_fw, &roboto_20, LV_PART_MAIN);
-  lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align_to(dev_info_fw, dev_info_deveui, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
-
-  /* Button counters label */
-  dev_info_counters = lv_label_create(screen_device_info);
+  /* Button counters next */
+  dev_info_counters = lv_label_create(cont_devinfo);
   lv_label_set_text(dev_info_counters, "B0:0 B1:0 B2:0 B3:0 B4:0 B5:0");
-  lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_font(dev_info_counters, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
                               LV_PART_MAIN);
-  lv_obj_align_to(dev_info_counters, dev_info_fw, LV_ALIGN_OUT_BOTTOM_MID, 0,
-                  10);
+
+  /* FW version last */
+  dev_info_fw = lv_label_create(cont_devinfo);
+  lv_label_set_text(dev_info_fw, "FW: " FW_VERSION_STRING);
+  lv_obj_set_style_text_font(dev_info_fw, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
 
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
 }
@@ -455,7 +504,14 @@ static void display_work_handler(struct k_work *work) {
     current_screen = DISPLAY_SCREEN_LOGO;
     do_render(display, JOB_SHOW_LOGO, 0);
     break;
-  case JOB_SHOW_LAST_CLEANED:
+  case JOB_SHOW_LAST_CLEANED: {
+    /* EPD fast update often doesn't fully switch when changing to different
+     * content (LOGO or CONNECTING -> LAST_CLEANED); force full refresh. */
+    bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
+                              current_screen == DISPLAY_SCREEN_CONNECTING);
+    if (need_full_refresh) {
+      ssd1683_set_fast_update(display, false);
+    }
     current_screen = DISPLAY_SCREEN_LAST_CLEANED;
     if (cleaning_timer_active) {
       k_timer_stop(&cleaning_timer);
@@ -472,7 +528,11 @@ static void display_work_handler(struct k_work *work) {
       }
     }
     do_render(display, JOB_SHOW_LAST_CLEANED, epoch);
+    if (need_full_refresh) {
+      ssd1683_set_fast_update(display, true);
+    }
     break;
+  }
   case JOB_SHOW_THANKS:
     current_screen = DISPLAY_SCREEN_THANKS;
     k_timer_stop(&thanks_timer);
@@ -487,7 +547,8 @@ static void display_work_handler(struct k_work *work) {
     }
     cleaning_timer_active = true;
     do_render(display, JOB_SHOW_CLEANING, 0);
-    /* Re-showing after Thanks: timer kept running; don't restart so 45min is preserved. */
+    /* Re-showing after Thanks: timer kept running; don't restart so 45min is
+     * preserved. */
     if (!reshowing_after_thanks) {
       k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
                     K_NO_WAIT);

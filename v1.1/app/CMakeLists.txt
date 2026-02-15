@@ -17,6 +17,7 @@ project(feedbacknow1.2)
 target_include_directories(app PRIVATE 
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts
+  ${CMAKE_CURRENT_SOURCE_DIR}/assets/logo
 )
 
 # 3. Use a file list for cleaner source management
@@ -51,4 +52,5 @@ target_sources(app PRIVATE
   assets/fonts/roboto_28.c
   assets/fonts/roboto_36.c
   assets/fonts/roboto_bold_42.c
+  assets/logo/bootLogo.c
 )

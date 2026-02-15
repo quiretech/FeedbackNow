@@ -130,6 +130,8 @@ static const char *smf_ev_type_str(uint8_t ev_type) {
     return "JOINED";
   case SMF_EVT_JOIN_STARTED:
     return "JOIN_STARTED";
+  case SMF_EVT_JOIN_CYCLE_FAILED:
+    return "JOIN_CYCLE_FAILED";
   case SMF_EVT_TIME_SYNC_DONE:
     return "TIME_SYNC_DONE";
   case SMF_EVT_DISCONNECTED:
@@ -289,7 +291,8 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
   }
 }
 
-/* Set when SMF_EVT_SYSTEM_READY received; gates Normal-mode actions until "go". */
+/* Set when SMF_EVT_SYSTEM_READY received; gates Normal-mode actions until "go".
+ */
 static volatile bool system_ready;
 
 static void smf_thread_fn(void *a, void *b, void *c) {
@@ -343,6 +346,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         display_show_connecting();
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
+      } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
+        display_show_last_cleaned();
+        display_request_full_refresh(); /* Force EPD full refresh so panel updates from LOGO */
+        LOG_INF("[SMF] Join cycle failed -> Last Cleaned (customer-facing)");
       } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
         LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));
         if (housekeeping_holding_3v3a) {
@@ -386,8 +393,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
             if (pret == 0) {
               lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
               msg_hk.port = FPORT_HOUSEKEEPING;
-              msg_hk.confirmed =
-                  false; /* heartbeat battery status can be unconfirmed */
+              msg_hk.confirmed = true; /* heartbeat battery status can be
+                                          unconfirmed but i set it to true*/
               msg_hk.len = PAYLOAD_LEN_BYTES;
               memcpy(msg_hk.data, payload, PAYLOAD_LEN_BYTES);
               int qret = lora_put_event(&msg_hk, K_MSEC(500));

@@ -72,6 +72,7 @@ void app_logic_public_vote(uint8_t button_id) {
   ret = lora_put_event(&msg, K_NO_WAIT);
   if (ret == -ENOTCONN) {
     LOG_WRN("Not joined; dropped button id=%u", payload_button_id);
+    last_accepted_any_press_ms = now_ms; /* Cooldown same as when joined (no EPD flood). */
   } else if (ret != 0) {
     LOG_ERR("Queue button uplink failed: %d", ret);
   } else {

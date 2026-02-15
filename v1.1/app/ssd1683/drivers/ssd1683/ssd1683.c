@@ -271,7 +271,7 @@ static int _ssd1683_init_display(const struct device *dev) {
   if (ret < 0)
     return ret;
 
-  ret = _ssd1683_write_data(cfg, 0x01);
+  ret = _ssd1683_write_data(cfg, 0x10);
   if (ret < 0)
     return ret;
 
@@ -328,7 +328,7 @@ static int _ssd1683_write_screen_buffer(const struct device *dev,
     return ret;
 
   // Prepare a small burst buffer (e.g., 64 bytes)
-  uint8_t burst[64];
+  uint8_t burst[15008];
   memset(burst, value, sizeof(burst));
 
   struct spi_buf buf = {.buf = burst, .len = sizeof(burst)};

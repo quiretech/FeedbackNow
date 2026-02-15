@@ -32,6 +32,8 @@ enum smf_ev_type {
   SMF_EVT_JOINED,
   SMF_EVT_JOIN_STARTED,   /* LoRa thread started join (orchestration visibility)
                            */
+  SMF_EVT_JOIN_CYCLE_FAILED, /* Join failed after N attempts; show Last Cleaned
+                               * (customer-facing) before backoff. */
   SMF_EVT_TIME_SYNC_DONE, /* LoRa thread finished time sync (button_id: 0=ok,
                              1=fail) */
   SMF_EVT_DISCONNECTED,
