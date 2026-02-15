@@ -13,6 +13,7 @@
 #include "app_logic.h"
 #include "battery_adc.h"
 #include "button_counter_store.h"
+#include "devnonce_store.h"
 #include "display_manager.h"
 #include "join_state_store.h"
 #include "last_cleaned_store.h"
@@ -70,7 +71,7 @@ static struct k_mutex smf_nfc_mutex;
 #define DL_CMD_FACTORY_RESET 0x06
 
 /* Counter-sync: small delay between uplinks to avoid congestion */
-#define COUNTER_SYNC_DELAY_MS 200
+#define COUNTER_SYNC_DELAY_MS 3000
 
 /* Mode timeout: timer posts this event so SMF returns to Normal */
 static volatile uint8_t mode_timeout_ev;
@@ -246,12 +247,18 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
     rail_manager_release_3v3a();
     break;
   case DL_CMD_FACTORY_RESET:
-    LOG_INF("[SMF] cmd 0x06 factory reset (counters + has_joined_once)");
+    LOG_INF(
+        "[SMF] cmd 0x06 factory reset (counters + devnonce + has_joined_once)");
     rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
       LOG_INF("[SMF] factory reset: counters done");
     } else {
       LOG_ERR("[SMF] factory reset: counters failed");
+    }
+    if (devnonce_store_factory_reset() == 0) {
+      LOG_INF("[SMF] factory reset: devnonce reset to 0");
+    } else {
+      LOG_WRN("[SMF] factory reset: devnonce reset failed");
     }
     if (join_state_store_clear_has_joined_once() == 0) {
       LOG_INF("[SMF] factory reset: has_joined_once cleared");
@@ -338,10 +345,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_JOINED) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
         rail_manager_request_3v3a();
-        smf_do_counter_sync(true); /* confirmed on rejoin */
-        rail_manager_release_3v3a();
+        k_msleep(5000);
+        smf_do_counter_sync(false); /* confirmed on rejoin */
         display_show_last_cleaned();
-        // rail_manager_release_3v3a();
+        rail_manager_release_3v3a();
 
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         display_show_connecting();
@@ -391,7 +398,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                 payload);
             if (pret == 0) {
               lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
-              msg_hk.port = 32;
+              msg_hk.port = FPORT_HOUSEKEEPING;
               msg_hk.confirmed = true; /* heartbeat battery status can be
                                           unconfirmed but i set it to true*/
               msg_hk.len = PAYLOAD_LEN_BYTES;
@@ -416,8 +423,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           lora_request_link_check(true);
           lora_request_time_sync();
 
-          /* 3. Counter sync (also slow, but uses its own delays) */
-          smf_do_counter_sync(false);
+          /* 3. Counter sync (confirmed, like heartbeat and rejoin path) */
+          smf_do_counter_sync(true);
+          rail_manager_release_3v3();
+          rail_manager_release_3v3a();
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
@@ -516,19 +525,23 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         LOG_DBG("[SMF] NFC scan timeout (worker will post result)");
       } else if (msg.ev_type == SMF_EVT_NFC_RESULT) {
         k_timer_stop(&mode_timeout_timer);
-        rail_manager_release_3v6();
-        rail_manager_release_3v3a();
 
         uint8_t ok = msg.payload.nfc.ok;
         uint8_t intent = msg.payload.nfc.intent;
         uint8_t bid = msg.payload.nfc.button_id;
 
+        /* Read RTC while 3.3A is still held (RTC on I2C needs it). Release
+         * rails after we have epoch and have queued display/uplink. */
+        uint32_t epoch_s = 0;
+        (void)rtc_get_epoch_seconds(&epoch_s);
+        if (epoch_s == 0) {
+          epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+        }
+
+        rail_manager_release_3v6();
+        rail_manager_release_3v3a();
+
         if (ok) {
-          uint32_t epoch_s = 0;
-          (void)rtc_get_epoch_seconds(&epoch_s);
-          if (epoch_s == 0) {
-            epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-          }
           uint8_t payload[PAYLOAD_LEN_BYTES];
           uint8_t data_4[SMF_NFC_DATA_SIZE];
           k_mutex_lock(&smf_nfc_mutex, K_FOREVER);

@@ -7,6 +7,7 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
+#include <errno.h>
 #include <stdbool.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -24,6 +25,17 @@ static uint8_t app_key[] = LORAWAN_APP_KEY;
 
 /* Last uplink completion time (ms) for rate limiting; 0 = never sent yet */
 static uint32_t last_uplink_ms;
+
+/* Consecutive send failures; when >= LORA_SEND_FAILURES_BEFORE_BACKOFF we
+ * clear joined and schedule re-join after backoff. */
+static uint32_t consecutive_send_failures;
+
+static void join_after_backoff_timer_expiry(struct k_timer *timer) {
+  (void)timer;
+  LOG_INF("Link backoff elapsed; posting LORA_CMD_JOIN_SILENT");
+  (void)lora_cmd_put(LORA_CMD_JOIN_SILENT);
+}
+K_TIMER_DEFINE(join_after_backoff_timer, join_after_backoff_timer_expiry, NULL);
 
 static void lora_log_join_ids(void) {
   LOG_INF("LoRaWAN OTAA identifiers in use:");
@@ -73,15 +85,20 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
   int ret;
   uint16_t dev_nonce;
 
-  /* JOIN_STARTED is posted by caller only for deliberate join (LORA_CMD_JOIN). */
+  /* JOIN_STARTED is posted by caller only for deliberate join (LORA_CMD_JOIN).
+   */
   LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++) {
+    /* Hold 3.3A (and 3.3V) for devnonce read and for the whole join attempt so
+     * the LoRa radio can receive JoinAccept in Rx windows. On boot, main()
+     * keeps rails on until enter_idle(); on retry after backoff, rails are off
+     * so we must request here and release only after lorawan_join() returns. */
     rail_manager_request_3v3a();
     ret = devnonce_store_next(&dev_nonce);
-    rail_manager_release_3v3a();
     if (ret != 0) {
+      rail_manager_release_3v3a();
       LOG_ERR("DevNonce allocation failed (%d) - rebooting", ret);
       sys_reboot(SYS_REBOOT_COLD);
     }
@@ -92,12 +109,22 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
     lora_log_join_ids();
     LOG_INF("Joining network using OTAA, devNonce: %d", dev_nonce);
     ret = lorawan_join(join_cfg);
+    rail_manager_release_3v3a(); /* Release after join so Rx window had rail on
+                                  */
     LOG_INF("lorawan_join() returned: %d", ret);
 
     if (ret == 0) {
       LOG_SECTION_INF("LORA JOIN SUCCESSFUL");
+      consecutive_send_failures = 0;
+      k_timer_stop(&join_after_backoff_timer);
       atomic_set(&lora_joined_flag, 1);
       k_sem_give(&lora_join_sem);
+
+      /* --- ADD SETTLE DELAY HERE --- */
+      LOG_INF("Waiting 5s for stack to settle before post-join tasks...");
+      k_msleep(5000);
+      /* ---------------------------- */
+
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
       rail_manager_request_3v3a();
       (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
@@ -152,7 +179,8 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   LOG_INF("has_joined_once=%d (EEPROM_JOIN_STATE_CLEAR_ON_BOOT=%d)",
           has_joined_once, EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
   if (has_joined_once) {
-    (void)lora_cmd_put(LORA_CMD_JOIN_SILENT); /* Auto-join: no Connecting screen */
+    (void)lora_cmd_put(
+        LORA_CMD_JOIN_SILENT); /* Auto-join: no Connecting screen */
   } else {
     LOG_SECTION_INF("FIRST BOOT: waiting for join command (Staff + 0+1+2)");
   }
@@ -201,8 +229,10 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           if (LORA_UPLINK_MIN_INTERVAL_MS > 0) {
             uint32_t now_ms = (uint32_t)k_uptime_get();
             uint32_t elapsed = now_ms - last_uplink_ms;
-            if (last_uplink_ms != 0 && elapsed < (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) {
-              uint32_t wait_ms = (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS - elapsed;
+            if (last_uplink_ms != 0 &&
+                elapsed < (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) {
+              uint32_t wait_ms =
+                  (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS - elapsed;
               LOG_DBG("LoRa rate limit: wait %u ms", (unsigned)wait_ms);
               k_msleep(wait_ms);
             }
@@ -210,8 +240,45 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
           if (ret == 0) {
             last_uplink_ms = (uint32_t)k_uptime_get();
+            consecutive_send_failures = 0;
           } else if (ret < 0) {
             LOG_ERR("Failed to send LoRa message: %d", ret);
+            if (ret == -ENOTCONN) {
+              /* Stack reports "not joined" (e.g. session lost after Rx
+               * timeout). Sync our state and schedule re-join; do not count
+               * toward "link lost" failures (that is for -116 timeouts while
+               * joined). */
+              if (lora_is_joined()) {
+                atomic_set(&lora_joined_flag, 0);
+                (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
+                k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
+                                          ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
+                                          : K_MINUTES(1);
+                k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+                LOG_INF("Stack not joined (-ENOTCONN); cleared flag, re-join "
+                        "in backoff");
+              }
+            } else if (ret != -EBUSY) {
+              /* Only count link/ACK failures (e.g. -116 timeout) toward "link
+               * lost". */
+              consecutive_send_failures++;
+              if (LORA_SEND_FAILURES_BEFORE_BACKOFF > 0 &&
+                  consecutive_send_failures >=
+                      (uint32_t)LORA_SEND_FAILURES_BEFORE_BACKOFF &&
+                  lora_is_joined()) {
+                LOG_WRN(
+                    "Link lost: %u consecutive send failures; clearing joined, "
+                    "scheduling re-join after backoff",
+                    consecutive_send_failures);
+                atomic_set(&lora_joined_flag, 0);
+                consecutive_send_failures = 0;
+                (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
+                k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
+                                          ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
+                                          : K_MINUTES(1);
+                k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+              }
+            }
           }
         } else {
           LOG_ERR("Invalid message length: %d", msg.len);
@@ -227,7 +294,16 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           if (cmd == LORA_CMD_JOIN) {
             (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
           }
-          (void)run_join_cycle(&join_cfg);
+          if (!run_join_cycle(&join_cfg)) {
+            /* Join cycle failed (e.g. 20 attempts); schedule retry after
+             * backoff. */
+            k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
+                                      ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
+                                      : K_MINUTES(1);
+            k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+            LOG_INF("Join cycle failed; will retry in %s",
+                    LORA_JOIN_BACKOFF_HOURS > 0 ? "hours" : "1 min");
+          }
         } else if (cmd == LORA_CMD_TIME_SYNC) {
           time_sync_request_and_update_rtc();
           int ts_ret = time_sync_wait(TIME_SYNC_WAIT_TIMEOUT);

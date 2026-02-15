@@ -22,10 +22,11 @@ int devnonce_store_init(void);
 int devnonce_store_next(uint16_t *out_nonce);
 
 /**
- * @brief Factory reset: erase DevNonce store and reinitialize with random value.
+ * @brief Factory reset: erase DevNonce store and reinitialize so next join
+ *        uses devnonce 0.
  *
- * This erases both EEPROM slots and reinitializes with a new random starting
- * DevNonce. Use this if you're getting OTAA errors and want to start fresh.
+ * Erases both EEPROM slots and reinitializes; next devnonce_store_next() will
+ * return 0. Use via downlink 0x06 or EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT.
  *
  * @return 0 on success, negative errno on failure.
  */

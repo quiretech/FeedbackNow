@@ -10,7 +10,6 @@
 #include <zephyr/drivers/eeprom.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/random/random.h>
 #include <zephyr/sys/crc.h>
 
 LOG_MODULE_REGISTER(devnonce_store, CONFIG_LOG_DEFAULT_LEVEL);
@@ -112,10 +111,9 @@ static int load_or_init(void) {
   const bool v1 = rec_is_valid(&r1);
 
   if ((blank0 && blank1) || (!v0 && !v1)) {
-    /* Initialize with a randomized starting point to reduce predictability. */
-    uint32_t rnd = 0;
-    sys_rand_get(&rnd, sizeof(rnd));
-    const uint16_t start = (uint16_t)rnd;
+    /* First time: next value returned will be 0, then 1, 2, ... (last_devnonce
+     * 0xFFFF => next = 0 in 16-bit arithmetic). */
+    const uint16_t start = 0xFFFF;
 
     ctx.active_slot = 0;
     ctx.seq = 0;
@@ -129,8 +127,8 @@ static int load_or_init(void) {
     }
 
     LOG_SECTION_INF("DEVNONCE STORE INITIALIZED");
-    LOG_INF("DevNonce store initialized (slot=%u seq=%u start=%u)",
-            ctx.active_slot, ctx.seq, ctx.last_devnonce);
+    LOG_INF("DevNonce store initialized (slot=%u seq=%u, first join will use 0)",
+            ctx.active_slot, ctx.seq);
     return 0;
   }
 
@@ -267,12 +265,10 @@ int devnonce_store_factory_reset(void) {
     return ret;
   }
 
-  /* Reinitialize with a new random starting value */
+  /* Reinitialize so next join uses devnonce 0 (last_devnonce 0xFFFF => next = 0) */
   k_mutex_lock(&ctx.lock, K_FOREVER);
 
-  uint32_t rnd = 0;
-  sys_rand_get(&rnd, sizeof(rnd));
-  const uint16_t start = (uint16_t)rnd;
+  const uint16_t start = 0xFFFF;
 
   ctx.active_slot = 0;
   ctx.seq = 0;
@@ -290,8 +286,7 @@ int devnonce_store_factory_reset(void) {
   ctx.initialized = true;
   k_mutex_unlock(&ctx.lock);
 
-  LOG_WRN("DevNonce factory reset complete (slot=0 seq=0 start=%u). New random "
-          "DevNonce initialized.",
-          start);
+  LOG_WRN("DevNonce factory reset complete (slot=0 seq=0). Next join will use "
+          "devnonce 0.");
   return 0;
 }

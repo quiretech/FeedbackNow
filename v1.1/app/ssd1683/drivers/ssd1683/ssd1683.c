@@ -248,7 +248,24 @@ static int _ssd1683_init_display(const struct device *dev) {
   _ssd1683_write_data(cfg, 0x9C);
   _ssd1683_write_data(cfg, 0x96);
   _ssd1683_write_data(cfg, 0x0F);
+  // 2. Set Gate Driving Voltage (Command 0x03)
+  // Set VGH to 20V (0x17) for firm pixel locking
+  _ssd1683_write_cmd(cfg, 0x03);
+  _ssd1683_write_data(cfg, 0x17);
 
+  // 3. Set Source Driving Voltage (Command 0x04)
+  // VSH1=15V, VSH2=5V, VSL=-15V
+  _ssd1683_write_cmd(cfg, 0x04);
+  _ssd1683_write_data(cfg, 0x41); // VSH1
+  _ssd1683_write_data(cfg, 0x00); // VSH2
+  _ssd1683_write_data(cfg, 0x32); // VSL
+
+  // 4. VCOM Calibration (Command 0x2C)
+  // Critical for removing ghosting and background grayness
+  _ssd1683_write_cmd(cfg, 0x2C);
+  _ssd1683_write_data(cfg, 0x36); // -1.0V (Standard sweet spot)
+                                  //
+                                  //
   // Set MUX as 300 (like reference)
   ret = _ssd1683_write_cmd(cfg, 0x01);
   if (ret < 0)
@@ -271,7 +288,7 @@ static int _ssd1683_init_display(const struct device *dev) {
   if (ret < 0)
     return ret;
   // black border : 0x10
-  ret = _ssd1683_write_data(cfg, 0x10);
+  ret = _ssd1683_write_data(cfg, 0x01);
   if (ret < 0)
     return ret;
 

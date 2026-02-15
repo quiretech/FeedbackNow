@@ -309,6 +309,14 @@ static void create_lvgl_screens(void) {
   lv_obj_set_style_text_font(dev_info_fw, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
 
+  /* Footer: QuireTech LLC 2026, centered, roboto20 font */
+  lv_obj_t *dev_info_footer = lv_label_create(cont_devinfo);
+  lv_label_set_text(dev_info_footer, "QuireTech LLC 2026");
+  lv_obj_set_style_text_font(dev_info_footer, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_footer, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_footer, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
+
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
 }
 

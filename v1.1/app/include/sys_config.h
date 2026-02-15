@@ -16,10 +16,10 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 10
+#define LORA_JOIN_RETRY_DELAY_SECONDS 20
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
-#define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
+#define LORA_JOIN_ATTEMPTS_PER_CYCLE 5
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
  * (K_HOURS expects int). Use 0 for testing with 1-minute backoff. */
@@ -29,7 +29,11 @@
 /** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
  * after each send to stay within duty cycle / LoRa Alliance fair use. Set to 0
  * to disable. Typical: 2000–5000 ms (e.g. EU868 1% duty cycle). */
-#define LORA_UPLINK_MIN_INTERVAL_MS 2000
+#define LORA_UPLINK_MIN_INTERVAL_MS 3000
+/** After this many consecutive lorawan_send() failures, clear joined and
+ * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
+ * disable. Typical: 3. */
+#define LORA_SEND_FAILURES_BEFORE_BACKOFF 3
 #define LORA_BUTTON_PORT 2
 
 /* =============================================================================
@@ -173,9 +177,9 @@
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
  */
-#define HEARTBEAT_USE_DEVEUI_JITTER 0
+#define HEARTBEAT_USE_DEVEUI_JITTER 1
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 60
+#define HOUSEKEEPING_INTERVAL_SECONDS 120
 /** Seconds per day (for daily schedule). */
 #define SECONDS_PER_DAY 86400
 /** Minutes per day (for offset modulo). */
@@ -206,7 +210,7 @@
  * Delay allows RX1/RX2 (~1–2 s after uplink) to complete before we use SPI.
  * Set to 0 to disable delay (e.g. if SPI is not shared).
  */
-#define DISPLAY_WORK_DELAY_MS 3000
+#define DISPLAY_WORK_DELAY_MS 5000
 
 /* =============================================================================
  * Firmware Version
