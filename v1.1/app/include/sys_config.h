@@ -42,7 +42,7 @@
 #define BUTTON_THREAD_STACK_SIZE 1536
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_COOLDOWN_MS 18000
+#define BUTTON_COOLDOWN_MS 7000
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
  * reset). */

@@ -356,6 +356,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         if (housekeeping_holding_3v3a) {
           housekeeping_holding_3v3a = false;
           rail_manager_release_3v3a();
+          rail_manager_release_3v3(); // Release both
         }
       } else if (msg.ev_type == SMF_EVT_HOUSEKEEPING_TICK) {
         /* Housekeeping runs under SMF rail arbitration; hold 3.3A until
@@ -370,10 +371,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         if (lora_is_joined()) {
           housekeeping_holding_3v3a = true;
           rail_manager_request_3v3a();
-          rail_manager_request_3v3();
-          rail_manager_request_1v8();
-
+          rail_manager_request_3v3(); // MUST BE ON for the divider
+          /* 500ms is great; gives the main rail and capacitors time to charge
+           */
           k_msleep(500);
+
           /* 1) Battery status heartbeat uplink (EVT_BATTERY_STATUS). */
           int32_t battery_mv = 0;
           if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
@@ -389,7 +391,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                 payload);
             if (pret == 0) {
               lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
-              msg_hk.port = FPORT_HOUSEKEEPING;
+              msg_hk.port = 32;
               msg_hk.confirmed = true; /* heartbeat battery status can be
                                           unconfirmed but i set it to true*/
               msg_hk.len = PAYLOAD_LEN_BYTES;
@@ -411,14 +413,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           }
 
           /* 2. NOW trigger the async events that might signal "Done" */
-          k_msleep(100);
           lora_request_link_check(true);
           lora_request_time_sync();
 
           /* 3. Counter sync (also slow, but uses its own delays) */
           smf_do_counter_sync(false);
-          rail_manager_release_3v3();
-          rail_manager_release_1v8();
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);

@@ -270,7 +270,7 @@ static int _ssd1683_init_display(const struct device *dev) {
   ret = _ssd1683_write_cmd(cfg, 0x3C);
   if (ret < 0)
     return ret;
-
+  // black border : 0x10
   ret = _ssd1683_write_data(cfg, 0x10);
   if (ret < 0)
     return ret;

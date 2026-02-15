@@ -24,14 +24,15 @@ LOG_MODULE_REGISTER(battery_adc, LOG_LEVEL_INF);
 
 #define ADC_NODE DT_NODELABEL(adc)
 #define ADC_RESOLUTION 10
-#define ADC_CHANNEL_ID 3 /* AIN3 = P0.05 */
+#define ADC_CHANNEL_ID                                                         \
+  3 /* AIN3 on nRF52840; match reference (channel 0, BIT(0)) */
 #define ADC_RAW_MAX                                                            \
   1023 /* 10-bit ADC valid range; values outside are hardware garbage */
 
 /* Simple resistor divider gain from board: approx 3.120x from pin to VBAT. */
 #define BATTERY_DIVIDER_NUM 2956
 #define BATTERY_DIVIDER_DEN 1000
-#define ADC_SAMPLES 5
+#define ADC_SAMPLES 20
 #define ADC_SAMPLE_DELAY_MS 100 /* match reference: 100 ms between samples */
 
 /* nRF internal reference 0.6 V; use if adc_ref_internal() returns 0 at read
@@ -46,7 +47,7 @@ static int16_t sample_buffer;
 static struct adc_channel_cfg channel_cfg = {
     .gain = ADC_GAIN_1_3,
     .reference = ADC_REF_INTERNAL,
-    .acquisition_time = ADC_ACQ_TIME_DEFAULT,
+    .acquisition_time = ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40),
     .channel_id = ADC_CHANNEL_ID,
     .input_positive = NRF_SAADC_INPUT_AIN3, /* AIN3 = P0.05 */
 };
@@ -81,7 +82,6 @@ int battery_adc_init(void) {
   }
   nrf_saadc_task_trigger(NRF_SAADC, NRF_SAADC_TASK_CALIBRATEOFFSET);
   k_msleep(20);
-
   LOG_INF("ADC initialized and calibrated");
 
   return 0;
@@ -92,10 +92,12 @@ int battery_adc_read_mv(int32_t *battery_mv) {
     return -EINVAL;
   }
 
-  /* Discard read(s): clear result register and let ADC settle (reference does
+  battery_adc_init();
+
+  /* Discard read: clear result register and let ADC settle (reference does
    * one discard then 100 ms before first real read). */
   (void)adc_read(adc_dev, &sequence);
-  k_msleep(ADC_SAMPLE_DELAY_MS);
+  k_msleep(100);
 
   uint16_t ref_mv = adc_ref_internal(adc_dev);
   if (ref_mv == 0) {
