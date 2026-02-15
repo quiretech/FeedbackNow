@@ -7,6 +7,7 @@
 #define NFC_SERVICE_H
 
 #include <stdint.h>
+#include <zephyr/kernel.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,8 +20,12 @@ enum nfc_intent {
   NFC_INTENT_VOTE = 0x03,      /* EVT_NFC_VOTE */
 };
 
+/** Thread ID for main to start (K_THREAD_DEFINE with delay = -1). */
+extern const k_tid_t nfc_worker_id;
+
 /**
  * One-time init: PN5180 init and configure ISO15693. Call after rails/GPIO.
+ * Start nfc_worker_id from main thread block.
  * @return 0 on success, negative on error.
  */
 int nfc_service_init(void);

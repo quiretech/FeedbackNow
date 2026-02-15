@@ -136,6 +136,10 @@
 #define RTC_SET_MINUTE 00
 #define RTC_SET_SECOND 00
 #define RTC_VALID_YEAR_MIN 2026
+/** Retries for RTC read when rail may have just powered up (I2C -EIO). */
+#define RTC_GET_EPOCH_RETRIES 3
+/** Delay (ms) between RTC read retries. */
+#define RTC_GET_EPOCH_RETRY_DELAY_MS 5
 #define RTC_REQUIRE_LNS_TIME_SYNC 0
 #define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 10
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18

@@ -13,6 +13,7 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/rtc.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/timeutil.h>
 
@@ -121,7 +122,18 @@ int rtc_get_epoch_seconds(uint32_t *out_epoch_s) {
   }
 
   struct rtc_time t = {0};
-  int ret = rtc_get_time(rtc_dev, &t);
+  int ret = -EIO;
+  for (int attempt = 0; attempt < RTC_GET_EPOCH_RETRIES; attempt++) {
+    if (attempt > 0) {
+      k_msleep(RTC_GET_EPOCH_RETRY_DELAY_MS);
+    }
+    ret = rtc_get_time(rtc_dev, &t);
+    if (ret == 0) {
+      break;
+    }
+    /* -EIO (-5) typical when 3.3A rail just came on (RTC on I2C not ready yet) */
+    LOG_DBG("RTC read attempt %d failed: %d", attempt + 1, ret);
+  }
   if (ret != 0) {
     return ret;
   }

@@ -140,6 +140,8 @@ static const char *smf_ev_type_str(uint8_t ev_type) {
     return "NFC_RESULT";
   case SMF_EVT_HOUSEKEEPING_TICK:
     return "HOUSEKEEPING_TICK";
+  case SMF_EVT_SYSTEM_READY:
+    return "SYSTEM_READY";
   default:
     return "?";
   }
@@ -287,6 +289,9 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
   }
 }
 
+/* Set when SMF_EVT_SYSTEM_READY received; gates Normal-mode actions until "go". */
+static volatile bool system_ready;
+
 static void smf_thread_fn(void *a, void *b, void *c) {
   smf_msg_t msg;
   enum system_mode mode = MODE_NORMAL;
@@ -302,6 +307,13 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       continue;
     }
 
+    /* System go: all inits and threads started. */
+    if (msg.ev_type == SMF_EVT_SYSTEM_READY) {
+      system_ready = true;
+      LOG_INF("[SMF] system ready (all go)");
+      continue;
+    }
+
     LOG_DBG("[SMF] dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
             smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms,
             smf_mode_str(mode));
@@ -310,11 +322,16 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     case MODE_NORMAL:
       if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
           msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
-        LOG_DBG("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
-                msg.button_id);
-        rail_manager_request_3v3a();
-        app_logic_public_vote(msg.button_id);
-        rail_manager_release_3v3a();
+        if (!system_ready) {
+          LOG_DBG("[SMF] Normal: button %u ignored (system not ready yet)",
+                  msg.button_id);
+        } else {
+          LOG_DBG("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
+                  msg.button_id);
+          rail_manager_request_3v3a();
+          app_logic_public_vote(msg.button_id);
+          rail_manager_release_3v3a();
+        }
       } else if (msg.ev_type == SMF_EVT_JOINED) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
         rail_manager_request_3v3a();

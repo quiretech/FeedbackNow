@@ -123,8 +123,7 @@ int nfc_service_init(void) {
   }
 
   k_mutex_init(&scan_params_mutex);
-  k_thread_start(nfc_worker_id);
-  LOG_INF("nfc_service initialized (worker thread started)");
+  LOG_INF("nfc_service initialized (start nfc_worker_id from main)");
   return 0;
 }
 

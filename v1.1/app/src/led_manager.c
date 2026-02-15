@@ -218,7 +218,7 @@ static void led_ui_thread_fn(void *a, void *b, void *c) {
 }
 
 K_THREAD_DEFINE(led_ui_thread_id, LED_UI_THREAD_STACK, led_ui_thread_fn, NULL,
-                NULL, NULL, LED_UI_THREAD_PRIORITY, 0, 0);
+                NULL, NULL, LED_UI_THREAD_PRIORITY, 0, -1);
 
 int led_manager_init(void) {
   int ret = leds_init();

@@ -9,6 +9,7 @@
 #define LED_MANAGER_H
 
 #include <stdint.h>
+#include <zephyr/kernel.h>
 
 /** Pattern ids (FRD 4.4). Post one of these; thread runs it and then goes idle
  * or repeats until next command. */
@@ -25,7 +26,10 @@ enum led_pattern_id {
   LED_PATTERN_COUNT
 };
 
-/** Init GPIO and start LED thread. Call once from main. */
+/** Thread ID for main to start (K_THREAD_DEFINE with delay = -1). */
+extern const k_tid_t led_ui_thread_id;
+
+/** Init GPIO. Call once from main; start led_ui_thread_id from main thread block. */
 int led_manager_init(void);
 
 /**

@@ -133,9 +133,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                          .otaa.dev_nonce = 0};
 
   /* Join is command-driven: first boot waits for SMF (Staff+COMBO_JOIN);
-   * subsequent boot auto-posts LORA_CMD_JOIN so join runs without blocking. */
+   * subsequent boot auto-posts LORA_CMD_JOIN so join runs without blocking.
+   * join_state_store is inited from main before this thread starts. */
   bool has_joined_once = false;
-  (void)join_state_store_init();
   (void)join_state_store_has_joined_once(&has_joined_once);
   LOG_INF("has_joined_once=%d (EEPROM_JOIN_STATE_CLEAR_ON_BOOT=%d)",
           has_joined_once, EEPROM_JOIN_STATE_CLEAR_ON_BOOT);

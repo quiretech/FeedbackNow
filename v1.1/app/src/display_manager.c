@@ -95,8 +95,17 @@ static lv_obj_t *dev_info_counters;
 static uint8_t __aligned(4) lvgl_buf1[LVGL_BUF_SIZE];
 static uint8_t __aligned(4) lvgl_buf2[LVGL_BUF_SIZE];
 
+static void enqueue_job(enum display_job_type type, uint32_t epoch);
+
 static void thanks_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
+  /* If staff check-in is still active (cleaning in progress), return to that
+   * screen instead of Last Cleaned, so "Thank You" from a public press doesn't
+   * lose the cleaning state. */
+  if (cleaning_timer_active) {
+    enqueue_job(JOB_SHOW_CLEANING, 0);
+    return;
+  }
   display_show_last_cleaned();
 }
 
@@ -470,16 +479,21 @@ static void display_work_handler(struct k_work *work) {
     do_render(display, JOB_SHOW_THANKS, 0);
     k_timer_start(&thanks_timer, K_MSEC(EPD_THANKS_DISPLAY_MS), K_NO_WAIT);
     break;
-  case JOB_SHOW_CLEANING:
+  case JOB_SHOW_CLEANING: {
     current_screen = DISPLAY_SCREEN_CLEANING;
-    if (cleaning_timer_active) {
+    bool reshowing_after_thanks = cleaning_timer_active;
+    if (cleaning_timer_active && !reshowing_after_thanks) {
       k_timer_stop(&cleaning_timer);
     }
     cleaning_timer_active = true;
     do_render(display, JOB_SHOW_CLEANING, 0);
-    k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
-                  K_NO_WAIT);
+    /* Re-showing after Thanks: timer kept running; don't restart so 45min is preserved. */
+    if (!reshowing_after_thanks) {
+      k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
+                    K_NO_WAIT);
+    }
     break;
+  }
   case JOB_SHOW_CONNECTING:
     current_screen = DISPLAY_SCREEN_CONNECTING;
     do_render(display, JOB_SHOW_CONNECTING, 0);

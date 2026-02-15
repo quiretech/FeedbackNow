@@ -39,6 +39,7 @@ enum smf_ev_type {
   SMF_EVT_NFC_RESULT,
   SMF_EVT_HOUSEKEEPING_TICK, /* Periodic housekeeping (time sync, later link
                                 check, battery) */
+  SMF_EVT_SYSTEM_READY,     /* All inits and threads started; "system go" */
   SMF_EVT_COUNT
 };
 

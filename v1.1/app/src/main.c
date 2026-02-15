@@ -20,6 +20,7 @@
 #include "display_manager.h"
 #include "eeprom_probe.h"
 #include "housekeeping.h"
+#include "join_state_store.h"
 #include "last_cleaned_store.h"
 #include "led_manager.h"
 #include "log_fmt.h"
@@ -38,6 +39,99 @@
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 
+/**
+ * Single consolidated init: dependency order is EEPROM probe, rail_manager,
+ * then EEPROM-backed stores (counters, devnonce, join_state), then RTC and
+ * display stores, then peripherals (battery ADC, NFC, display, LoRa).
+ * Factory-reset one-shots (if enabled) reboot and do not return.
+ * Returns 0 on success, negative on failure.
+ */
+static int system_init(void) {
+  int ret;
+
+  /* Payload gen (no EEPROM yet; uses counters later) */
+  payload_gen_init();
+
+  ret = led_manager_init();
+  if (ret != 0) {
+    LOG_WRN("LED manager init failed (%d); LED feedback may be disabled", ret);
+  }
+
+  eeprom_probe_log();
+
+  ret = rail_manager_init();
+  if (ret != 0) {
+    LOG_ERR("rail_manager_init failed: %d", ret);
+    return ret;
+  }
+
+  ret = button_counter_store_init();
+  if (ret != 0) {
+    LOG_ERR("Button counter store init failed (%d) - rebooting", ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+
+  ret = devnonce_store_init();
+  if (ret != 0) {
+    LOG_ERR("DevNonce store init failed (%d) - rebooting", ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+
+  (void)join_state_store_init();
+
+#if EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT
+  ret = devnonce_store_factory_reset();
+  if (ret != 0) {
+    LOG_ERR("DevNonce factory reset failed (%d) - rebooting", ret);
+  }
+  LOG_INF("DevNonce factory reset complete - rebooting");
+  sys_reboot(SYS_REBOOT_COLD);
+#endif
+
+#if EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT
+  ret = button_counter_store_factory_reset();
+  if (ret != 0) {
+    LOG_ERR("Factory reset failed (%d) - rebooting", ret);
+  }
+  sys_reboot(SYS_REBOOT_COLD);
+#endif
+
+  ret = rtc_app_init();
+  if (ret != 0) {
+    LOG_WRN("RTC init not available (%d); button timestamps may fall back",
+            ret);
+    sys_reboot(SYS_REBOOT_COLD);
+  }
+
+  (void)last_cleaned_store_init();
+  (void)tz_offset_store_init();
+  uint32_t rtc_epoch = 0;
+  if (rtc_get_epoch_seconds(&rtc_epoch) == 0) {
+    (void)last_cleaned_store_ensure_non_empty(rtc_epoch);
+  }
+
+  ret = battery_adc_init();
+  if (ret != 0) {
+    LOG_WRN("battery_adc_init failed (%d); heartbeat battery status disabled",
+            ret);
+  }
+
+  ret = nfc_service_init();
+  if (ret != 0) {
+    LOG_WRN("nfc_service_init failed (%d); Staff NFC disabled", ret);
+  }
+
+  (void)display_manager_init();
+
+  ret = lora_app_init();
+  if (ret < 0) {
+    LOG_ERR("Failed to initialize LoRa app: %d", ret);
+    return ret;
+  }
+
+  return 0;
+}
+
 int main(void) {
   int ret;
 
@@ -51,17 +145,13 @@ int main(void) {
     return ret;
   }
 
-  /* Power up all domains for initialization */
   power_ctrl_set(POWER_EN_3V3, true);
   power_ctrl_set(POWER_EN_1V8, true);
   power_ctrl_set(POWER_EN_3V3A, true);
-  power_ctrl_set(
-      POWER_EN_3V6,
-      true); /* LoRa radio - will be managed by lora_thread after join */
+  power_ctrl_set(POWER_EN_3V6, true);
 
   k_sleep(K_SECONDS(1));
 
-  /* Wait for I2C bus to stabilize after power-on */
 #if DT_NODE_EXISTS(DT_NODELABEL(arduino_i2c))
   const struct device *i2c_dev = DEVICE_DT_GET(DT_NODELABEL(arduino_i2c));
   if (i2c_dev != NULL) {
@@ -77,103 +167,23 @@ int main(void) {
       LOG_WRN("I2C bus not ready after waiting");
     }
   }
-  /* Additional delay for EEPROM power-on stabilization */
   k_msleep(50);
 #endif
 
-  /* Initialize payload generator (stable NFC UID, counters) */
-  payload_gen_init();
-
-  /* Initialize LED manager early (used for join + button feedback) */
-  ret = led_manager_init();
+  ret = system_init();
   if (ret != 0) {
-    LOG_WRN("LED manager init failed (%d); LED feedback may be disabled", ret);
+    return ret;
   }
 
-  /* EEPROM bring-up (readiness check only) */
-  eeprom_probe_log();
-
-  /* Persistent button counters (EEPROM is mandatory) */
-  ret = button_counter_store_init();
-  if (ret != 0) {
-    LOG_ERR("Button counter store init failed (%d) - rebooting", ret);
-    sys_reboot(SYS_REBOOT_COLD);
-  }
-
-  /* Persistent DevNonce (EEPROM-backed). Mandatory for robust OTAA joins. */
-  ret = devnonce_store_init();
-  if (ret != 0) {
-    LOG_ERR("DevNonce store init failed (%d) - rebooting", ret);
-    sys_reboot(SYS_REBOOT_COLD);
-  }
-
-#if EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT
-  /* One-shot maintenance: erase DevNonce and reinitialize with random value,
-   * then reboot. */
-  ret = devnonce_store_factory_reset();
-  if (ret != 0) {
-    LOG_ERR("DevNonce factory reset failed (%d) - rebooting", ret);
-  }
-  LOG_INF("DevNonce factory reset complete - rebooting");
-  sys_reboot(SYS_REBOOT_COLD);
-#endif
-
-#if EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT
-  /* One-shot maintenance: wipe persistent counters, then reboot. */
-  ret = button_counter_store_factory_reset();
-  if (ret != 0) {
-    LOG_ERR("Factory reset failed (%d) - rebooting", ret);
-  }
-  sys_reboot(SYS_REBOOT_COLD);
-#endif
-
-  /* Optional RTC init (button mode uses RTC timestamps) */
-  ret = rtc_app_init();
-  if (ret != 0) {
-    LOG_WRN("RTC init not available (%d); button timestamps may fall back",
-            ret);
-    sys_reboot(SYS_REBOOT_COLD);
-  }
-
-  /* Last cleaned display store (EEPROM); ensure non-empty for first boot */
-  (void)last_cleaned_store_init();
-  /* Timezone offset (EEPROM); build-time default used if uninitialized */
-  (void)tz_offset_store_init();
-  uint32_t rtc_epoch = 0;
-  if (rtc_get_epoch_seconds(&rtc_epoch) == 0) {
-    (void)last_cleaned_store_ensure_non_empty(rtc_epoch);
-  }
-
-  /* Initialize battery ADC (AIN3) for heartbeat / battery status uplink. */
-  ret = battery_adc_init();
-  if (ret != 0) {
-    LOG_WRN("battery_adc_init failed (%d); heartbeat battery status disabled",
-            ret);
-  }
-
-  /* NFC service (PN5180 ISO15693) for Staff check-in/out/vote */
-  ret = nfc_service_init();
-  if (ret != 0) {
-    LOG_WRN("nfc_service_init failed (%d); Staff NFC disabled", ret);
-  }
-
-  /* Display manager (EPD); show logo at boot */
-  (void)display_manager_init();
   display_show_logo();
 
-  /* Initialize LoRaWAN stack */
-  ret = lora_app_init();
-  if (ret < 0) {
-    LOG_ERR("Failed to initialize LoRa app: %d", ret);
-    return 0;
-  }
-
-  /* Start the LoRa thread (no blocking join; orchestration via SMF in Phase 2+)
-   */
+  /* Centralized thread start (single block for ordering and priorities). */
+  k_thread_start(led_ui_thread_id);
+  LOG_INF("LED thread started");
+  k_thread_start(nfc_worker_id);
+  LOG_INF("NFC worker started");
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started");
-
-  /* Start SMF thread (system mode FSM); it blocks on its input queue */
   k_thread_start(smf_thread_id);
   LOG_INF("SMF thread started");
 
@@ -183,15 +193,15 @@ int main(void) {
     return 0;
   }
 
-  /* Input thread: posts button events to SMF queue; SMF invokes app_logic */
   k_thread_start(button_uplink_thread_id);
   LOG_INF("Input thread started");
 
-  /* Housekeeping: periodic RTC sync (and later link check, battery + heartbeat)
-   */
   (void)housekeeping_init();
   k_thread_start(housekeeping_thread_id);
   LOG_INF("Housekeeping thread started");
+
+  /* Signal SMF: all inits and threads started ("system go"). */
+  (void)smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get());
 
   /* Enter idle: turn off 3.3V, 3.3A, 3.6V. 1.8V stays on for LoRa + buttons. */
   rail_manager_enter_idle();
