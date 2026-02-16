@@ -5,6 +5,16 @@
  * FlexBox v1.2 — Single point for FRD-configurable parameters.
  * Sections: LoRa, Buttons/Input, Combo & mode timeouts, LED, EEPROM, RTC/Time
  * sync. Values marked * in FRD are tunable here.
+ *
+ * --- Production lock-down (ensure these before release) ---
+ * LORA_JOIN_BACKOFF_HOURS     : 0 = test (1 min backoff), prod = 24 (or per
+ * FRD). HEARTBEAT_USE_DEVEUI_JITTER : 1 = prod (daily + jitter), 0 = test
+ * (every 120s). EEPROM_*_FACTORY_RESET_ON_BOOT : all 0 for prod (no wipe on
+ * boot). EEPROM_JOIN_STATE_CLEAR_ON_BOOT : 0 for prod (persist join state).
+ * SYS_CONFIG_EEPROM_PROBE_LOG : 0 for prod (no hex dump at boot).
+ * RTC_FORCE_SET_TIME_ON_BOOT  : 0 for prod (don't overwrite RTC).
+ * eui_keys.h                  : use production DevEUI/JoinEUI/AppKey; consider
+ * excluding from VCS.
  */
 
 /* =============================================================================
@@ -16,16 +26,17 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 20
+#define LORA_JOIN_RETRY_DELAY_SECONDS 15
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
-#define LORA_JOIN_ATTEMPTS_PER_CYCLE 5
+#define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
- * (K_HOURS expects int). Use 0 for testing with 1-minute backoff. */
-#define LORA_JOIN_BACKOFF_HOURS 0
-#define LORA_MAX_RETRIES 3
-#define LORA_SEND_BUSY_RETRY_MS 1000
+ * (K_HOURS expects int). Use 0 for testing (1-minute backoff); production: 24.
+ */
+#define LORA_JOIN_BACKOFF_HOURS 6 // changed to 6
+#define LORA_MAX_RETRIES 5
+#define LORA_SEND_BUSY_RETRY_MS 3000
 /** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
  * after each send to stay within duty cycle / LoRa Alliance fair use. Set to 0
  * to disable. Typical: 2000–5000 ms (e.g. EU868 1% duty cycle). */
@@ -60,7 +71,7 @@
 #define COMBO_STAFF_HOLD_MS 2000       /* 0+1: enter Staff */
 #define COMBO_DEVICE_INFO_HOLD_MS 3000 /* 0+1+5: Device Info */
 #define COMBO_JOIN_HOLD_MS 3000        /* 0+1+2 in Staff: deliberate join */
-#define COMBO_REBOOT_HOLD_MS 10000     /* 0+1+2+3 in Staff: reboot */
+#define COMBO_REBOOT_HOLD_MS 8000      /* 0+1+2+3 in Staff: reboot */
 
 /* =============================================================================
  * Mode timeouts (FRD 3.3, 3.4) — return to Normal when elapsed
@@ -68,7 +79,7 @@
  */
 /* Staff: 20s (longer than FRD 10s* to allow Reboot combo 0+1+2+3 hold 10s). */
 #define STAFF_TIMEOUT_MS 20000
-#define DEVICE_INFO_TIMEOUT_MS 10000
+#define DEVICE_INFO_TIMEOUT_MS 4000
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -82,6 +93,9 @@
 #define LED_JOIN_BLINKS 3
 #define LED_JOIN_ON_MS 100
 #define LED_JOIN_OFF_MS 100
+/* Joining (no EPD): repeat 2s on, 1s off until join success or cycle ends */
+#define LED_JOINING_ON_MS 2000
+#define LED_JOINING_OFF_MS 1000
 /* NFC waiting: 1 Hz until next command */
 #define LED_NFC_1HZ_ON_MS 500
 #define LED_NFC_1HZ_OFF_MS 500
@@ -103,10 +117,13 @@
  * EEPROM / persistent storage
  * =============================================================================
  */
-#define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT 0
-#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT 0
-#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT 0
-/* If 1, log EEPROM probe hex dump at boot (diagnostic). */
+#define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT                                  \
+  0 /* prod: 0; 1 = one-shot wipe on boot */
+#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT                                  \
+  0 /* prod: 0; 1 = one-shot reinit on boot */
+#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT                                        \
+  0 /* prod: 0; 1 = test (no persist join state) */
+/* If 1, log EEPROM probe hex dump at boot (diagnostic). prod: 0 */
 #define SYS_CONFIG_EEPROM_PROBE_LOG 0
 
 /* EEPROM layout (external AT24 @ eeprom0). Keep regions non-overlapping. */
@@ -143,7 +160,8 @@
  * =============================================================================
  */
 #define RTC_SET_TIME_ON_BOOT 1
-#define RTC_FORCE_SET_TIME_ON_BOOT 0
+#define RTC_FORCE_SET_TIME_ON_BOOT                                             \
+  0 /* prod: 0 (do not overwrite RTC from build-time) */
 #define RTC_SET_YEAR 2026
 #define RTC_SET_MONTH 1
 #define RTC_SET_DAY 1
@@ -176,7 +194,7 @@
  */
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
- */
+ * prod: 1 */
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
 #define HOUSEKEEPING_INTERVAL_SECONDS 120
@@ -211,6 +229,24 @@
  * Set to 0 to disable delay (e.g. if SPI is not shared).
  */
 #define DISPLAY_WORK_DELAY_MS 5000
+
+/* =============================================================================
+ * Thread and message queue sizing (single source of truth for prod tuning)
+ * =============================================================================
+ * Tune these with stack usage reports (-fstack-usage / CONFIG_STACK_SENTINEL).
+ * Msgq sizes should cover burst traffic; too small => -ENOMEM, too large =>
+ * RAM.
+ */
+#define SMF_MSGQ_SIZE 16
+#define SMF_MSGQ_ALIGN 4
+#define SMF_THREAD_STACK_SIZE 1536
+#define DISPLAY_JOB_QUEUE_SIZE 8
+#define DISPLAY_JOB_ALIGN 4
+#define LED_UI_MSGQ_LEN 8
+#define LED_UI_MSGQ_ALIGN 4
+#define LED_UI_THREAD_STACK 1024
+#define HOUSEKEEPING_STACK_SIZE 1024
+#define NFC_WORKER_STACK_SIZE 1024
 
 /* =============================================================================
  * Firmware Version

@@ -19,7 +19,7 @@ LOG_MODULE_REGISTER(nfc_svc, CONFIG_LOG_DEFAULT_LEVEL);
 #error "pn5180 node not defined in devicetree"
 #endif
 
-#define NFC_WORKER_STACK_SIZE 1024
+/* Use sys_config.h for NFC_WORKER_STACK_SIZE */
 #define NFC_WORKER_PRIORITY 7
 #define NFC_POLL_INTERVAL_MS 200
 /** Delay after rails are turned on before using PN5180 (power settle). */

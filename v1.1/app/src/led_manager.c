@@ -12,8 +12,7 @@
 
 LOG_MODULE_REGISTER(led_manager, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define LED_UI_MSGQ_LEN 8
-#define LED_UI_MSGQ_ALIGN 4
+/* Use sys_config.h for LED_UI_MSGQ_LEN, LED_UI_MSGQ_ALIGN, LED_UI_THREAD_STACK */
 
 typedef struct {
   uint8_t led_id;
@@ -30,7 +29,6 @@ static struct {
   int64_t next_ms;
 } led_state[NUM_LEDS];
 
-#define LED_UI_THREAD_STACK 1024
 #define LED_UI_THREAD_PRIORITY 9
 
 static void led_apply(uint8_t led_id, bool on) {
@@ -72,6 +70,15 @@ static void advance_1hz(uint8_t id, int64_t now_ms) {
       now_ms + (currently_on ? LED_NFC_1HZ_ON_MS : LED_NFC_1HZ_OFF_MS);
 }
 
+/* Joining: 2s on, 1s off, repeat until next command (e.g. JOIN_SUCCESS or OFF) */
+static void advance_joining(uint8_t id, int64_t now_ms) {
+  bool currently_on = (led_state[id].step & 1) == 0;
+  led_apply(id, !currently_on);
+  led_state[id].step ^= 1;
+  led_state[id].next_ms =
+      now_ms + (currently_on ? LED_JOINING_ON_MS : LED_JOINING_OFF_MS);
+}
+
 static void run_timeout(uint8_t id, int64_t now_ms) {
   if (led_state[id].next_ms == 0 || now_ms < led_state[id].next_ms) {
     return;
@@ -105,6 +112,9 @@ static void run_timeout(uint8_t id, int64_t now_ms) {
     led_apply(id, false);
     led_state[id].pattern = LED_PATTERN_OFF;
     led_state[id].next_ms = 0;
+    break;
+  case LED_PATTERN_JOINING:
+    advance_joining(id, now_ms);
     break;
   case LED_PATTERN_NFC_WAITING:
     advance_1hz(id, now_ms);
@@ -153,6 +163,11 @@ static void start_pattern(uint8_t id, enum led_pattern_id pattern,
                    : pattern == LED_PATTERN_NFC_FAIL   ? LED_NFC_FAIL_OFF_MS
                    : pattern == LED_PATTERN_CONFIRM    ? LED_CONFIRM_OFF_MS
                                                        : LED_POWER_ON_MS);
+    break;
+  case LED_PATTERN_JOINING:
+    led_apply(id, true);
+    led_state[id].step = 0;
+    led_state[id].next_ms = now_ms + LED_JOINING_ON_MS;
     break;
   case LED_PATTERN_NFC_WAITING:
     led_apply(id, true);

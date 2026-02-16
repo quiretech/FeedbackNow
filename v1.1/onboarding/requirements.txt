@@ -1,0 +1,4 @@
+# ChirpStack onboarding scripts (use with system Python or a venv, not NCS toolchain Python)
+grpcio>=1.50.0
+protobuf>=4.21.0
+chirpstack-api>=4.0.0

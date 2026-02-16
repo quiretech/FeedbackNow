@@ -89,6 +89,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
    */
   LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
+  (void)led_manager_show(0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++) {
     /* Hold 3.3A (and 3.3V) for devnonce read and for the whole join attempt so
@@ -120,10 +121,8 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
       atomic_set(&lora_joined_flag, 1);
       k_sem_give(&lora_join_sem);
 
-      /* --- ADD SETTLE DELAY HERE --- */
-      LOG_INF("Waiting 5s for stack to settle before post-join tasks...");
+      /* Brief settle so stack is ready before post-join uplinks/time_sync */
       k_msleep(5000);
-      /* ---------------------------- */
 
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
       rail_manager_request_3v3a();
@@ -152,6 +151,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
 
   LOG_WRN("Join failed after %d attempts (assume no gateway / genuine failure)",
           LORA_JOIN_ATTEMPTS_PER_CYCLE);
+  (void)led_manager_show(0, LED_PATTERN_OFF); /* stop joining blink */
   return false;
 }
 

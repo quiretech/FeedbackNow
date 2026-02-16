@@ -30,14 +30,17 @@ LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
 /* Boot logo image (from assets/logo/bootLogo.c) */
 LV_IMG_DECLARE(bootLogo);
+/* Thanks/ack screen image (from assets/logo/AckEng.c) */
+LV_IMG_DECLARE(ackEng);
+/* Cleaning in progress image (from assets/display_screens/CleaningScreen.c) */
+LV_IMG_DECLARE(cleaningScreen);
 #endif
 
 LOG_MODULE_REGISTER(display_mgr, CONFIG_LOG_DEFAULT_LEVEL);
 
 #if EPD_ENABLED
 
-#define DISPLAY_JOB_QUEUE_SIZE 8
-#define DISPLAY_JOB_ALIGN 4
+/* Use sys_config.h for DISPLAY_JOB_QUEUE_SIZE, DISPLAY_JOB_ALIGN */
 
 enum display_job_type {
   JOB_SHOW_LOGO,
@@ -208,38 +211,22 @@ static void create_lvgl_screens(void) {
 
   lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: THANKS – message centered in middle of 400x300 */
+  /* Screen: THANKS – ack image centered (same style as logo, from assets/logo/AckEng.c) */
   screen_thanks = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
-
-  lv_obj_t *cont_thanks = lv_obj_create(screen_thanks);
-  lv_obj_set_size(cont_thanks, 400, 300);
-  lv_obj_center(cont_thanks);
-  lv_obj_set_style_bg_color(cont_thanks, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(cont_thanks, LV_OPA_COVER, LV_PART_MAIN);
-  lv_obj_set_style_border_width(cont_thanks, 0, LV_PART_MAIN);
-  lv_obj_set_style_pad_all(cont_thanks, 0, LV_PART_MAIN);
-  lv_obj_set_flex_flow(cont_thanks, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_flex_align(cont_thanks, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
-                        LV_FLEX_ALIGN_CENTER);
-
-  label = lv_label_create(cont_thanks);
-  lv_label_set_text(label, "Thanks\nfor your\nFeedback!");
-  lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-
+  lv_obj_t *img_thanks = lv_img_create(screen_thanks);
+  lv_img_set_src(img_thanks, &ackEng);
+  lv_obj_center(img_thanks);
   lv_obj_add_flag(screen_thanks, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: CLEANING */
+  /* Screen: CLEANING – bitmap centered (same style as logo/thanks) */
   screen_cleaning = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_cleaning, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_cleaning, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_cleaning);
-  lv_label_set_text(label, "Cleaning\nIn Progress");
-  lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+  lv_obj_t *img_cleaning = lv_img_create(screen_cleaning);
+  lv_img_set_src(img_cleaning, &cleaningScreen);
+  lv_obj_center(img_cleaning);
   lv_obj_add_flag(screen_cleaning, LV_OBJ_FLAG_HIDDEN);
 
   /* Screen: CONNECTING – text centered in middle of 400x300 */

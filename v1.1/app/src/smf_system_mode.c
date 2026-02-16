@@ -44,8 +44,7 @@ enum system_mode {
   MODE_COUNT
 };
 
-#define SMF_MSGQ_SIZE 16
-#define SMF_MSGQ_ALIGN 4
+/* Use sys_config.h for SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN, SMF_THREAD_STACK_SIZE */
 
 K_MSGQ_DEFINE(smf_msgq, sizeof(smf_msg_t), SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN);
 
@@ -58,7 +57,6 @@ static struct k_mutex smf_dl_mutex;
 static uint8_t smf_nfc_data[SMF_NFC_DATA_SIZE];
 static struct k_mutex smf_nfc_mutex;
 
-#define SMF_THREAD_STACK_SIZE 1536
 #define SMF_THREAD_PRIORITY 6
 
 /* Downlink command codes (FRD 4.5) */
@@ -453,17 +451,20 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
+        rail_manager_release_3v3a(); /* paired with request on enter Staff */
         LOG_INF("[SMF] Staff -> Normal (timeout)");
       } else if (msg.ev_type == SMF_EVT_COMBO_JOIN) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
+        rail_manager_release_3v3a(); /* paired with request on enter Staff */
         LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger LoRa join)");
         display_show_connecting();
         lora_request_join();
       } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         mode = MODE_REBOOT;
         k_timer_stop(&mode_timeout_timer);
+        rail_manager_release_3v3a(); /* Staff ref; reboot will reset system */
         LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
         (void)led_manager_show(0, LED_PATTERN_POWER_ON);
         k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
@@ -471,6 +472,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_DEVICE_INFO;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
+        rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
         display_show_device_info();
         LOG_INF("[SMF] Staff -> DeviceInfo (30s timeout)");
         mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
@@ -512,6 +514,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] DeviceInfo -> Normal (timeout)");
         display_show_last_cleaned();
+        /* No rail to release: we released 3.3A when leaving Staff for
+         * DeviceInfo */
       }
       break;
 
@@ -522,7 +526,12 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     case MODE_NFC_SCAN:
       if (msg.ev_type == SMF_EVT_NFC_TIMEOUT) {
         nfc_scan_cancel();
-        LOG_DBG("[SMF] NFC scan timeout (worker will post result)");
+        rail_manager_release_3v6();
+        rail_manager_release_3v3a(); /* NFC ref */
+        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
+        mode = MODE_NORMAL;
+        (void)led_manager_show(0, LED_PATTERN_OFF);
+        LOG_INF("[SMF] NFCScan -> Normal (timeout)");
       } else if (msg.ev_type == SMF_EVT_NFC_RESULT) {
         k_timer_stop(&mode_timeout_timer);
 
@@ -539,7 +548,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         }
 
         rail_manager_release_3v6();
-        rail_manager_release_3v3a();
+        rail_manager_release_3v3a(); /* NFC ref */
+        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
 
         if (ok) {
           uint8_t payload[PAYLOAD_LEN_BYTES];

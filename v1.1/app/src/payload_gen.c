@@ -11,8 +11,12 @@
 #include <string.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/util.h>
 
 LOG_MODULE_REGISTER(payload_gen, CONFIG_LOG_DEFAULT_LEVEL);
+
+BUILD_ASSERT(PAYLOAD_LEN_BYTES == LORA_MAX_PAYLOAD_SIZE,
+             "payload size must match LoRa max payload");
 
 #define BUTTON_ID_MAX (NUM_BUTTONS - 1)
 

@@ -18,7 +18,7 @@
 
 LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define HOUSEKEEPING_STACK_SIZE 1024
+/* Use sys_config.h for HOUSEKEEPING_STACK_SIZE */
 #define HOUSEKEEPING_PRIORITY 9
 
 /** Compute seconds until next daily heartbeat time (00:00 UTC +

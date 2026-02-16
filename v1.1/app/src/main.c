@@ -209,7 +209,7 @@ int main(void) {
 
   /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink
    */
-  while (1) {
+  for (;;) {
     k_sleep(K_FOREVER);
   }
 }
