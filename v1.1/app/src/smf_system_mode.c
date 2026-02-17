@@ -50,12 +50,12 @@ K_MSGQ_DEFINE(smf_msgq, sizeof(smf_msg_t), SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN);
 
 /* Downlink payload copy (written by smf_post_downlink, read by SMF handler) */
 static uint8_t smf_dl_payload[LORA_MAX_PAYLOAD_SIZE];
-static struct k_mutex smf_dl_mutex;
+K_MUTEX_DEFINE(smf_dl_mutex);
 
 /* NFC result: 4-byte card data (written by smf_post_nfc_result, read by SMF) */
 #define SMF_NFC_DATA_SIZE 4
 static uint8_t smf_nfc_data[SMF_NFC_DATA_SIZE];
-static struct k_mutex smf_nfc_mutex;
+K_MUTEX_DEFINE(smf_nfc_mutex);
 
 #define SMF_THREAD_PRIORITY 6
 
@@ -344,7 +344,17 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
         rail_manager_request_3v3a();
         k_msleep(5000);
-        smf_do_counter_sync(false); /* confirmed on rejoin */
+        smf_do_counter_sync(false);
+        /* Wait for LoRa queue to fully drain before showing display.
+         * EPD and LoRa share SPI; rendering while a TX is in-flight
+         * causes EPD Busy Timeout. */
+        int drain_wait = 0;
+        while (k_msgq_num_used_get(&lora_msgq) > 0 && drain_wait < 30) {
+          k_msleep(1000);
+          drain_wait++;
+        }
+        /* Extra settle for last TX RX windows to close */
+        k_msleep(3000);
         display_show_last_cleaned();
         rail_manager_release_3v3a();
 
@@ -474,7 +484,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
         display_show_device_info();
-        LOG_INF("[SMF] Staff -> DeviceInfo (30s timeout)");
+        LOG_INF("[SMF] Staff -> DeviceInfo (%u ms timeout)",
+                DEVICE_INFO_TIMEOUT_MS);
         mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
                       K_NO_WAIT);
@@ -527,8 +538,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       if (msg.ev_type == SMF_EVT_NFC_TIMEOUT) {
         nfc_scan_cancel();
         rail_manager_release_3v6();
-        rail_manager_release_3v3a(); /* NFC ref */
-        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
+        rail_manager_release_3v3a(); /* NFC ref only (Staff already released on entry) */
         mode = MODE_NORMAL;
         (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] NFCScan -> Normal (timeout)");
@@ -548,8 +558,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         }
 
         rail_manager_release_3v6();
-        rail_manager_release_3v3a(); /* NFC ref */
-        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
+        rail_manager_release_3v3a(); /* NFC ref only (Staff already released on entry) */
 
         if (ok) {
           uint8_t payload[PAYLOAD_LEN_BYTES];

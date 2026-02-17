@@ -65,6 +65,8 @@ K_MSGQ_DEFINE(display_jobq, sizeof(struct display_job), DISPLAY_JOB_QUEUE_SIZE,
 static struct k_work_delayable display_work;
 static volatile uint32_t pending_last_cleaned_epoch; /* 0 = none */
 static bool cleaning_timer_active;
+static volatile bool
+    cleaning_timer_expired; /* Set when timer expires, cleared when handled */
 static enum display_screen_id current_screen = DISPLAY_SCREEN_LOGO;
 
 /* LVGL display and screen objects */
@@ -77,11 +79,6 @@ static lv_obj_t *screen_cleaning;
 static lv_obj_t *screen_connecting;
 static lv_obj_t *screen_device_info;
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
-/* Device Info screen labels */
-static lv_obj_t *dev_info_heading;
-static lv_obj_t *dev_info_deveui;
-static lv_obj_t *dev_info_fw;
-static lv_obj_t *dev_info_counters;
 /* Device Info screen labels */
 static lv_obj_t *dev_info_heading;
 static lv_obj_t *dev_info_deveui;
@@ -102,27 +99,33 @@ static uint8_t __aligned(4) lvgl_buf2[LVGL_BUF_SIZE];
 
 static void enqueue_job(enum display_job_type type, uint32_t epoch);
 
+/**
+ * Force LVGL to render and flush. In DIRECT render mode, a single
+ * lv_task_handler() call may not flush (LVGL can defer rendering to the next
+ * tick). lv_refr_now() forces an immediate render pass, then lv_task_handler()
+ * processes the flush. Belt-and-suspenders: if still not flushed, try once more.
+ */
+static void force_lvgl_flush(void) {
+  lv_refr_now(lvgl_display);
+  lv_task_handler();
+}
+
 static void thanks_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  /* If staff check-in is still active (cleaning in progress), return to that
-   * screen instead of Last Cleaned, so "Thank You" from a public press doesn't
-   * lose the cleaning state. */
+  /* ISR context — only enqueue, never call blocking APIs. */
   if (cleaning_timer_active) {
     enqueue_job(JOB_SHOW_CLEANING, 0);
     return;
   }
-  display_show_last_cleaned();
+  enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
 }
 
 static void cleaning_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
+  /* ISR context — set flag and enqueue. RTC/EEPROM work deferred to handler. */
   cleaning_timer_active = false;
-  uint32_t now = 0;
-  (void)rtc_get_epoch_seconds(&now);
-  if (now != 0) {
-    (void)last_cleaned_store_set(now);
-  }
-  display_show_last_cleaned();
+  cleaning_timer_expired = true;
+  enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
 }
 
 K_TIMER_DEFINE(thanks_timer, thanks_timer_expiry, NULL);
@@ -211,7 +214,8 @@ static void create_lvgl_screens(void) {
 
   lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: THANKS – ack image centered (same style as logo, from assets/logo/AckEng.c) */
+  /* Screen: THANKS – ack image centered (same style as logo, from
+   * assets/logo/AckEng.c) */
   screen_thanks = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
@@ -338,9 +342,17 @@ static void do_render(const struct device *display, enum display_job_type type,
     return;
   }
 
-  ret = display_blanking_off(display);
+  /* Power on EPD. Retry if SPI is busy (shared with LoRa radio). */
+  for (int attempt = 0; attempt < 3; attempt++) {
+    ret = display_blanking_off(display);
+    if (ret == 0) {
+      break;
+    }
+    LOG_WRN("[EPD] blanking_off failed: %d (attempt %d/3)", ret, attempt + 1);
+    k_msleep(2000);
+  }
   if (ret < 0) {
-    LOG_ERR("[EPD] blanking_off failed: %d", ret);
+    LOG_ERR("[EPD] blanking_off failed after retries: %d", ret);
     return;
   }
 
@@ -490,10 +502,6 @@ static void display_work_handler(struct k_work *work) {
     return;
   }
 
-  // ssd1683_set_fast_update(display, true);
-  /* Process LVGL tasks before rendering */
-  lv_task_handler();
-
   uint32_t epoch = 0;
   switch (job.type) {
   case JOB_SHOW_LOGO:
@@ -513,7 +521,17 @@ static void display_work_handler(struct k_work *work) {
       k_timer_stop(&cleaning_timer);
       cleaning_timer_active = false;
     }
-    if (pending_last_cleaned_epoch != 0) {
+    /* If cleaning timer expired, update last cleaned time from RTC */
+    if (cleaning_timer_expired) {
+      cleaning_timer_expired = false;
+      if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
+        (void)last_cleaned_store_set(epoch);
+        LOG_INF("[EPD] Cleaning auto-revert, last cleaned = %u", epoch);
+      } else {
+        (void)last_cleaned_store_get(&epoch);
+        LOG_WRN("[EPD] Cleaning auto-revert, RTC unavailable");
+      }
+    } else if (pending_last_cleaned_epoch != 0) {
       epoch = pending_last_cleaned_epoch;
       pending_last_cleaned_epoch = 0;
       (void)last_cleaned_store_set(epoch);
@@ -537,17 +555,16 @@ static void display_work_handler(struct k_work *work) {
     break;
   case JOB_SHOW_CLEANING: {
     current_screen = DISPLAY_SCREEN_CLEANING;
-    bool reshowing_after_thanks = cleaning_timer_active;
-    if (cleaning_timer_active && !reshowing_after_thanks) {
-      k_timer_stop(&cleaning_timer);
-    }
+    bool timer_was_running = cleaning_timer_active;
     cleaning_timer_active = true;
     do_render(display, JOB_SHOW_CLEANING, 0);
-    /* Re-showing after Thanks: timer kept running; don't restart so 45min is
-     * preserved. */
-    if (!reshowing_after_thanks) {
+    if (!timer_was_running) {
       k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
                     K_NO_WAIT);
+      LOG_INF("[EPD] Cleaning timer started (%u min)",
+              EPD_CLEANING_REVERT_MINUTES);
+    } else {
+      LOG_DBG("[EPD] Cleaning screen reshown, timer kept running");
     }
     break;
   }
@@ -560,7 +577,6 @@ static void display_work_handler(struct k_work *work) {
     do_render(display, JOB_SHOW_DEVICE_INFO, 0);
     break;
   case JOB_FULL_REFRESH:
-    /* Use slow refresh for full refresh (clear ghosting); restore fast after */
     ssd1683_set_fast_update(display, false);
     do_render(display, JOB_FULL_REFRESH, 0);
     break;
@@ -569,8 +585,10 @@ static void display_work_handler(struct k_work *work) {
     break;
   }
 
-  /* Process LVGL tasks after rendering to flush display */
-  lv_task_handler();
+  /* Force LVGL to render and flush to the EPD. A single lv_task_handler() is
+   * unreliable in DIRECT mode — it may defer the flush to the next tick. */
+  force_lvgl_flush();
+  LOG_DBG("[EPD] flush done for job type=%u", job.type);
 
   /* Restore fast update after a full (slow) refresh */
   if (job.type == JOB_FULL_REFRESH) {
@@ -579,9 +597,11 @@ static void display_work_handler(struct k_work *work) {
 
   rail_manager_release_3v3a();
 
-  /* If more jobs, reschedule work after delay so LoRa RX can complete first */
+  /* If more jobs queued, run the next one quickly (100ms settle time).
+   * The initial DISPLAY_WORK_DELAY_MS was for LoRa SPI sharing and only
+   * applies to the first job after an uplink. Follow-up jobs can run fast. */
   if (k_msgq_num_used_get(&display_jobq) > 0) {
-    (void)k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
+    (void)k_work_reschedule(&display_work, K_MSEC(100));
   }
 }
 
@@ -591,8 +611,20 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
     LOG_WRN("[EPD] job queue full, drop type=%u", type);
     return;
   }
-  /* Delay before running so LoRa can use SPI for RX1/RX2 after uplinks */
-  (void)k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
+  /* k_work_schedule preserves an existing deadline (returns 0 if already
+   * pending) so a later enqueue doesn't push back an earlier job's render.
+   * Returns 1 if newly submitted.
+   *
+   * Edge case: handler is currently running (not pending). k_work_schedule
+   * returns 0 ("already busy"). The handler's tail-check will see the new
+   * job and reschedule itself at 100 ms. As a safety net, if the handler has
+   * already passed its tail-check, force a short reschedule. */
+  int ret = k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
+  if (ret == 0 && !k_work_delayable_is_pending(&display_work)) {
+    /* Work is running right now; handler may have already passed its
+     * tail-check. Schedule a short follow-up to guarantee processing. */
+    (void)k_work_reschedule(&display_work, K_MSEC(200));
+  }
 }
 
 #endif /* EPD_ENABLED */
@@ -604,6 +636,7 @@ int display_manager_init(void) {
   k_work_init_delayable(&display_work, display_work_handler);
   pending_last_cleaned_epoch = 0;
   cleaning_timer_active = false;
+  cleaning_timer_expired = false;
 
   /* Get display device */
   lvgl_display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));

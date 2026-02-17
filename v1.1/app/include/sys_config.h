@@ -26,7 +26,7 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
-#define LORA_JOIN_RETRY_DELAY_SECONDS 15
+#define LORA_JOIN_RETRY_DELAY_SECONDS 20
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
@@ -34,7 +34,7 @@
  * cycle (deployed device cannot be re-joined by human). Must be integer
  * (K_HOURS expects int). Use 0 for testing (1-minute backoff); production: 24.
  */
-#define LORA_JOIN_BACKOFF_HOURS 6 // changed to 6
+#define LORA_JOIN_BACKOFF_HOURS 6 // prod: changed to 6 after customer handoff
 #define LORA_MAX_RETRIES 5
 #define LORA_SEND_BUSY_RETRY_MS 3000
 /** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
@@ -79,7 +79,8 @@
  */
 /* Staff: 20s (longer than FRD 10s* to allow Reboot combo 0+1+2+3 hold 10s). */
 #define STAFF_TIMEOUT_MS 20000
-#define DEVICE_INFO_TIMEOUT_MS 4000
+#define DEVICE_INFO_TIMEOUT_MS                                                 \
+  15000 /* Increased for better UX (was 4s, display delay is 5s) */
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -87,29 +88,31 @@
  * =============================================================================
  */
 #define NUM_LEDS 1
-/* Button accepted: solid on 1s then off */
+/* Button press accepted: LED solid ON for 1s, then OFF */
 #define LED_BUTTON_ACCEPTED_MS 1000
-/* Join success: 3 quick flashes ~300ms total */
+/* Join success: LED blinks 3 times (3 x 60ms ON, 60ms OFF; total ~360ms) */
 #define LED_JOIN_BLINKS 3
-#define LED_JOIN_ON_MS 100
-#define LED_JOIN_OFF_MS 100
-/* Joining (no EPD): repeat 2s on, 1s off until join success or cycle ends */
+#define LED_JOIN_ON_MS 60
+#define LED_JOIN_OFF_MS 60
+/* While joining (no EPD): LED ON for 2s, then OFF for 1s, repeats until done */
 #define LED_JOINING_ON_MS 2000
 #define LED_JOINING_OFF_MS 1000
-/* NFC waiting: 1 Hz until next command */
+/* NFC waiting: LED blinks at 1 Hz (500ms ON, 500ms OFF) */
 #define LED_NFC_1HZ_ON_MS 500
 #define LED_NFC_1HZ_OFF_MS 500
-/* NFC read fail: 3 fast blinks ~600ms */
-#define LED_NFC_FAIL_BLINKS 3
-#define LED_NFC_FAIL_ON_MS 100
-#define LED_NFC_FAIL_OFF_MS 100
-/* Check-in/out/Registered vote: 3 blinks ~2s */
-#define LED_CONFIRM_BLINKS 3
-#define LED_CONFIRM_ON_MS 333
-#define LED_CONFIRM_OFF_MS 333
-/* Reboot: solid for this long then off (reboot handled elsewhere) */
+/* NFC read fail: LED blinks 2 times (2 x 400ms ON, 200ms OFF; total ~800ms) */
+#define LED_NFC_FAIL_BLINKS 2
+#define LED_NFC_FAIL_ON_MS 400
+#define LED_NFC_FAIL_OFF_MS 200
+/* Check-in/out/Registered vote: LED blinks 2 times (2 x 150ms ON, 100ms OFF;
+ * total ~400ms) */
+#define LED_CONFIRM_BLINKS 2
+#define LED_CONFIRM_ON_MS 150
+#define LED_CONFIRM_OFF_MS 100
+/* Reboot indication: LED solid ON for 3s, then OFF (reboot handled elsewhere)
+ */
 #define LED_REBOOT_HOLD_MS 3000
-/* Power on: 2 quick flashes ~200ms */
+/* Power on: LED blinks 2 times (2 x 100ms ON; total ~200ms) */
 #define LED_POWER_ON_BLINKS 2
 #define LED_POWER_ON_MS 100
 
@@ -219,9 +222,10 @@
 #define EPD_ENABLED 1
 /** Thanks screen duration before returning to last cleaned (ms). */
 #define EPD_THANKS_DISPLAY_MS 5000
-/** Cleaning screen auto-revert to last cleaned if no check-out (ms). */
-#define EPD_CLEANING_REVERT_MINUTES 45
-#define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60 * 1000)
+/** Cleaning screen auto-revert to last cleaned if no check-out (ms).
+ * prod: 45; test: 1–3. */
+#define EPD_CLEANING_REVERT_MINUTES 45U
+#define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 /**
  * Delay (ms) before running display work. EPD and LoRa share SPI; holding the
  * bus for EPD refresh blocks the radio during RX windows and drops downlinks.

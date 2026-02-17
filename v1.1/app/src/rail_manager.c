@@ -85,6 +85,9 @@ void rail_manager_release_3v3(void) {
   k_mutex_lock(&lock, K_FOREVER);
   if (ref_3v3 > 0) {
     ref_3v3--;
+  } else {
+    LOG_ERR("rail_manager_release_3v3: ref already 0 (double release?)");
+    ref_3v3 = 0; /* Prevent negative */
   }
   if (ref_3v3 == 0) {
     if (ref_3v3a > 0) {
@@ -136,9 +139,15 @@ void rail_manager_release_3v3a(void) {
   k_mutex_lock(&lock, K_FOREVER);
   if (ref_3v3a > 0) {
     ref_3v3a--;
+  } else {
+    LOG_ERR("rail_manager_release_3v3a: ref already 0 (double release?)");
+    ref_3v3a = 0; /* Prevent negative */
   }
   if (ref_3v3 > 0) {
     ref_3v3--;
+  } else {
+    LOG_ERR("rail_manager_release_3v3a: 3v3 ref already 0 (double release?)");
+    ref_3v3 = 0; /* Prevent negative */
   }
   if (ref_3v3a == 0) {
     keepalive_pending = true;

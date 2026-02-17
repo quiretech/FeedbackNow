@@ -492,22 +492,39 @@ static int _ssd1683_power_on(const struct device *dev) {
 
   ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
   if (ret < 0)
-    return ret;
+    goto cold_start;
 
   ret = _ssd1683_write_data(cfg, 0xe0);
   if (ret < 0)
-    return ret;
+    goto cold_start;
 
   ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
   if (ret < 0)
-    return ret;
+    goto cold_start;
 
   ret = _ssd1683_wait_busy(cfg);
-  if (ret < 0)
+  if (ret == 0) {
+    data->is_powered_on = true;
+    LOG_DBG("Power on completed");
+    return 0;
+  }
+
+cold_start:
+  /* Busy timeout or SPI failure — EPD was likely power-cycled (rail off/on).
+   * The driver state says "initialized" but the hardware lost all register
+   * configuration. Force a full re-initialization with hardware reset. */
+  LOG_WRN("Power-on failed, forcing full re-init (cold start recovery)");
+  data->is_initialized = false;
+  data->is_hibernating = false;
+
+  ret = _ssd1683_init_display(dev);
+  if (ret < 0) {
+    LOG_ERR("Cold start recovery failed: %d", ret);
     return ret;
+  }
 
   data->is_powered_on = true;
-  LOG_DBG("Power on completed");
+  LOG_INF("Cold start recovery successful");
   return 0;
 }
 

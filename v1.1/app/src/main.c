@@ -98,9 +98,9 @@ static int system_init(void) {
 
   ret = rtc_app_init();
   if (ret != 0) {
-    LOG_WRN("RTC init not available (%d); button timestamps may fall back",
+    LOG_WRN("RTC init not available (%d); button timestamps will use uptime",
             ret);
-    sys_reboot(SYS_REBOOT_COLD);
+    /* Continue without RTC - system can still function with uptime fallback */
   }
 
   (void)last_cleaned_store_init();
