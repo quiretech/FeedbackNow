@@ -17,6 +17,7 @@
 #include <zephyr/drivers/display.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 
 #if EPD_ENABLED
 #include "ssd1683.h"
@@ -63,10 +64,12 @@ K_MSGQ_DEFINE(display_jobq, sizeof(struct display_job), DISPLAY_JOB_QUEUE_SIZE,
               DISPLAY_JOB_ALIGN);
 
 static struct k_work_delayable display_work;
-static volatile uint32_t pending_last_cleaned_epoch; /* 0 = none */
-static bool cleaning_timer_active;
-static volatile bool
-    cleaning_timer_expired; /* Set when timer expires, cleared when handled */
+/* Pending epoch from downlink; mutex protects set vs consume (SMF vs work queue) */
+static uint32_t pending_last_cleaned_epoch; /* 0 = none */
+static K_MUTEX_DEFINE(pending_epoch_mutex);
+/* Timer vs work queue: use atomic for thread safety */
+static atomic_t cleaning_timer_active_atomic = ATOMIC_INIT(0);
+static atomic_t cleaning_timer_expired_atomic = ATOMIC_INIT(0);
 static enum display_screen_id current_screen = DISPLAY_SCREEN_LOGO;
 
 /* LVGL display and screen objects */
@@ -112,8 +115,8 @@ static void force_lvgl_flush(void) {
 
 static void thanks_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  /* ISR context — only enqueue, never call blocking APIs. */
-  if (cleaning_timer_active) {
+  /* Timer context — only enqueue, never call blocking APIs. */
+  if (atomic_get(&cleaning_timer_active_atomic)) {
     enqueue_job(JOB_SHOW_CLEANING, 0);
     return;
   }
@@ -122,9 +125,9 @@ static void thanks_timer_expiry(struct k_timer *timer) {
 
 static void cleaning_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  /* ISR context — set flag and enqueue. RTC/EEPROM work deferred to handler. */
-  cleaning_timer_active = false;
-  cleaning_timer_expired = true;
+  /* Timer context — set flag and enqueue. RTC/EEPROM work deferred to handler. */
+  atomic_set(&cleaning_timer_active_atomic, 0);
+  atomic_set(&cleaning_timer_expired_atomic, 1);
   enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
 }
 
@@ -334,7 +337,7 @@ static void format_epoch_yyyymmdd_hhmm(uint32_t epoch_s, char *buf,
 static void do_render(const struct device *display, enum display_job_type type,
                       uint32_t epoch) {
   int ret;
-  char ts[32];
+  char ts[64]; /* enough for "%04d/%02d/%02d %02d:%02d" + locale; avoids -Wformat-truncation */
   lv_obj_t *scr_to_show = NULL;
 
   if (display == NULL || !device_is_ready(display)) {
@@ -517,13 +520,13 @@ static void display_work_handler(struct k_work *work) {
       ssd1683_set_fast_update(display, false);
     }
     current_screen = DISPLAY_SCREEN_LAST_CLEANED;
-    if (cleaning_timer_active) {
+    if (atomic_get(&cleaning_timer_active_atomic)) {
       k_timer_stop(&cleaning_timer);
-      cleaning_timer_active = false;
+      atomic_set(&cleaning_timer_active_atomic, 0);
     }
     /* If cleaning timer expired, update last cleaned time from RTC */
-    if (cleaning_timer_expired) {
-      cleaning_timer_expired = false;
+    if (atomic_get(&cleaning_timer_expired_atomic)) {
+      atomic_set(&cleaning_timer_expired_atomic, 0);
       if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
         (void)last_cleaned_store_set(epoch);
         LOG_INF("[EPD] Cleaning auto-revert, last cleaned = %u", epoch);
@@ -531,14 +534,18 @@ static void display_work_handler(struct k_work *work) {
         (void)last_cleaned_store_get(&epoch);
         LOG_WRN("[EPD] Cleaning auto-revert, RTC unavailable");
       }
-    } else if (pending_last_cleaned_epoch != 0) {
+    } else {
+      k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
       epoch = pending_last_cleaned_epoch;
       pending_last_cleaned_epoch = 0;
-      (void)last_cleaned_store_set(epoch);
-    } else {
-      (void)last_cleaned_store_get(&epoch);
-      if (epoch == 0) {
-        (void)rtc_get_epoch_seconds(&epoch);
+      k_mutex_unlock(&pending_epoch_mutex);
+      if (epoch != 0) {
+        (void)last_cleaned_store_set(epoch);
+      } else {
+        (void)last_cleaned_store_get(&epoch);
+        if (epoch == 0) {
+          (void)rtc_get_epoch_seconds(&epoch);
+        }
       }
     }
     do_render(display, JOB_SHOW_LAST_CLEANED, epoch);
@@ -555,8 +562,8 @@ static void display_work_handler(struct k_work *work) {
     break;
   case JOB_SHOW_CLEANING: {
     current_screen = DISPLAY_SCREEN_CLEANING;
-    bool timer_was_running = cleaning_timer_active;
-    cleaning_timer_active = true;
+    bool timer_was_running = (atomic_get(&cleaning_timer_active_atomic) != 0);
+    atomic_set(&cleaning_timer_active_atomic, 1);
     do_render(display, JOB_SHOW_CLEANING, 0);
     if (!timer_was_running) {
       k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
@@ -635,8 +642,8 @@ int display_manager_init(void) {
 
   k_work_init_delayable(&display_work, display_work_handler);
   pending_last_cleaned_epoch = 0;
-  cleaning_timer_active = false;
-  cleaning_timer_expired = false;
+  atomic_set(&cleaning_timer_active_atomic, 0);
+  atomic_set(&cleaning_timer_expired_atomic, 0);
 
   /* Get display device */
   lvgl_display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
@@ -749,13 +756,17 @@ void display_show_device_info(void) {
 
 void display_set_pending_last_cleaned(uint32_t epoch) {
 #if EPD_ENABLED
+  k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
   pending_last_cleaned_epoch = epoch;
+  k_mutex_unlock(&pending_epoch_mutex);
 #endif
 }
 
 void display_set_pending_last_cleaned_and_apply(uint32_t epoch) {
 #if EPD_ENABLED
+  k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
   pending_last_cleaned_epoch = epoch;
+  k_mutex_unlock(&pending_epoch_mutex);
   if (current_screen != DISPLAY_SCREEN_THANKS) {
     enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
   }

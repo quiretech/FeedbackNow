@@ -111,6 +111,9 @@ void rail_manager_release_1v8(void) {
   k_mutex_lock(&lock, K_FOREVER);
   if (ref_1v8 > 0) {
     ref_1v8--;
+  } else {
+    LOG_ERR("rail_manager_release_1v8: ref already 0 (double release?)");
+    ref_1v8 = 0;
   }
   if (ref_1v8 == 0) {
     set_rail(POWER_EN_1V8, false);
@@ -170,6 +173,9 @@ void rail_manager_release_3v6(void) {
   k_mutex_lock(&lock, K_FOREVER);
   if (ref_3v6 > 0) {
     ref_3v6--;
+  } else {
+    LOG_ERR("rail_manager_release_3v6: ref already 0 (double release?)");
+    ref_3v6 = 0;
   }
   if (ref_3v6 == 0) {
     set_rail(POWER_EN_3V6, false);

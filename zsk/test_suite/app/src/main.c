@@ -162,7 +162,7 @@ static bool test_epd(void) {
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
 
   lv_obj_t *label = lv_label_create(screen);
-  lv_label_set_text(label, "EPD Test Passed");
+  lv_label_set_text(label, "EPD Test Passed v2");
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
   lv_obj_center(label);
 

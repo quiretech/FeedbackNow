@@ -30,6 +30,7 @@
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(smf, CONFIG_LOG_DEFAULT_LEVEL);
@@ -71,8 +72,9 @@ K_MUTEX_DEFINE(smf_nfc_mutex);
 /* Counter-sync: small delay between uplinks to avoid congestion */
 #define COUNTER_SYNC_DELAY_MS 3000
 
-/* Mode timeout: timer posts this event so SMF returns to Normal */
-static volatile uint8_t mode_timeout_ev;
+/* Mode timeout: timer posts this event so SMF returns to Normal (atomic: timer
+ * vs SMF thread) */
+static atomic_t mode_timeout_ev = ATOMIC_INIT(0); /* 0 = SMF_EVT_NONE */
 
 /* Set when SMF requested time sync from housekeeping; release 3.3A on
  * TIME_SYNC_DONE */
@@ -80,9 +82,10 @@ static bool housekeeping_holding_3v3a;
 
 static void mode_timeout_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  if (mode_timeout_ev != SMF_EVT_NONE) {
-    (void)smf_post_event(mode_timeout_ev, 0, k_uptime_get());
-    mode_timeout_ev = SMF_EVT_NONE;
+  int ev = atomic_get(&mode_timeout_ev);
+  if (ev != SMF_EVT_NONE) {
+    (void)smf_post_event((uint8_t)ev, 0, k_uptime_get());
+    atomic_set(&mode_timeout_ev, SMF_EVT_NONE);
   }
 }
 
@@ -435,6 +438,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           smf_do_counter_sync(true);
           rail_manager_release_3v3();
           rail_manager_release_3v3a();
+          housekeeping_holding_3v3a =
+              false; /* Released here; TIME_SYNC_DONE must not release again */
         }
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
         k_mutex_lock(&smf_dl_mutex, K_FOREVER);
@@ -446,7 +451,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
         rail_manager_request_3v3a();
         (void)led_manager_show(0, LED_PATTERN_ON);
-        mode_timeout_ev = SMF_EVT_STAFF_TIMEOUT;
+        atomic_set(&mode_timeout_ev, SMF_EVT_STAFF_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(STAFF_TIMEOUT_MS), K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO ||
                  msg.ev_type == SMF_EVT_COMBO_JOIN ||
@@ -486,7 +491,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         display_show_device_info();
         LOG_INF("[SMF] Staff -> DeviceInfo (%u ms timeout)",
                 DEVICE_INFO_TIMEOUT_MS);
-        mode_timeout_ev = SMF_EVT_DEVICE_INFO_TIMEOUT;
+        atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
                       K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
@@ -508,7 +513,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_request_3v3a();
         rail_manager_request_3v6();
         (void)led_manager_show(0, LED_PATTERN_NFC_WAITING);
-        mode_timeout_ev = SMF_EVT_NFC_TIMEOUT;
+        atomic_set(&mode_timeout_ev, SMF_EVT_NFC_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(NFC_SCAN_TIMEOUT_MS),
                       K_NO_WAIT);
         nfc_scan_start(intent, bid);
@@ -538,7 +543,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       if (msg.ev_type == SMF_EVT_NFC_TIMEOUT) {
         nfc_scan_cancel();
         rail_manager_release_3v6();
-        rail_manager_release_3v3a(); /* NFC ref only (Staff already released on entry) */
+        rail_manager_release_3v3a(); /* NFC ref */
+        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
         mode = MODE_NORMAL;
         (void)led_manager_show(0, LED_PATTERN_OFF);
         LOG_INF("[SMF] NFCScan -> Normal (timeout)");
@@ -558,7 +564,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         }
 
         rail_manager_release_3v6();
-        rail_manager_release_3v3a(); /* NFC ref only (Staff already released on entry) */
+        rail_manager_release_3v3a(); /* NFC ref */
+        rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
 
         if (ok) {
           uint8_t payload[PAYLOAD_LEN_BYTES];

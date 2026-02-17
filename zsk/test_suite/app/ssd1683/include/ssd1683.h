@@ -39,6 +39,7 @@
   0x26 // Previous buffer (what was there before)
 #define SSD1683_CMD_DISPLAY_UPDATE 0x20
 #define SSD1683_CMD_DISPLAY_UPDATE_CTRL 0x21
+#define SSD1683_CMD_DISPLAY_UPDATE_CTRL_2 0x22
 #define SSD1683_CMD_POWER_OFF 0x22
 
 /**

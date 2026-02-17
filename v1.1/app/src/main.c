@@ -135,7 +135,7 @@ static int system_init(void) {
 int main(void) {
   int ret;
 
-  LOG_SECTION_INF("LoRaWAN Application Starting");
+  LOG_SECTION_INF("FeedbackNow FlexBox v1.2.1 Starting");
 
   k_sleep(K_SECONDS(1));
 

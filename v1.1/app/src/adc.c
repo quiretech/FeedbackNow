@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(battery_adc, LOG_LEVEL_INF);
 #define ADC_NODE DT_NODELABEL(adc)
 #define ADC_RESOLUTION 10
 #define ADC_CHANNEL_ID                                                         \
-  3 /* AIN3 on nRF52840; match reference (channel 0, BIT(0)) */
+  0 /* AIN3 on nRF52840; match reference (channel 0, BIT(0)) */
 #define ADC_RAW_MAX                                                            \
   1023 /* 10-bit ADC valid range; values outside are hardware garbage */
 
