@@ -69,6 +69,16 @@ K_MUTEX_DEFINE(smf_nfc_mutex);
 #define DL_CMD_RESET_COUNTERS 0x05
 #define DL_CMD_FACTORY_RESET 0x06
 
+/*
+Command	Hex	Raw Byte	Base64
+DL_CMD_EPD_UPDATE	0x01	01	AQ==
+DL_CMD_EPD_REFRESH	0x02	02	Ag==
+DL_CMD_TIMEZONE_OFFSET	0x03	03	Aw==
+DL_CMD_STATUS_REQ	0x04	04	BA==
+DL_CMD_RESET_COUNTERS	0x05	05	BQ==
+DL_CMD_FACTORY_RESET	0x06	06	Bg==
+*/
+
 /* Counter-sync: small delay between uplinks to avoid congestion */
 #define COUNTER_SYNC_DELAY_MS 3000
 
