@@ -19,10 +19,12 @@ from pathlib import Path
 
 import boto3
 
-# Default CSV: onboarding/eui_registry.csv (relative to this script: batchregistration/ -> onboarding/)
+# Default CSV: same directory as this script
 SCRIPT_DIR = Path(__file__).resolve().parent
-ONBOARDING_DIR = SCRIPT_DIR.parent.parent
-DEFAULT_CSV = ONBOARDING_DIR / "eui_registry.csv"
+
+# Detect repo root (v1.1) and default to onboarding/eui_registry.csv
+REPO_ROOT = SCRIPT_DIR.parents[2]  # batchregistration → aws_onboarding → onboarding → v1.1
+DEFAULT_CSV = REPO_ROOT / "onboarding" / "eui_registry.csv"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -171,6 +173,8 @@ def main() -> int:
     parser.add_argument("--destination-name", required=True, help="AWS IoT Wireless Destination name (must exist)")
     parser.add_argument("--verbose", "-v", action="store_true", help="More output")
     parser.add_argument("--dryrun", "-d", action="store_true", help="Do not call AWS API; only log actions")
+    parser.add_argument("--last-only", action="store_true", help="Only onboard the last entry in the CSV")
+
 
     args = parser.parse_args()
     csv_path = Path(args.inputfilename)
@@ -180,6 +184,15 @@ def main() -> int:
         return 2
 
     rows = load_eui_registry(csv_path)
+    if args.last_only:
+        if rows:
+            rows = [rows[-1]]
+            logger.info("Processing only last CSV entry (asset_id=%s)", rows[0]["asset_id"])
+        else:
+            logger.warning("CSV is empty; nothing to process.")
+            return 0
+
+
     if not rows:
         logger.warning("No rows in %s", csv_path)
         return 0

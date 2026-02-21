@@ -1,6 +1,0 @@
-aws iotwireless send-data-to-wireless-device --id "6e93e03d-6631-4789-9104-d49132f51f07" --transmit-mode 1 --payload-data "dGhhbmsgeW91IQ==" --wireless-metadata "LoRaWAN={FPort=2}"
-
-
-
-
-aws iotwireless send-data-to-wireless-device --id "a25d96d2-0977-4896-b2b8-428443583ded" --transmit-mode 1 --payload-data "dGhhbmsgeW91IQ==" --wireless-metadata "LoRaWAN={FPort=2}"
