@@ -186,7 +186,8 @@
  */
 /** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
  * run. */
-#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 6000
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS                                         \
+  20000 // changed from 6000 to 20000 ON 2/25
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
