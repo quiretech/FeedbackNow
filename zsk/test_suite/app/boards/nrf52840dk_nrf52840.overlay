@@ -150,7 +150,7 @@ enables {
 	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
 	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
 	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-	dio1-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>; //  0,19
+	dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
 	dio2-tx-enable;
 	tcxo-power-startup-delay-ms = <5>;
 
