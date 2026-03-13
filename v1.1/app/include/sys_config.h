@@ -44,7 +44,7 @@
 /** After this many consecutive lorawan_send() failures, clear joined and
  * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
  * disable. Typical: 3. */
-#define LORA_SEND_FAILURES_BEFORE_BACKOFF 3
+#define LORA_SEND_FAILURES_BEFORE_BACKOFF 5
 #define LORA_BUTTON_PORT 2
 
 /* =============================================================================
@@ -153,11 +153,9 @@
  */
 /** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
  * is uninitialized. */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-480)
-/** Clamp range: ±24 hours in minutes. */
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // PDT
 #define TZ_OFFSET_MIN_MINUTES (-1440)
-#define TZ_OFFSET_MAX_MINUTES 1440
-
+#define TZ_OFFSET_MAX_MINUTES (1440)
 /* =============================================================================
  * RTC / time sync
  * =============================================================================
@@ -172,13 +170,42 @@
 #define RTC_SET_MINUTE 00
 #define RTC_SET_SECOND 00
 #define RTC_VALID_YEAR_MIN 2026
-/** Retries for RTC read when rail may have just powered up (I2C -EIO). */
-#define RTC_GET_EPOCH_RETRIES 3
-/** Delay (ms) between RTC read retries. */
-#define RTC_GET_EPOCH_RETRY_DELAY_MS 5
+#define RTC_GET_EPOCH_RETRIES 5
+#define RTC_GET_EPOCH_RETRY_DELAY_MS 10
 #define RTC_REQUIRE_LNS_TIME_SYNC 0
-#define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 10
+#define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 30
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18
+
+/** GPS epoch (1980-01-06) to Unix epoch (1970-01-01) offset in seconds. */
+#define GPS_TO_UNIX_EPOCH_OFFSET 315964800U
+
+/** How often to poll for DeviceTimeAns after sending DeviceTimeReq (ms).
+ * DeviceTimeAns arrives in RX1/RX2 (~1-2s after uplink) so poll fast.
+ * prod: 2000. */
+#define TIME_SYNC_POLL_INTERVAL_MS 2000
+
+/** Default max polls per attempt when RTC_REQUIRE_LNS_TIME_SYNC=0.
+ * Total wait = TIME_SYNC_POLL_INTERVAL_MS * TIME_SYNC_MAX_POLLS (~20s).
+ * When RTC_REQUIRE_LNS_TIME_SYNC=1, time_sync.c overrides from
+ * RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS. */
+#define TIME_SYNC_MAX_POLLS 10
+
+/** How many full DeviceTimeReq cycles to attempt before giving up entirely.
+ * Each retry sends a fresh DeviceTimeReq on the next uplink opportunity.
+ * prod: 3. */
+#define TIME_SYNC_MAX_RETRIES 3
+
+/** Delay (ms) between full retry cycles. Gives device time to uplink again
+ * so the next DeviceTimeReq goes out in a fresh MAC frame. prod: 30000. */
+#define TIME_SYNC_RETRY_DELAY_MS 30000
+
+/** Max acceptable delta (seconds) between written and readback RTC epoch.
+ * If exceeded a warning is logged. prod: 2. */
+#define TIME_SYNC_RTC_READBACK_DELTA_MAX_S 2
+
+/** Delay (ms) after join before first DeviceTimeReq.
+ * Allows ADR to push DR up before time sync. prod: 25000. */
+#define TIME_SYNC_POST_JOIN_DELAY_MS 25000
 
 /* =============================================================================
  * Power gating (rail manager)

@@ -89,7 +89,8 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
    */
   LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
-  (void)led_manager_show(0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
+  (void)led_manager_show(
+      0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++) {
     /* Hold 3.3A (and 3.3V) for devnonce read and for the whole join attempt so
@@ -128,7 +129,11 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
       rail_manager_request_3v3a();
       (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
       (void)join_state_store_set_has_joined_once();
-      time_sync_request_and_update_rtc();
+      /* Wait for ADR to settle before DeviceTimeReq so Ans arrives at DR5 */
+      LOG_INF("Waiting %d ms for ADR to settle before time sync",
+              TIME_SYNC_POST_JOIN_DELAY_MS);
+      k_msleep(TIME_SYNC_POST_JOIN_DELAY_MS);
+      // time_sync_request_and_update_rtc();
       rail_manager_release_3v3a();
       LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
       return true;

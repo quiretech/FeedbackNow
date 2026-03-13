@@ -8,6 +8,8 @@
 #   From repo root (v1.1):
 #     python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
 #       --region us-east-1 --device-profile-id <UUID> --service-profile-id <UUID> --destination-name <Name>
+#   EU868 registry (eui_registry_EU868.csv):
+#     ... --EU
 #   With dry run (no API calls):
 #     ... --dryrun
 
@@ -19,12 +21,13 @@ from pathlib import Path
 
 import boto3
 
-# Default CSV: same directory as this script
+# Default CSV: resolved from repo root (v1.1)
 SCRIPT_DIR = Path(__file__).resolve().parent
-
-# Detect repo root (v1.1) and default to onboarding/eui_registry.csv
 REPO_ROOT = SCRIPT_DIR.parents[2]  # batchregistration → aws_onboarding → onboarding → v1.1
-DEFAULT_CSV = REPO_ROOT / "onboarding" / "eui_registry.csv"
+ONBOARDING_DIR = REPO_ROOT / "onboarding"
+DEFAULT_CSV = ONBOARDING_DIR / "eui_registry.csv"
+EU868_CSV = ONBOARDING_DIR / "eui_registry_EU868.csv"
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -164,8 +167,13 @@ def main() -> int:
     parser.add_argument(
         "inputfilename",
         nargs="?",
-        default=str(DEFAULT_CSV),
-        help=f"Path to CSV (default: {DEFAULT_CSV})",
+        default=None,
+        help="Path to CSV (default: eui_registry_EU868.csv if --EU, else eui_registry.csv)",
+    )
+    parser.add_argument(
+        "--EU",
+        action="store_true",
+        help="Use EU868 registry (eui_registry_EU868.csv) when no input file is given",
     )
     parser.add_argument("--region", "-r", required=True, help="AWS region (e.g. us-east-1)")
     parser.add_argument("--device-profile-id", required=True, help="AWS IoT Wireless Device Profile ID (UUID)")
@@ -177,7 +185,10 @@ def main() -> int:
 
 
     args = parser.parse_args()
-    csv_path = Path(args.inputfilename)
+    if args.inputfilename is not None:
+        csv_path = Path(args.inputfilename)
+    else:
+        csv_path = EU868_CSV if args.EU else DEFAULT_CSV
 
     if not csv_path.exists():
         logger.error("CSV not found: %s", csv_path)

@@ -9,7 +9,7 @@
 
 #include "power_ctrl.h"
 
-// #define CLEAR_SCREEN
+#define CLEAR_SCREEN
 
 #ifdef CLEAR_SCREEN
 #include "ssd1683.h"

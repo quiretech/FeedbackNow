@@ -21,16 +21,12 @@
 
 LOG_MODULE_REGISTER(time_sync, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* GPS epoch (1980-01-06) to Unix epoch (1970-01-01) offset in seconds */
-#define GPS_TO_UNIX_EPOCH_OFFSET 315964800U
-
-/* Polling strategy */
-#define TIME_SYNC_POLL_INTERVAL K_SECONDS(2)
+/* When LNS time sync is required, override max polls from sys_config. */
 #if RTC_REQUIRE_LNS_TIME_SYNC
-/* Ensure the internal polling window covers the external "required" timeout. */
-#define TIME_SYNC_MAX_POLLS ((RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS + 1) / 2)
-#else
-#define TIME_SYNC_MAX_POLLS 15 /* ~30 seconds */
+#undef TIME_SYNC_MAX_POLLS
+#define TIME_SYNC_MAX_POLLS                                                      \
+  (((RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS * 1000) + TIME_SYNC_POLL_INTERVAL_MS - 1) / \
+   TIME_SYNC_POLL_INTERVAL_MS)
 #endif
 
 static void time_sync_work_handler(struct k_work *work);
@@ -118,7 +114,7 @@ static void time_sync_work_handler(struct k_work *work) {
 
   LOG_INF("Waiting for DeviceTimeAns... (poll %d/%d, ret=%d)",
           time_sync_poll_count, TIME_SYNC_MAX_POLLS, ret);
-  (void)k_work_schedule(&time_sync_work, TIME_SYNC_POLL_INTERVAL);
+  (void)k_work_schedule(&time_sync_work, K_MSEC(TIME_SYNC_POLL_INTERVAL_MS));
 }
 
 void time_sync_request_and_update_rtc(void) {
@@ -163,7 +159,7 @@ void time_sync_request_and_update_rtc(void) {
   }
 
   LOG_INF("DeviceTimeReq sent; will update RTC on DeviceTimeAns");
-  (void)k_work_schedule(&time_sync_work, TIME_SYNC_POLL_INTERVAL);
+  (void)k_work_schedule(&time_sync_work, K_MSEC(TIME_SYNC_POLL_INTERVAL_MS));
 }
 
 int time_sync_wait(k_timeout_t timeout) {
