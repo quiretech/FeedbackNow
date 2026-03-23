@@ -43,12 +43,26 @@ static uint32_t last_uplink_ms;
 static uint32_t consecutive_send_failures;
 K_SEM_DEFINE(lora_ready_sem, 0, 1);
 
+static void join_after_backoff_timer_expiry(struct k_timer *timer);
+K_TIMER_DEFINE(join_after_backoff_timer, join_after_backoff_timer_expiry, NULL);
+
 static void join_after_backoff_timer_expiry(struct k_timer *timer) {
   (void)timer;
   LOG_INF("Link backoff elapsed; posting LORA_CMD_JOIN_SILENT");
-  (void)lora_cmd_put(LORA_CMD_JOIN_SILENT);
+  int ret;
+  for (int attempt = 0; attempt < 5; attempt++) {
+    ret = lora_cmd_put(LORA_CMD_JOIN_SILENT);
+    if (ret == 0) {
+      return;
+    }
+    LOG_WRN("Rejoin cmd queue full (attempt %d/5), retry in 500ms",
+            attempt + 1);
+    k_msleep(500);
+  }
+  LOG_ERR("Failed to post rejoin command after 5 attempts; scheduling retry in "
+          "30s");
+  k_timer_start(&join_after_backoff_timer, K_SECONDS(30), K_NO_WAIT);
 }
-K_TIMER_DEFINE(join_after_backoff_timer, join_after_backoff_timer_expiry, NULL);
 
 static void lora_log_join_ids(void) {
   LOG_INF("LoRaWAN OTAA identifiers in use:");
@@ -65,21 +79,30 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
     return -EINVAL;
   }
 
-  /* LoRa runs on 1.8V only; 3.6V is for NFC RF and not used for LoRa TX/RX. */
-
   LOG_INF("Sending payload (port %d, len %zu):", port, len);
   LOG_HEXDUMP_INF(data, len, "");
 
-  ret =
-      lorawan_send(port, (uint8_t *)data, (uint8_t)len,
-                   confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
+  for (int attempt = 0; attempt < 5; attempt++) {
+    ret = lorawan_send(
+        port, (uint8_t *)data, (uint8_t)len,
+        confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
 
-  if (ret == -EAGAIN) {
-    LOG_WRN("lorawan_send: busy / too long");
+    if (ret == -EBUSY || ret == -EAGAIN) {
+      if (attempt < 4) {
+        LOG_DBG("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
+        k_msleep(500);
+      } else {
+        LOG_WRN("lorawan_send: busy after 5 retries");
+      }
+    } else {
+      break;
+    }
+  }
+
+  if (ret == 0) {
+    LOG_INF("Data sent on port %d", port);
   } else if (ret < 0) {
     LOG_ERR("lorawan_send failed: %d", ret);
-  } else {
-    LOG_INF("Data sent on port %d", port);
   }
 
   return ret;
@@ -135,12 +158,13 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
        * gateways. ADR disabled at init; re-enabled after time sync completes.
        */
       int dr_ret = lorawan_set_datarate(LORA_TIME_SYNC_DR);
-      if (dr_ret != 0) {
-        LOG_WRN("lorawan_set_datarate(DR=" LORA_TIME_SYNC_DR_STR ") failed: %d",
-                dr_ret);
-      } else {
+      if (dr_ret == 0) {
         LOG_INF("DR set to %s (SF7/125) for time sync; ADR off until sync done",
                 LORA_TIME_SYNC_DR_STR);
+      } else if (dr_ret != -EINVAL) {
+        /* -EINVAL = already at target DR (e.g. join set DR5) */
+        LOG_WRN("lorawan_set_datarate(DR=" LORA_TIME_SYNC_DR_STR ") failed: %d",
+                dr_ret);
       }
       lora_on_join_success();
       k_sem_give(&lora_join_sem);
@@ -268,10 +292,6 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           } else if (ret < 0) {
             LOG_ERR("Failed to send LoRa message: %d", ret);
             if (ret == -ENOTCONN) {
-              /* Stack reports "not joined" (e.g. session lost after Rx
-               * timeout). Sync our state and schedule re-join; do not count
-               * toward "link lost" failures (that is for -116 timeouts while
-               * joined). */
               if (lora_is_joined()) {
                 atomic_set(&lora_joined_flag, 0);
                 lora_reset_dr_time_sync_retry();
@@ -283,26 +303,28 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                 LOG_INF("Stack not joined (-ENOTCONN); cleared flag, re-join "
                         "in backoff");
               }
-            } else if (ret != -EBUSY) {
-              /* Only count link/ACK failures (e.g. -116 timeout) toward "link
-               * lost". */
-              consecutive_send_failures++;
-              if (LORA_SEND_FAILURES_BEFORE_BACKOFF > 0 &&
-                  consecutive_send_failures >=
-                      (uint32_t)LORA_SEND_FAILURES_BEFORE_BACKOFF &&
-                  lora_is_joined()) {
-                LOG_WRN(
-                    "Link lost: %u consecutive send failures; clearing joined, "
-                    "scheduling re-join after backoff",
-                    consecutive_send_failures);
-                atomic_set(&lora_joined_flag, 0);
-                lora_reset_dr_time_sync_retry();
-                consecutive_send_failures = 0;
-                (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
-                k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
-                                          ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
-                                          : K_MINUTES(1);
-                k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+            } else if (ret != -EBUSY && ret != -EAGAIN) {
+              /* Only count confirmed uplink failures (-116 Rx timeout) toward
+               * "link lost". Unconfirmed: no ACK expected, -116 is benign. */
+              if (msg.confirmed) {
+                consecutive_send_failures++;
+                if (LORA_SEND_FAILURES_BEFORE_BACKOFF > 0 &&
+                    consecutive_send_failures >=
+                        (uint32_t)LORA_SEND_FAILURES_BEFORE_BACKOFF &&
+                    lora_is_joined()) {
+                  LOG_WRN(
+                      "Link lost: %u consecutive confirmed send failures; "
+                      "clearing joined, scheduling re-join after backoff",
+                      consecutive_send_failures);
+                  atomic_set(&lora_joined_flag, 0);
+                  lora_reset_dr_time_sync_retry();
+                  consecutive_send_failures = 0;
+                  (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
+                  k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
+                                            ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
+                                            : K_MINUTES(1);
+                  k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+                }
               }
             }
           }

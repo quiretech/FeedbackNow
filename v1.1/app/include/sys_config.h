@@ -34,11 +34,16 @@
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
- * (K_HOURS expects int). Use 0 for testing (1-minute backoff); production: 24.
+ * (K_HOURS expects int). Use 0 for testing (1-minute backoff); production:
+ * 6–24.
+ *
+ * BACKOFF TEST: set to 0 (1-min backoff), HEARTBEAT_USE_DEVEUI_JITTER=0,
+ * LORA_SEND_FAILURES_BEFORE_BACKOFF=2, LORA_HEARTBEAT_UPLINK_CONFIRMED=1
+ * to verify rejoin logic in ~5 min.
  */
-#define LORA_JOIN_BACKOFF_HOURS 6 // prod: changed to 6 after customer handoff
+#define LORA_JOIN_BACKOFF_HOURS 6 // prod: 6; test: 0
 #define LORA_MAX_RETRIES 5
-#define LORA_SEND_BUSY_RETRY_MS 3000
+#define LORA_SEND_BUSY_RETRY_MS 5000
 /** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
  * after each send to stay within duty cycle / LoRa Alliance fair use. Set to 0
  * to disable. Typical: 2000–5000 ms (e.g. EU868 1% duty cycle). */
@@ -61,9 +66,11 @@
                                      */
 #define LORA_NFC_UPLINK_CONFIRMED 1 /* check-in/out/vote: unconfirmed */
 #define LORA_HEARTBEAT_UPLINK_CONFIRMED                                        \
-  0                                   /* battery/counter in housekeeping       \
-                                       */
-#define LORA_COUNTER_SYNC_CONFIRMED 0 /* counter sync (join + heartbeat) */
+  1 /* battery/counter in housekeeping                                         \
+     */
+#define LORA_COUNTER_SYNC_CONFIRMED                                            \
+  0 /* counter sync: unconfirmed to avoid Rx                                   \
+       timeout treated as link loss */
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1; gpio-keys aliases in DT overlay)
@@ -209,13 +216,13 @@
  * Total wait = TIME_SYNC_POLL_INTERVAL_MS * TIME_SYNC_MAX_POLLS (~20s).
  * When RTC_REQUIRE_LNS_TIME_SYNC=1, time_sync.c overrides from
  * RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS. */
-#define TIME_SYNC_MAX_POLLS 30
+#define TIME_SYNC_MAX_POLLS 10
 
 /** How many full DeviceTimeReq cycles to attempt before giving up entirely.
  * Each retry sends a fresh DeviceTimeReq on the next uplink opportunity.
  * Field-stable: 2 (LNS often does not send DeviceTimeAns; fewer retries = less
  * radio load). */
-#define TIME_SYNC_MAX_RETRIES 2
+#define TIME_SYNC_MAX_RETRIES 3
 /** Time to wait for DeviceTimeAns after each DeviceTimeReq before retry/fail.
  */
 #define TIME_SYNC_ANS_TIMEOUT_MS 12000
@@ -238,7 +245,7 @@
 /** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
  * run. */
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS                                         \
-  20000 // changed from 6000 to 20000 ON 2/25
+  20000 // changed from 60000 to 20000 ON 2/25
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
@@ -249,7 +256,7 @@
  */
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
- * prod: 1 */
+ * prod: 1; BACKOFF TEST: 0 (heartbeat every 120s). */
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
 #define HOUSEKEEPING_INTERVAL_SECONDS 120
