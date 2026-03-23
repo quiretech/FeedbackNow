@@ -16,6 +16,7 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(input, CONFIG_LOG_DEFAULT_LEVEL);
+K_SEM_DEFINE(button_thread_ready_sem, 0, 1);
 
 #define BUTTON_MASK(b) (1U << (b))
 
@@ -71,6 +72,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(c);
 
   LOG_INF("Input thread started (single + combo -> SMF)");
+  k_sem_give(&button_thread_ready_sem);
 
   while (1) {
     bool got =
@@ -199,3 +201,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
 K_THREAD_DEFINE(button_uplink_thread_id, BUTTON_THREAD_STACK_SIZE,
                 button_input_thread_fn, NULL, NULL, NULL,
                 BUTTON_THREAD_PRIORITY, 0, -1);
+
+int button_thread_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&button_thread_ready_sem, timeout);
+}

@@ -10,6 +10,8 @@
  * Safe to call multiple times; it will coalesce work.
  */
 void time_sync_request_and_update_rtc(void);
+void time_sync_on_lorawan_time_updated(void);
+void time_sync_retry_request(void);
 
 /**
  * @brief Wait for the current time sync attempt to complete.

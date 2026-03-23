@@ -26,6 +26,8 @@
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
+/** Field-stable: 20s between join attempts (was 15). Reduces join-cycle load.
+ */
 #define LORA_JOIN_RETRY_DELAY_SECONDS 20
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
@@ -46,6 +48,22 @@
  * disable. Typical: 3. */
 #define LORA_SEND_FAILURES_BEFORE_BACKOFF 5
 #define LORA_BUTTON_PORT 2
+
+/** Uplink confirmation policy (field-stable profile)
+ * Confirmed: device waits for ACK in RX1/RX2; no ACK => Rx timeout (-116).
+ * Unconfirmed: fire-and-forget; no ACK => no RX timeout; better for weak links.
+ * Field-stable: use unconfirmed for non-critical uplinks to avoid Rx timeouts.
+ * Set to 1 only where backend must acknowledge (e.g. provisioning,
+ * billing-critical NFC).
+ */
+#define LORA_BUTTON_UPLINK_CONFIRMED                                           \
+  0                                 /* public votes: unconfirmed (FRD 4.5)     \
+                                     */
+#define LORA_NFC_UPLINK_CONFIRMED 1 /* check-in/out/vote: unconfirmed */
+#define LORA_HEARTBEAT_UPLINK_CONFIRMED                                        \
+  0                                   /* battery/counter in housekeeping       \
+                                       */
+#define LORA_COUNTER_SYNC_CONFIRMED 0 /* counter sync (join + heartbeat) */
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1; gpio-keys aliases in DT overlay)
@@ -153,7 +171,7 @@
  */
 /** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
  * is uninitialized. */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // PDT
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h France CET
 #define TZ_OFFSET_MIN_MINUTES (-1440)
 #define TZ_OFFSET_MAX_MINUTES (1440)
 /* =============================================================================
@@ -172,6 +190,9 @@
 #define RTC_VALID_YEAR_MIN 2026
 #define RTC_GET_EPOCH_RETRIES 5
 #define RTC_GET_EPOCH_RETRY_DELAY_MS 10
+#define RTC_3V3A_SETTLE_MS 120
+#define RTC_INIT_RETRY_COUNT 5
+#define RTC_INIT_RETRY_DELAY_MS 30
 #define RTC_REQUIRE_LNS_TIME_SYNC 0
 #define RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS 30
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18
@@ -188,12 +209,16 @@
  * Total wait = TIME_SYNC_POLL_INTERVAL_MS * TIME_SYNC_MAX_POLLS (~20s).
  * When RTC_REQUIRE_LNS_TIME_SYNC=1, time_sync.c overrides from
  * RTC_TIME_SYNC_REQUIRED_TIMEOUT_SECONDS. */
-#define TIME_SYNC_MAX_POLLS 10
+#define TIME_SYNC_MAX_POLLS 30
 
 /** How many full DeviceTimeReq cycles to attempt before giving up entirely.
  * Each retry sends a fresh DeviceTimeReq on the next uplink opportunity.
- * prod: 3. */
-#define TIME_SYNC_MAX_RETRIES 3
+ * Field-stable: 2 (LNS often does not send DeviceTimeAns; fewer retries = less
+ * radio load). */
+#define TIME_SYNC_MAX_RETRIES 2
+/** Time to wait for DeviceTimeAns after each DeviceTimeReq before retry/fail.
+ */
+#define TIME_SYNC_ANS_TIMEOUT_MS 12000
 
 /** Delay (ms) between full retry cycles. Gives device time to uplink again
  * so the next DeviceTimeReq goes out in a fresh MAC frame. prod: 30000. */
@@ -203,9 +228,8 @@
  * If exceeded a warning is logged. prod: 2. */
 #define TIME_SYNC_RTC_READBACK_DELTA_MAX_S 2
 
-/** Delay (ms) after join before first DeviceTimeReq.
- * Allows ADR to push DR up before time sync. prod: 25000. */
-#define TIME_SYNC_POST_JOIN_DELAY_MS 25000
+/* Time sync is requested by smf_joined_work after all 6 counter-syncs are sent.
+ * No post-join delay (DR set at join; counter sync then time sync). */
 
 /* =============================================================================
  * Power gating (rail manager)
@@ -269,16 +293,16 @@
  * Msgq sizes should cover burst traffic; too small => -ENOMEM, too large =>
  * RAM.
  */
-#define SMF_MSGQ_SIZE 16
+#define SMF_MSGQ_SIZE 24
 #define SMF_MSGQ_ALIGN 4
-#define SMF_THREAD_STACK_SIZE 1536
+#define SMF_THREAD_STACK_SIZE 2048
 #define DISPLAY_JOB_QUEUE_SIZE 8
 #define DISPLAY_JOB_ALIGN 4
 #define LED_UI_MSGQ_LEN 8
 #define LED_UI_MSGQ_ALIGN 4
-#define LED_UI_THREAD_STACK 1024
-#define HOUSEKEEPING_STACK_SIZE 1024
-#define NFC_WORKER_STACK_SIZE 1024
+#define LED_UI_THREAD_STACK 1280
+#define HOUSEKEEPING_STACK_SIZE 1536
+#define NFC_WORKER_STACK_SIZE 1536
 
 /* =============================================================================
  * Firmware Version
@@ -286,7 +310,7 @@
  */
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 2
-#define FW_VERSION_PATCH 1
-#define FW_VERSION_STRING "1.2.1"
+#define FW_VERSION_PATCH 2
+#define FW_VERSION_STRING "1.2.2"
 
 #endif /* SYS_CONFIG_H */

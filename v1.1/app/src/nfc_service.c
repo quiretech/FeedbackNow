@@ -28,6 +28,7 @@ LOG_MODULE_REGISTER(nfc_svc, CONFIG_LOG_DEFAULT_LEVEL);
 
 static const struct device *nfc_dev;
 static K_SEM_DEFINE(scan_start_sem, 0, 1);
+K_SEM_DEFINE(nfc_ready_sem, 0, 1);
 static struct k_mutex scan_params_mutex;
 static atomic_t scan_intent_atomic = ATOMIC_INIT(0);
 static atomic_t scan_button_id_atomic = ATOMIC_INIT(0);
@@ -45,6 +46,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
   uint8_t button_id;
   int ret;
 
+  k_sem_give(&nfc_ready_sem);
   while (1) {
     k_sem_take(&scan_start_sem, K_FOREVER);
 
@@ -126,6 +128,10 @@ int nfc_service_init(void) {
   k_mutex_init(&scan_params_mutex);
   LOG_INF("nfc_service initialized (start nfc_worker_id from main)");
   return 0;
+}
+
+int nfc_service_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&nfc_ready_sem, timeout);
 }
 
 void nfc_scan_start(uint8_t intent, uint8_t button_id) {

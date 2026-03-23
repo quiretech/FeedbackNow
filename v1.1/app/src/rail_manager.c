@@ -4,6 +4,7 @@
  */
 #include "rail_manager.h"
 #include "power_ctrl.h"
+#include "rtc.h"
 #include "sys_config.h"
 
 #include <zephyr/kernel.h>
@@ -131,6 +132,7 @@ void rail_manager_request_3v3a(void) {
   ref_3v3++; /* tie 3.3V to 3.3A for peripheral rail */
   if (ref_3v3a == 1) {
     set_rail(POWER_EN_3V3A, true);
+    rtc_notify_3v3a_enabled();
   }
   if (ref_3v3 == 1) {
     set_rail(POWER_EN_3V3, true);

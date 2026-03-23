@@ -23,4 +23,9 @@ int rtc_get_epoch_seconds(uint32_t *out_epoch_s);
  */
 int rtc_set_epoch_seconds(uint32_t epoch_s);
 
+/**
+ * @brief Notify RTC helper that 3V3A was enabled.
+ */
+void rtc_notify_3v3a_enabled(void);
+
 #endif /* RTC_APP_H */

@@ -49,15 +49,6 @@ enum system_mode {
 
 K_MSGQ_DEFINE(smf_msgq, sizeof(smf_msg_t), SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN);
 
-/* Downlink payload copy (written by smf_post_downlink, read by SMF handler) */
-static uint8_t smf_dl_payload[LORA_MAX_PAYLOAD_SIZE];
-K_MUTEX_DEFINE(smf_dl_mutex);
-
-/* NFC result: 4-byte card data (written by smf_post_nfc_result, read by SMF) */
-#define SMF_NFC_DATA_SIZE 4
-static uint8_t smf_nfc_data[SMF_NFC_DATA_SIZE];
-K_MUTEX_DEFINE(smf_nfc_mutex);
-
 #define SMF_THREAD_PRIORITY 6
 
 /* Downlink command codes (FRD 4.5) */
@@ -80,7 +71,9 @@ DL_CMD_FACTORY_RESET	0x06	06	Bg==
 */
 
 /* Counter-sync: small delay between uplinks to avoid congestion */
-#define COUNTER_SYNC_DELAY_MS 3000
+/** Delay between queuing each counter-sync uplink. LoRa thread rate-limits
+ * (LORA_UPLINK_MIN_INTERVAL_MS); 1s is enough to avoid queue flood. */
+#define COUNTER_SYNC_DELAY_MS 1000
 
 /* Mode timeout: timer posts this event so SMF returns to Normal (atomic: timer
  * vs SMF thread) */
@@ -89,6 +82,10 @@ static atomic_t mode_timeout_ev = ATOMIC_INIT(0); /* 0 = SMF_EVT_NONE */
 /* Set when SMF requested time sync from housekeeping; release 3.3A on
  * TIME_SYNC_DONE */
 static bool housekeeping_holding_3v3a;
+static void smf_joined_work_handler(struct k_work *work);
+static void smf_housekeeping_work_handler(struct k_work *work);
+K_WORK_DEFINE(smf_joined_work, smf_joined_work_handler);
+K_WORK_DEFINE(smf_housekeeping_work, smf_housekeeping_work_handler);
 
 static void mode_timeout_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
@@ -181,8 +178,8 @@ static const char *smf_mode_str(enum system_mode mode) {
 }
 
 /**
- * Queue counter-sync payloads (Event 0x12) for all buttons. Used on rejoin
- * (confirmed) and as part of heartbeat / on-demand status (unconfirmed).
+ * Queue counter-sync payloads (Event 0x12) for all buttons. Used on rejoin and
+ * as part of heartbeat / on-demand status. Confirmation policy: sys_config.h.
  */
 static void smf_do_counter_sync(bool confirmed) {
   uint32_t epoch_s = 0;
@@ -309,9 +306,67 @@ static void smf_handle_downlink(uint8_t port, uint8_t len,
   }
 }
 
+static void smf_joined_work_handler(struct k_work *work) {
+  ARG_UNUSED(work);
+  rail_manager_request_3v3a();
+  /* Brief settle after join (DR already set); was 5s, reduced now that DR is fixed */
+  k_msleep(2000);
+  smf_do_counter_sync(LORA_COUNTER_SYNC_CONFIRMED);
+  /* Wait until all 6 counter-sync uplinks are sent before time sync */
+  int drain_wait = 0;
+  while (k_msgq_num_used_get(&lora_msgq) > 0 && drain_wait < 60) {
+    k_msleep(500);
+    drain_wait++;
+  }
+  lora_request_time_sync();
+  display_show_last_cleaned();
+  rail_manager_release_3v3a();
+}
+
+static void smf_housekeeping_work_handler(struct k_work *work) {
+  ARG_UNUSED(work);
+  if (!lora_is_joined()) {
+    return;
+  }
+
+  housekeeping_holding_3v3a = true;
+  rail_manager_request_3v3a();
+  rail_manager_request_3v3();
+  k_msleep(500);
+
+  int32_t battery_mv = 0;
+  if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
+    uint32_t epoch_s = 0;
+    (void)rtc_get_epoch_seconds(&epoch_s);
+    if (epoch_s == 0) {
+      epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+    }
+
+    uint8_t payload[PAYLOAD_LEN_BYTES];
+    int pret = payload_gen_build_battery_status(
+        epoch_s, (uint16_t)battery_mv, 0, 0, payload);
+    if (pret == 0) {
+      lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
+      msg_hk.port = FPORT_HOUSEKEEPING;
+      msg_hk.confirmed = LORA_HEARTBEAT_UPLINK_CONFIRMED;
+      msg_hk.len = PAYLOAD_LEN_BYTES;
+      memcpy(msg_hk.data, payload, PAYLOAD_LEN_BYTES);
+      (void)lora_put_event(&msg_hk, K_MSEC(500));
+    }
+  }
+
+  lora_request_link_check(true);
+  lora_request_time_sync();
+  smf_do_counter_sync(LORA_COUNTER_SYNC_CONFIRMED);
+  rail_manager_release_3v3();
+  rail_manager_release_3v3a();
+  housekeeping_holding_3v3a = false;
+}
+
 /* Set when SMF_EVT_SYSTEM_READY received; gates Normal-mode actions until "go".
  */
 static volatile bool system_ready;
+K_SEM_DEFINE(smf_ready_sem, 0, 1);
 
 static void smf_thread_fn(void *a, void *b, void *c) {
   smf_msg_t msg;
@@ -331,6 +386,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     /* System go: all inits and threads started. */
     if (msg.ev_type == SMF_EVT_SYSTEM_READY) {
       system_ready = true;
+      k_sem_give(&smf_ready_sem);
       LOG_INF("[SMF] system ready (all go)");
       continue;
     }
@@ -355,21 +411,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         }
       } else if (msg.ev_type == SMF_EVT_JOINED) {
         LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
-        rail_manager_request_3v3a();
-        k_msleep(5000);
-        smf_do_counter_sync(false);
-        /* Wait for LoRa queue to fully drain before showing display.
-         * EPD and LoRa share SPI; rendering while a TX is in-flight
-         * causes EPD Busy Timeout. */
-        int drain_wait = 0;
-        while (k_msgq_num_used_get(&lora_msgq) > 0 && drain_wait < 30) {
-          k_msleep(1000);
-          drain_wait++;
-        }
-        /* Extra settle for last TX RX windows to close */
-        k_msleep(3000);
-        display_show_last_cleaned();
-        rail_manager_release_3v3a();
+        (void)k_work_submit(&smf_joined_work);
 
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         display_show_connecting();
@@ -387,75 +429,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           rail_manager_release_3v3(); // Release both
         }
       } else if (msg.ev_type == SMF_EVT_HOUSEKEEPING_TICK) {
-        /* Housekeeping runs under SMF rail arbitration; hold 3.3A until
-         * TIME_SYNC_DONE. Within this window:
-         *  - sample battery via ADC and enqueue EVT_BATTERY_STATUS (0x10)
-         *  - request time sync (DeviceTimeReq/Ans)
-         *  - request LinkCheckReq MAC command
-         *
-         * LoRa thread and time_sync module own lorawan_* and RTC writes; SMF
-         * just sequences requests and owns the 3.3A rail.
-         */
-        if (lora_is_joined()) {
-          housekeeping_holding_3v3a = true;
-          rail_manager_request_3v3a();
-          rail_manager_request_3v3(); // MUST BE ON for the divider
-          /* 500ms is great; gives the main rail and capacitors time to charge
-           */
-          k_msleep(500);
-
-          /* 1) Battery status heartbeat uplink (EVT_BATTERY_STATUS). */
-          int32_t battery_mv = 0;
-          if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
-            uint32_t epoch_s = 0;
-            (void)rtc_get_epoch_seconds(&epoch_s);
-            if (epoch_s == 0) {
-              epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-            }
-
-            uint8_t payload[PAYLOAD_LEN_BYTES];
-            int pret = payload_gen_build_battery_status(
-                epoch_s, (uint16_t)battery_mv, 0 /* percent */, 0 /* flags */,
-                payload);
-            if (pret == 0) {
-              lora_uplink_msg_t msg_hk = (lora_uplink_msg_t){0};
-              msg_hk.port = FPORT_HOUSEKEEPING;
-              msg_hk.confirmed = true; /* heartbeat battery status can be
-                                          unconfirmed but i set it to true*/
-              msg_hk.len = PAYLOAD_LEN_BYTES;
-              memcpy(msg_hk.data, payload, PAYLOAD_LEN_BYTES);
-              int qret = lora_put_event(&msg_hk, K_MSEC(500));
-              if (qret == 0) {
-                LOG_INF("[SMF] housekeeping: queued battery status %d mV",
-                        battery_mv);
-              } else {
-                LOG_WRN("[SMF] housekeeping: lora_put_event battery failed: %d",
-                        qret);
-              }
-            } else {
-              LOG_WRN("[SMF] housekeeping: build battery status failed: %d",
-                      pret);
-            }
-          } else {
-            LOG_WRN("[SMF] housekeeping: ADC battery read failed");
-          }
-
-          /* 2. NOW trigger the async events that might signal "Done" */
-          lora_request_link_check(true);
-          lora_request_time_sync();
-
-          /* 3. Counter sync (confirmed, like heartbeat and rejoin path) */
-          smf_do_counter_sync(true);
-          rail_manager_release_3v3();
-          rail_manager_release_3v3a();
-          housekeeping_holding_3v3a =
-              false; /* Released here; TIME_SYNC_DONE must not release again */
-        }
+        (void)k_work_submit(&smf_housekeeping_work);
       } else if (msg.ev_type == SMF_EVT_DOWNLINK) {
-        k_mutex_lock(&smf_dl_mutex, K_FOREVER);
         smf_handle_downlink(msg.payload.downlink.port, msg.payload.downlink.len,
-                            smf_dl_payload);
-        k_mutex_unlock(&smf_dl_mutex);
+                            msg.payload.downlink.data);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         mode = MODE_STAFF;
         LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
@@ -579,10 +556,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
 
         if (ok) {
           uint8_t payload[PAYLOAD_LEN_BYTES];
-          uint8_t data_4[SMF_NFC_DATA_SIZE];
-          k_mutex_lock(&smf_nfc_mutex, K_FOREVER);
-          memcpy(data_4, smf_nfc_data, SMF_NFC_DATA_SIZE);
-          k_mutex_unlock(&smf_nfc_mutex);
+          uint8_t data_4[4];
+          memcpy(data_4, msg.payload.nfc.data_4, sizeof(data_4));
 
           if (intent == NFC_INTENT_CHECK_IN) {
             display_show_cleaning();
@@ -602,7 +577,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           if (pret == 0) {
             lora_uplink_msg_t uplink = {0};
             uplink.port = FPORT_NFC;
-            uplink.confirmed = true; // NFC should be confirmed
+            uplink.confirmed = LORA_NFC_UPLINK_CONFIRMED;
             uplink.len = PAYLOAD_LEN_BYTES;
             memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
             if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
@@ -638,16 +613,18 @@ int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms) {
       .button_id = button_id,
       .timestamp_ms = timestamp_ms,
   };
-  return k_msgq_put(&smf_msgq, &msg, K_NO_WAIT) == 0 ? 0 : -ENOMEM;
+  int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
+  if (ret != 0) {
+    LOG_WRN("[SMF] msgq full, dropping ev=%u", ev_type);
+    return -ENOMEM;
+  }
+  return 0;
 }
 
 int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
   if (data == NULL || len > LORA_MAX_PAYLOAD_SIZE) {
     return -EINVAL;
   }
-  k_mutex_lock(&smf_dl_mutex, K_FOREVER);
-  memcpy(smf_dl_payload, data, len);
-  k_mutex_unlock(&smf_dl_mutex);
 
   smf_msg_t msg = {
       .ev_type = SMF_EVT_DOWNLINK,
@@ -656,19 +633,17 @@ int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
   };
   msg.payload.downlink.port = port;
   msg.payload.downlink.len = len;
+  memcpy(msg.payload.downlink.data, data, len);
 
   int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
+  if (ret != 0) {
+    LOG_WRN("[SMF] msgq full, dropping downlink");
+  }
   return ret == 0 ? 0 : -ENOMEM;
 }
 
 int smf_post_nfc_result(uint8_t ok, uint8_t intent, uint8_t button_id,
                         const uint8_t *data_4) {
-  if (data_4 != NULL) {
-    k_mutex_lock(&smf_nfc_mutex, K_FOREVER);
-    memcpy(smf_nfc_data, data_4, SMF_NFC_DATA_SIZE);
-    k_mutex_unlock(&smf_nfc_mutex);
-  }
-
   smf_msg_t msg = {
       .ev_type = SMF_EVT_NFC_RESULT,
       .button_id = 0,
@@ -677,7 +652,19 @@ int smf_post_nfc_result(uint8_t ok, uint8_t intent, uint8_t button_id,
   msg.payload.nfc.ok = ok;
   msg.payload.nfc.intent = intent;
   msg.payload.nfc.button_id = button_id;
+  if (data_4 != NULL) {
+    memcpy(msg.payload.nfc.data_4, data_4, sizeof(msg.payload.nfc.data_4));
+  } else {
+    memset(msg.payload.nfc.data_4, 0, sizeof(msg.payload.nfc.data_4));
+  }
 
   int ret = k_msgq_put(&smf_msgq, &msg, K_NO_WAIT);
+  if (ret != 0) {
+    LOG_WRN("[SMF] msgq full, dropping nfc result");
+  }
   return ret == 0 ? 0 : -ENOMEM;
+}
+
+int smf_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&smf_ready_sem, timeout);
 }

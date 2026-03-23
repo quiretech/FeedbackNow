@@ -32,6 +32,7 @@ extern const k_tid_t led_ui_thread_id;
 
 /** Init GPIO. Call once from main; start led_ui_thread_id from main thread block. */
 int led_manager_init(void);
+int led_manager_wait_until_ready(k_timeout_t timeout);
 
 /**
  * Show a pattern on the given LED. Non-blocking; queued.

@@ -8,6 +8,7 @@
 #include "log_fmt.h"
 #include "lora_app.h"
 #include "smf_system_mode.h"
+#include "time_sync.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -22,6 +23,11 @@ K_MSGQ_DEFINE(lora_cmdq, sizeof(uint8_t), LORA_CMDQ_SIZE, 4);
 /* Join status tracking */
 atomic_t lora_joined_flag = ATOMIC_INIT(0);
 K_SEM_DEFINE(lora_join_sem, 0, 1);
+extern struct k_sem lora_ready_sem;
+
+/* One-shot guard for DR-based time-sync retry per join lifecycle. */
+static atomic_t dr_time_sync_retry_requested = ATOMIC_INIT(0);
+static atomic_t latest_dr_seen = ATOMIC_INIT(-1);
 
 int lora_cmd_put(uint8_t cmd) {
   if (cmd >= LORA_CMD_COUNT) {
@@ -38,9 +44,26 @@ void lora_request_join(void) { (void)lora_cmd_put(LORA_CMD_JOIN); }
 
 void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
 
+void lora_request_enable_adr(void) {
+  (void)lora_cmd_put(LORA_CMD_ENABLE_ADR);
+}
+
 void lora_request_link_check(bool force_request) {
   (void)lora_cmd_put(force_request ? LORA_CMD_LINK_CHECK_FORCE
                                    : LORA_CMD_LINK_CHECK);
+}
+
+void lora_reset_dr_time_sync_retry(void) {
+  atomic_set(&dr_time_sync_retry_requested, 0);
+}
+
+void lora_on_join_success(void) {
+  lora_reset_dr_time_sync_retry();
+  /* Time sync is requested by smf_joined_work after all counter-syncs are sent */
+}
+
+int lora_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&lora_ready_sem, timeout);
 }
 
 bool lora_get_cmd(uint8_t *cmd_out, k_timeout_t timeout) {
@@ -117,6 +140,7 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
   if (flags & LORAWAN_TIME_UPDATED) {
     LOG_SECTION_INF(
         "LoRaWAN time updated by network (DeviceTimeAns / clock sync)");
+    time_sync_on_lorawan_time_updated();
   }
 
   if (!hex_data || len == 0) {
@@ -139,6 +163,7 @@ void lora_app_dr_changed(enum lorawan_datarate dr) {
 
   lorawan_get_payload_sizes(&unused, &max_size);
   LOG_INF("New Datarate: DR_%d, Max Payload %d", dr, max_size);
+  atomic_set(&latest_dr_seen, (atomic_val_t)dr);
 }
 
 /**
@@ -168,10 +193,18 @@ int lora_app_init(void) {
   /* Register battery level callback (randomized) */
   lorawan_register_battery_level_callback(lora_battery_level_cb);
 
-  // Enable ADR so network manages DR dynamically
-  lorawan_enable_adr(true);
-  LOG_INF("Adaptive Data Rate (ADR) enabled");
+  /* ADR disabled at init; re-enabled after time sync so DR sticks for
+   * DeviceTimeAns (DR0 downlinks often fail). See lora_request_enable_adr(). */
+  lorawan_enable_adr(false);
+  LOG_INF("Adaptive Data Rate (ADR) disabled at init, enabled after time sync");
 
   LOG_INF("LoRaWAN stack initialized successfully.");
+#if defined(CONFIG_LORAMAC_REGION_EU868) && defined(CONFIG_LORAMAC_REGION_US915)
+  LOG_INF("LoRaWAN regions compiled: EU868 + US915");
+#elif defined(CONFIG_LORAMAC_REGION_EU868)
+  LOG_INF("LoRaWAN region compiled: EU868");
+#elif defined(CONFIG_LORAMAC_REGION_US915)
+  LOG_INF("LoRaWAN region compiled: US915");
+#endif
   return 0;
 }

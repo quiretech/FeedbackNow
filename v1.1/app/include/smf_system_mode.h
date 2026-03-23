@@ -6,6 +6,7 @@
 #ifndef SMF_SYSTEM_MODE_H
 #define SMF_SYSTEM_MODE_H
 
+#include "sys_config.h"
 #include <stdint.h>
 #include <zephyr/kernel.h>
 
@@ -57,12 +58,13 @@ typedef struct smf_msg {
     struct {
       uint8_t port;
       uint8_t len;
+      uint8_t data[LORA_MAX_PAYLOAD_SIZE];
     } downlink;
     struct {
       uint8_t ok;        /* 1 = read success, 0 = timeout/error */
       uint8_t intent;    /* nfc_intent_t: CHECK_IN, CHECK_OUT, NFC_VOTE */
       uint8_t button_id; /* 0..5 for vote / check-in(0) / check-out(1) */
-      uint8_t pad;
+      uint8_t data_4[4];
     } nfc;
   } payload;
 } smf_msg_t;
@@ -73,6 +75,12 @@ typedef struct smf_msg {
  * button_id.
  */
 int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms);
+
+/**
+ * Wait until SMF consumes SYSTEM_READY and marks system go.
+ * Returns 0 on success or negative errno on timeout/failure.
+ */
+int smf_wait_until_ready(k_timeout_t timeout);
 
 /**
  * Post downlink to SMF (from LoRa downlink callback). Copies payload into

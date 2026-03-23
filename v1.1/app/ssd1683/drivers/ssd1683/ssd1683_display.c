@@ -150,7 +150,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
   }
 
   // STEP 3: Refresh the display (partial or full)
-  ret = ssd1683_refresh(dev, false);
+  ret = ssd1683_refresh(dev, partial_update);
   if (ret < 0) {
     LOG_ERR("Failed to refresh display: %d", ret);
     return ret;

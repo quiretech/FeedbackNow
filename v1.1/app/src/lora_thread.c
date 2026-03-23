@@ -19,6 +19,18 @@ LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
 
+/* SF7/125 for time sync phase (DR0 downlinks often fail). Region-specific. */
+#if defined(CONFIG_LORAMAC_REGION_EU868)
+#define LORA_TIME_SYNC_DR LORAWAN_DR_5
+#define LORA_TIME_SYNC_DR_STR "5 [EU868]"
+#elif defined(CONFIG_LORAMAC_REGION_US915)
+#define LORA_TIME_SYNC_DR LORAWAN_DR_3
+#define LORA_TIME_SYNC_DR_STR "3 [US915]"
+#else
+#define LORA_TIME_SYNC_DR LORAWAN_DR_5
+#define LORA_TIME_SYNC_DR_STR "5"
+#endif
+
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
@@ -29,6 +41,7 @@ static uint32_t last_uplink_ms;
 /* Consecutive send failures; when >= LORA_SEND_FAILURES_BEFORE_BACKOFF we
  * clear joined and schedule re-join after backoff. */
 static uint32_t consecutive_send_failures;
+K_SEM_DEFINE(lora_ready_sem, 0, 1);
 
 static void join_after_backoff_timer_expiry(struct k_timer *timer) {
   (void)timer;
@@ -71,8 +84,6 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 
   return ret;
 }
-
-#define TIME_SYNC_WAIT_TIMEOUT K_SECONDS(15)
 
 /**
  * Run one join "cycle": up to LORA_JOIN_ATTEMPTS_PER_CYCLE attempts with
@@ -120,20 +131,27 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
       consecutive_send_failures = 0;
       k_timer_stop(&join_after_backoff_timer);
       atomic_set(&lora_joined_flag, 1);
+      /* Set SF7/125 before time sync: DR0 downlinks often fail on some
+       * gateways. ADR disabled at init; re-enabled after time sync completes.
+       */
+      int dr_ret = lorawan_set_datarate(LORA_TIME_SYNC_DR);
+      if (dr_ret != 0) {
+        LOG_WRN("lorawan_set_datarate(DR=" LORA_TIME_SYNC_DR_STR ") failed: %d",
+                dr_ret);
+      } else {
+        LOG_INF("DR set to %s (SF7/125) for time sync; ADR off until sync done",
+                LORA_TIME_SYNC_DR_STR);
+      }
+      lora_on_join_success();
       k_sem_give(&lora_join_sem);
 
-      /* Brief settle so stack is ready before post-join uplinks/time_sync */
-      k_msleep(5000);
+      /* Brief settle so stack is ready before post-join uplinks */
+      k_msleep(2000);
 
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
       rail_manager_request_3v3a();
       (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
       (void)join_state_store_set_has_joined_once();
-      /* Wait for ADR to settle before DeviceTimeReq so Ans arrives at DR5 */
-      LOG_INF("Waiting %d ms for ADR to settle before time sync",
-              TIME_SYNC_POST_JOIN_DELAY_MS);
-      k_msleep(TIME_SYNC_POST_JOIN_DELAY_MS);
-      // time_sync_request_and_update_rtc();
       rail_manager_release_3v3a();
       LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
       return true;
@@ -165,6 +183,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   uint8_t cmd;
 
   LOG_SECTION_INF("LORA THREAD ENTRY");
+  k_sem_give(&lora_ready_sem);
   LOG_INF("LoRa thread started - Thread ID: %p", k_current_get());
   LOG_INF("LoRa thread priority: %d", k_thread_priority_get(k_current_get()));
   LOG_INF("LoRa thread stack size: %d", LORA_THREAD_STACK_SIZE);
@@ -255,6 +274,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                * joined). */
               if (lora_is_joined()) {
                 atomic_set(&lora_joined_flag, 0);
+                lora_reset_dr_time_sync_retry();
                 (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
                 k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
                                           ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
@@ -276,6 +296,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                     "scheduling re-join after backoff",
                     consecutive_send_failures);
                 atomic_set(&lora_joined_flag, 0);
+                lora_reset_dr_time_sync_retry();
                 consecutive_send_failures = 0;
                 (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
                 k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
@@ -311,9 +332,11 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           }
         } else if (cmd == LORA_CMD_TIME_SYNC) {
           time_sync_request_and_update_rtc();
-          int ts_ret = time_sync_wait(TIME_SYNC_WAIT_TIMEOUT);
-          (void)smf_post_event(SMF_EVT_TIME_SYNC_DONE, (ts_ret == 0 ? 0 : 1),
-                               k_uptime_get());
+        } else if (cmd == LORA_CMD_TIME_SYNC_RETRY) {
+          time_sync_retry_request();
+        } else if (cmd == LORA_CMD_ENABLE_ADR) {
+          lorawan_enable_adr(true);
+          LOG_INF("ADR re-enabled (time sync done; network will manage DR)");
         } else if (cmd == LORA_CMD_LINK_CHECK ||
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
           bool force = (cmd == LORA_CMD_LINK_CHECK_FORCE);

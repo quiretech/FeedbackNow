@@ -65,14 +65,15 @@ void app_logic_public_vote(uint8_t button_id) {
 
   lora_uplink_msg_t msg = {0};
   msg.port = FPORT_BUTTON;
-  msg.confirmed = false; /* FRD 4.5: unconfirmed uplinks */
+  msg.confirmed = LORA_BUTTON_UPLINK_CONFIRMED;
   msg.len = PAYLOAD_LEN_BYTES;
   memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
 
   ret = lora_put_event(&msg, K_NO_WAIT);
   if (ret == -ENOTCONN) {
     LOG_WRN("Not joined; dropped button id=%u", payload_button_id);
-    last_accepted_any_press_ms = now_ms; /* Cooldown same as when joined (no EPD flood). */
+    last_accepted_any_press_ms =
+        now_ms; /* Cooldown same as when joined (no EPD flood). */
   } else if (ret != 0) {
     LOG_ERR("Queue button uplink failed: %d", ret);
   } else {

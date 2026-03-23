@@ -20,6 +20,7 @@
  * Thread sleeps HOUSEKEEPING_INTERVAL_SECONDS then runs tasks in a loop.
  */
 int housekeeping_init(void);
+int housekeeping_wait_until_ready(k_timeout_t timeout);
 
 /** Thread ID for main to start (K_THREAD_DEFINE with delay = -1). */
 extern const k_tid_t housekeeping_thread_id;

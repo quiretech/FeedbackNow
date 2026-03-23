@@ -21,6 +21,7 @@ typedef struct {
 
 K_MSGQ_DEFINE(led_ui_msgq, sizeof(led_ui_msg_t), LED_UI_MSGQ_LEN,
               LED_UI_MSGQ_ALIGN);
+K_SEM_DEFINE(led_ready_sem, 0, 1);
 
 /* Per-LED runner state */
 static struct {
@@ -187,6 +188,7 @@ static void led_ui_thread_fn(void *a, void *b, void *c) {
 
   k_thread_name_set(k_current_get(), "led_ui");
   LOG_INF("LED UI thread started");
+  k_sem_give(&led_ready_sem);
 
   for (int i = 0; i < NUM_LEDS; i++) {
     led_state[i].pattern = LED_PATTERN_OFF;
@@ -251,4 +253,8 @@ int led_manager_show(uint8_t led_id, enum led_pattern_id pattern) {
   }
   led_ui_msg_t msg = {.led_id = led_id, .pattern = (uint8_t)pattern};
   return k_msgq_put(&led_ui_msgq, &msg, K_NO_WAIT) == 0 ? 0 : -ENOMEM;
+}
+
+int led_manager_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&led_ready_sem, timeout);
 }

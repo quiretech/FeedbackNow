@@ -46,7 +46,11 @@ static void debounce_expiry(struct k_timer *timer) {
       .type = val ? BUTTON_EVENT_PRESS : BUTTON_EVENT_RELEASE,
       .timestamp_ms = k_uptime_get(),
   };
-  k_msgq_put(&button_msgq, &evt, K_NO_WAIT);
+  int qret = k_msgq_put(&button_msgq, &evt, K_NO_WAIT);
+  if (qret != 0) {
+    LOG_WRN("button_msgq full, dropping event btn=%u type=%u", evt.button_id,
+            evt.type);
+  }
 }
 
 bool buttons_get_event(button_event_t *event, k_timeout_t timeout) {

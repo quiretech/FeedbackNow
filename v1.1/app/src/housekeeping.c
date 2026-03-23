@@ -17,6 +17,7 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
+K_SEM_DEFINE(housekeeping_ready_sem, 0, 1);
 
 /* Use sys_config.h for HOUSEKEEPING_STACK_SIZE */
 #define HOUSEKEEPING_PRIORITY 9
@@ -59,6 +60,7 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
 
   LOG_INF("[housekeeping] thread started, jitter=%d offset_min=%u",
           HEARTBEAT_USE_DEVEUI_JITTER, (unsigned)offset_minutes);
+  k_sem_give(&housekeeping_ready_sem);
 
   for (;;) {
 #if HEARTBEAT_USE_DEVEUI_JITTER
@@ -97,4 +99,8 @@ int housekeeping_init(void) {
   /* Thread is already defined; main will
    * k_thread_start(housekeeping_thread_id). No per-run resources needed. */
   return 0;
+}
+
+int housekeeping_wait_until_ready(k_timeout_t timeout) {
+  return k_sem_take(&housekeeping_ready_sem, timeout);
 }

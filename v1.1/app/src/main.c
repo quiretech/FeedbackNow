@@ -135,7 +135,7 @@ static int system_init(void) {
 int main(void) {
   int ret;
 
-  LOG_SECTION_INF("FeedbackNow FlexBox v1.2.1 Starting");
+  LOG_SECTION_INF("FeedbackNow FlexBox v1.2.2 Starting");
 
   k_sleep(K_SECONDS(1));
 
@@ -148,6 +148,7 @@ int main(void) {
   power_ctrl_set(POWER_EN_3V3, true);
   power_ctrl_set(POWER_EN_1V8, true);
   power_ctrl_set(POWER_EN_3V3A, true);
+  rtc_notify_3v3a_enabled();
   power_ctrl_set(POWER_EN_3V6, true);
 
   k_sleep(K_SECONDS(1));
@@ -175,15 +176,20 @@ int main(void) {
     return ret;
   }
 
-  display_show_logo();
+  /* Enter idle before worker threads run to avoid refcount-reset races. */
+  rail_manager_enter_idle();
+  LOG_INF("Rails released (idle); 3.3V/3.3A/3.6V off until requested");
 
   /* Centralized thread start (single block for ordering and priorities). */
   k_thread_start(led_ui_thread_id);
   LOG_INF("LED thread started");
+  (void)led_manager_wait_until_ready(K_SECONDS(1));
   k_thread_start(nfc_worker_id);
   LOG_INF("NFC worker started");
+  (void)nfc_service_wait_until_ready(K_SECONDS(1));
   k_thread_start(lora_thread_id);
   LOG_INF("LoRa thread started");
+  (void)lora_wait_until_ready(K_SECONDS(1));
   k_thread_start(smf_thread_id);
   LOG_INF("SMF thread started");
 
@@ -195,17 +201,21 @@ int main(void) {
 
   k_thread_start(button_uplink_thread_id);
   LOG_INF("Input thread started");
+  (void)button_thread_wait_until_ready(K_SECONDS(1));
 
   (void)housekeeping_init();
   k_thread_start(housekeeping_thread_id);
   LOG_INF("Housekeeping thread started");
+  (void)housekeeping_wait_until_ready(K_SECONDS(1));
 
   /* Signal SMF: all inits and threads started ("system go"). */
-  (void)smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get());
+  if (smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get()) != 0) {
+    LOG_WRN("Failed to post SYSTEM_READY to SMF");
+  } else if (smf_wait_until_ready(K_SECONDS(2)) != 0) {
+    LOG_WRN("SMF ready ack timeout; proceeding with rail idle transition");
+  }
 
-  /* Enter idle: turn off 3.3V, 3.3A, 3.6V. 1.8V stays on for LoRa + buttons. */
-  rail_manager_enter_idle();
-  LOG_INF("Rails released (idle); 3.3V/3.3A/3.6V off until requested");
+  display_show_logo();
 
   /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink
    */

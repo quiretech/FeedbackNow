@@ -15,6 +15,7 @@
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/timeutil.h>
 
 LOG_MODULE_REGISTER(rtc_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -25,6 +26,23 @@ static const struct device *rtc_dev = DEVICE_DT_GET(RTC_NODE);
 #else
 static const struct device *rtc_dev = NULL;
 #endif
+static atomic_t rtc_3v3a_enabled_at_ms = ATOMIC_INIT(0);
+
+void rtc_notify_3v3a_enabled(void) {
+  atomic_set(&rtc_3v3a_enabled_at_ms, (atomic_val_t)k_uptime_get_32());
+}
+
+static void rtc_wait_after_3v3a_enable(void) {
+  uint32_t t_enabled = (uint32_t)atomic_get(&rtc_3v3a_enabled_at_ms);
+  if (t_enabled == 0U) {
+    return;
+  }
+  uint32_t now = k_uptime_get_32();
+  uint32_t elapsed = now - t_enabled;
+  if (elapsed < RTC_3V3A_SETTLE_MS) {
+    k_msleep(RTC_3V3A_SETTLE_MS - elapsed);
+  }
+}
 
 static int rtc_should_set_time(const struct rtc_time *t) {
   /* rtc_time.tm_year is years since 1900 */
@@ -75,6 +93,12 @@ int rtc_app_init(void) {
   if (rtc_dev == NULL) {
     return -ENODEV;
   }
+  for (int i = 0; i < RTC_INIT_RETRY_COUNT; i++) {
+    if (device_is_ready(rtc_dev)) {
+      break;
+    }
+    k_msleep(RTC_INIT_RETRY_DELAY_MS);
+  }
   if (!device_is_ready(rtc_dev)) {
     return -ENODEV;
   }
@@ -123,6 +147,7 @@ int rtc_get_epoch_seconds(uint32_t *out_epoch_s) {
 
   struct rtc_time t = {0};
   int ret = -EIO;
+  rtc_wait_after_3v3a_enable();
   for (int attempt = 0; attempt < RTC_GET_EPOCH_RETRIES; attempt++) {
     if (attempt > 0) {
       k_msleep(RTC_GET_EPOCH_RETRY_DELAY_MS);
@@ -160,6 +185,7 @@ int rtc_get_epoch_seconds(uint32_t *out_epoch_s) {
 }
 
 int rtc_set_epoch_seconds(uint32_t epoch_s) {
+  rtc_wait_after_3v3a_enable();
   if (rtc_dev == NULL || !device_is_ready(rtc_dev)) {
     return -ENODEV;
   }

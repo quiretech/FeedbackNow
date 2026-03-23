@@ -626,7 +626,10 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
    * returns 0 ("already busy"). The handler's tail-check will see the new
    * job and reschedule itself at 100 ms. As a safety net, if the handler has
    * already passed its tail-check, force a short reschedule. */
-  int ret = k_work_schedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
+  uint32_t delay_ms =
+      (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING) ? 0U
+                                                              : DISPLAY_WORK_DELAY_MS;
+  int ret = k_work_schedule(&display_work, K_MSEC(delay_ms));
   if (ret == 0 && !k_work_delayable_is_pending(&display_work)) {
     /* Work is running right now; handler may have already passed its
      * tail-check. Schedule a short follow-up to guarantee processing. */

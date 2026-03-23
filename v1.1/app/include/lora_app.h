@@ -36,8 +36,10 @@ enum lora_cmd_type {
   LORA_CMD_JOIN = 0,   /* Deliberate join (Staff+0+1+2): show Connecting on EPD */
   LORA_CMD_JOIN_SILENT, /* Auto-join / rejoin: no EPD change, join in background */
   LORA_CMD_TIME_SYNC,   /* Request DeviceTimeReq/Ans and update RTC */
+  LORA_CMD_TIME_SYNC_RETRY, /* Retry DeviceTimeReq in active sync cycle */
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
   LORA_CMD_LINK_CHECK_FORCE, /* Send empty frame now for LinkCheckReq */
+  LORA_CMD_ENABLE_ADR,       /* Re-enable ADR after time sync (was off for LNS sync) */
   LORA_CMD_COUNT
 };
 
@@ -64,6 +66,7 @@ extern atomic_t lora_joined_flag;
 
 /* Semaphore to signal join completion to waiting threads */
 extern struct k_sem lora_join_sem;
+int lora_wait_until_ready(k_timeout_t timeout);
 
 /**
  * Request LoRa thread to perform OTAA join. SMF uses this (e.g. on COMBO_JOIN).
@@ -80,11 +83,30 @@ void lora_request_join(void);
 void lora_request_time_sync(void);
 
 /**
+ * Request LoRa thread to re-enable ADR. Called after time sync (success or
+ * timeout). ADR is disabled at join so DR sticks for DeviceTimeAns; re-enabled
+ * afterward so network manages DR.
+ */
+void lora_request_enable_adr(void);
+
+/**
  * Request LoRa thread to send LinkCheckReq MAC command. LoRa thread calls
  * lorawan_request_link_check(force_request). For heartbeat use true to send
  * immediately; false appends to next uplink.
  */
 void lora_request_link_check(bool force_request);
+
+/**
+ * Reset one-shot DR-based time sync retry guard. Call on each new join cycle
+ * transition so DR callback can request time sync once per join.
+ */
+void lora_reset_dr_time_sync_retry(void);
+
+/**
+ * Notify LoRa app layer that a new join succeeded.
+ * Time sync is requested by smf_joined_work after all counter-syncs are sent.
+ */
+void lora_on_join_success(void);
 
 /** Post a command to the LoRa thread (SMF or LoRa thread for self-bootstrap
  * only). */

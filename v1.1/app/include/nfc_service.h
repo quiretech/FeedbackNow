@@ -29,6 +29,7 @@ extern const k_tid_t nfc_worker_id;
  * @return 0 on success, negative on error.
  */
 int nfc_service_init(void);
+int nfc_service_wait_until_ready(k_timeout_t timeout);
 
 /**
  * Start NFC scan. Worker will run until card read or timeout/cancel.
