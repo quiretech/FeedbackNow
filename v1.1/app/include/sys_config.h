@@ -7,8 +7,8 @@
  * sync. Values marked * in FRD are tunable here.
  *
  * --- Production lock-down (ensure these before release) ---
- * LORA_JOIN_BACKOFF_HOURS     : 0 = test (1 min backoff), prod = 24 (or per
- * FRD). HEARTBEAT_USE_DEVEUI_JITTER : 1 = prod (daily + jitter), 0 = test
+ * LORA_JOIN_BACKOFF_HOURS     : 0 = test (1 min), prod = 6–24 (per FRD).
+ * HEARTBEAT_USE_DEVEUI_JITTER : 1 = prod (daily + jitter), 0 = test
  * (every 120s). EEPROM_*_FACTORY_RESET_ON_BOOT : all 0 for prod (no wipe on
  * boot). EEPROM_JOIN_STATE_CLEAR_ON_BOOT : 0 for prod (persist join state).
  * SYS_CONFIG_EEPROM_PROBE_LOG : 0 for prod (no hex dump at boot).
@@ -34,8 +34,8 @@
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
- * (K_HOURS expects int). Use 0 for testing (1-minute backoff); production:
- * 6–24.
+ * (K_HOURS expects int). Use 0 for testing (1-min backoff); prod: 6–24 (per
+ * FRD).
  *
  * BACKOFF TEST: set to 0 (1-min backoff), HEARTBEAT_USE_DEVEUI_JITTER=0,
  * LORA_SEND_FAILURES_BEFORE_BACKOFF=2, LORA_HEARTBEAT_UPLINK_CONFIRMED=1
@@ -82,12 +82,12 @@
 #define BUTTON_THREAD_STACK_SIZE 1536
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_COOLDOWN_MS 7000
+#define BUTTON_COOLDOWN_MS 5000
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
  * reset). */
 #define INPUT_COMBO_SCAN_INTERVAL_MS 50
-#define INPUT_SESSION_RECOVERY_MS 300
+#define INPUT_SESSION_RECOVERY_MS 250
 
 /* =============================================================================
  * Combo hold durations (FRD 3.1) — extend by adding entries in input layer
@@ -105,7 +105,7 @@
 /* Staff: 20s (longer than FRD 10s* to allow Reboot combo 0+1+2+3 hold 10s). */
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS                                                 \
-  15000 /* Increased for better UX (was 4s, display delay is 5s) */
+  12000 /* prod: 12s; return to Normal on timeout */
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -113,8 +113,8 @@
  * =============================================================================
  */
 #define NUM_LEDS 1
-/* Button press accepted: LED solid ON for 1s, then OFF */
-#define LED_BUTTON_ACCEPTED_MS 1000
+/* Button press accepted: LED solid ON, then OFF. prod: 800. */
+#define LED_BUTTON_ACCEPTED_MS 800
 /* Join success: LED blinks 3 times (3 x 60ms ON, 60ms OFF; total ~360ms) */
 #define LED_JOIN_BLINKS 3
 #define LED_JOIN_ON_MS 60
@@ -220,8 +220,7 @@
 
 /** How many full DeviceTimeReq cycles to attempt before giving up entirely.
  * Each retry sends a fresh DeviceTimeReq on the next uplink opportunity.
- * Field-stable: 2 (LNS often does not send DeviceTimeAns; fewer retries = less
- * radio load). */
+ * Field-stable: 3 retries. Balance RTC sync odds vs radio load. */
 #define TIME_SYNC_MAX_RETRIES 3
 /** Time to wait for DeviceTimeAns after each DeviceTimeReq before retry/fail.
  */
@@ -244,8 +243,7 @@
  */
 /** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
  * run. */
-#define RAIL_MANAGER_3V3A_KEEPALIVE_MS                                         \
-  20000 // changed from 60000 to 20000 ON 2/25
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 20000 /* prod: 20s (EEPROM flush 5s) */
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
@@ -280,18 +278,19 @@
  */
 #define EPD_ENABLED 1
 /** Thanks screen duration before returning to last cleaned (ms). */
-#define EPD_THANKS_DISPLAY_MS 5000
+#define EPD_THANKS_DISPLAY_MS 3000
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms).
  * prod: 45; test: 1–3. */
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 /**
- * Delay (ms) before running display work. EPD and LoRa share SPI; holding the
- * bus for EPD refresh blocks the radio during RX windows and drops downlinks.
- * Delay allows RX1/RX2 (~1–2 s after uplink) to complete before we use SPI.
- * Set to 0 to disable delay (e.g. if SPI is not shared).
+ * Delay (ms) before running display work for LAST_CLEANED, CLEANING, etc.
+ * EPD and LoRa share SPI; holding the bus blocks the radio during RX windows.
+ * THANKS uses 0 delay for instant UX (shows with LED); button uplink is
+ * unconfirmed so no critical RX. Set to 0 to disable delay (e.g. if SPI is
+ * not shared).
  */
-#define DISPLAY_WORK_DELAY_MS 5000
+#define DISPLAY_WORK_DELAY_MS 2000
 
 /* =============================================================================
  * Thread and message queue sizing (single source of truth for prod tuning)

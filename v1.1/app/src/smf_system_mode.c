@@ -314,8 +314,8 @@ static void smf_joined_work_handler(struct k_work *work) {
   smf_do_counter_sync(LORA_COUNTER_SYNC_CONFIRMED);
   /* Wait until all 6 counter-sync uplinks are sent before time sync */
   int drain_wait = 0;
-  while (k_msgq_num_used_get(&lora_msgq) > 0 && drain_wait < 60) {
-    k_msleep(500);
+  while (k_msgq_num_used_get(&lora_msgq) > 0 && drain_wait < 120) {
+    k_msleep(250);
     drain_wait++;
   }
   lora_request_time_sync();

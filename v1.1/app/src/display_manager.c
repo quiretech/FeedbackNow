@@ -625,10 +625,15 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
    * Edge case: handler is currently running (not pending). k_work_schedule
    * returns 0 ("already busy"). The handler's tail-check will see the new
    * job and reschedule itself at 100 ms. As a safety net, if the handler has
-   * already passed its tail-check, force a short reschedule. */
-  uint32_t delay_ms =
-      (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING) ? 0U
-                                                              : DISPLAY_WORK_DELAY_MS;
+   * already passed its tail-check, force a short reschedule.
+   *
+   * Instant (0 delay): LOGO, CONNECTING, THANKS. THANKS shows with LED for
+   * immediate UX. Button uplink is unconfirmed so no critical LoRa RX window;
+   * worst case EPD refresh may delay uplink ~2s. Other jobs use
+   * DISPLAY_WORK_DELAY_MS to avoid blocking LoRa SPI during RX. */
+  bool instant = (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
+                  type == JOB_SHOW_THANKS);
+  uint32_t delay_ms = instant ? 0U : DISPLAY_WORK_DELAY_MS;
   int ret = k_work_schedule(&display_work, K_MSEC(delay_ms));
   if (ret == 0 && !k_work_delayable_is_pending(&display_work)) {
     /* Work is running right now; handler may have already passed its
