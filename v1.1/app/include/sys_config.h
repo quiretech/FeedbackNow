@@ -64,7 +64,7 @@
 #define LORA_BUTTON_UPLINK_CONFIRMED                                           \
   0                                 /* public votes: unconfirmed (FRD 4.5)     \
                                      */
-#define LORA_NFC_UPLINK_CONFIRMED 1 /* check-in/out/vote: unconfirmed */
+#define LORA_NFC_UPLINK_CONFIRMED 1 /* check-in/out/vote: confirmed */
 #define LORA_HEARTBEAT_UPLINK_CONFIRMED                                        \
   1 /* battery/counter in housekeeping                                         \
      */
@@ -113,8 +113,8 @@
  * =============================================================================
  */
 #define NUM_LEDS 1
-/* Button press accepted: LED solid ON, then OFF. prod: 800. */
-#define LED_BUTTON_ACCEPTED_MS 800
+/* Button press accepted: LED solid ON, then OFF. prod: 600. */
+#define LED_BUTTON_ACCEPTED_MS 600
 /* Join success: LED blinks 3 times (3 x 60ms ON, 60ms OFF; total ~360ms) */
 #define LED_JOIN_BLINKS 3
 #define LED_JOIN_ON_MS 60
@@ -278,19 +278,19 @@
  */
 #define EPD_ENABLED 1
 /** Thanks screen duration before returning to last cleaned (ms). */
-#define EPD_THANKS_DISPLAY_MS 3000
+#define EPD_THANKS_DISPLAY_MS 1500
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms).
  * prod: 45; test: 1–3. */
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 /**
- * Delay (ms) before running display work for LAST_CLEANED, CLEANING, etc.
- * EPD and LoRa share SPI; holding the bus blocks the radio during RX windows.
- * THANKS uses 0 delay for instant UX (shows with LED); button uplink is
- * unconfirmed so no critical RX. Set to 0 to disable delay (e.g. if SPI is
- * not shared).
+ * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first
+ * (block until done), then LoRa/EEPROM with clear SPI for downlinks.
+ *
+ * DISPLAY_WORK_DELAY_MS: delay for LAST_CLEANED, CLEANING, etc. (e.g. after
+ * thanks_timer). Must be >= 4500 to avoid blocking LoRa RX.
  */
-#define DISPLAY_WORK_DELAY_MS 2000
+#define DISPLAY_WORK_DELAY_MS 5000
 
 /* =============================================================================
  * Thread and message queue sizing (single source of truth for prod tuning)

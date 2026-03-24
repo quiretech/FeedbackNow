@@ -30,8 +30,12 @@ void display_show_logo(void);
 /** Show last cleaned: read from store (or use pending from downlink 0x01), then render. */
 void display_show_last_cleaned(void);
 
-/** Show thanks; starts 5s timer then transitions to last cleaned. */
+/** Show thanks; starts timer then transitions to last cleaned. */
 void display_show_thanks(void);
+
+/** Show thanks and block until EPD render completes. Use for button: EPD first,
+ * then LoRa/EEPROM (clear SPI for downlinks). */
+void display_show_thanks_sync(void);
 
 /** Show cleaning; starts 45min auto-revert timer. */
 void display_show_cleaning(void);

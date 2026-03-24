@@ -43,7 +43,8 @@ void app_logic_public_vote(uint8_t button_id) {
   }
 
   (void)led_manager_show(0, LED_PATTERN_BUTTON_ACCEPTED);
-  display_show_thanks();
+  /* EPD first: finish THANKS render (SPI), then LoRa/EEPROM with clear RX. */
+  display_show_thanks_sync();
 
   uint32_t epoch_s = 0;
   int ret = rtc_get_epoch_seconds(&epoch_s);

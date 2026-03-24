@@ -64,7 +64,8 @@ K_MSGQ_DEFINE(display_jobq, sizeof(struct display_job), DISPLAY_JOB_QUEUE_SIZE,
               DISPLAY_JOB_ALIGN);
 
 static struct k_work_delayable display_work;
-/* Pending epoch from downlink; mutex protects set vs consume (SMF vs work queue) */
+/* Pending epoch from downlink; mutex protects set vs consume (SMF vs work
+ * queue) */
 static uint32_t pending_last_cleaned_epoch; /* 0 = none */
 static K_MUTEX_DEFINE(pending_epoch_mutex);
 /* Timer vs work queue: use atomic for thread safety */
@@ -106,7 +107,8 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch);
  * Force LVGL to render and flush. In DIRECT render mode, a single
  * lv_task_handler() call may not flush (LVGL can defer rendering to the next
  * tick). lv_refr_now() forces an immediate render pass, then lv_task_handler()
- * processes the flush. Belt-and-suspenders: if still not flushed, try once more.
+ * processes the flush. Belt-and-suspenders: if still not flushed, try once
+ * more.
  */
 static void force_lvgl_flush(void) {
   lv_refr_now(lvgl_display);
@@ -125,7 +127,8 @@ static void thanks_timer_expiry(struct k_timer *timer) {
 
 static void cleaning_timer_expiry(struct k_timer *timer) {
   ARG_UNUSED(timer);
-  /* Timer context — set flag and enqueue. RTC/EEPROM work deferred to handler. */
+  /* Timer context — set flag and enqueue. RTC/EEPROM work deferred to handler.
+   */
   atomic_set(&cleaning_timer_active_atomic, 0);
   atomic_set(&cleaning_timer_expired_atomic, 1);
   enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
@@ -133,6 +136,10 @@ static void cleaning_timer_expiry(struct k_timer *timer) {
 
 K_TIMER_DEFINE(thanks_timer, thanks_timer_expiry, NULL);
 K_TIMER_DEFINE(cleaning_timer, cleaning_timer_expiry, NULL);
+
+/* For display_show_thanks_sync: caller blocks until THANKS render completes. */
+K_SEM_DEFINE(thanks_done_sem, 0, 1);
+static atomic_t thanks_sync_waiting = ATOMIC_INIT(0);
 
 /* LVGL display flush callback - writes LVGL framebuffer to display */
 static void lvgl_flush_cb(lv_display_t *display, const lv_area_t *area,
@@ -337,7 +344,8 @@ static void format_epoch_yyyymmdd_hhmm(uint32_t epoch_s, char *buf,
 static void do_render(const struct device *display, enum display_job_type type,
                       uint32_t epoch) {
   int ret;
-  char ts[64]; /* enough for "%04d/%02d/%02d %02d:%02d" + locale; avoids -Wformat-truncation */
+  char ts[64]; /* enough for "%04d/%02d/%02d %02d:%02d" + locale; avoids
+                  -Wformat-truncation */
   lv_obj_t *scr_to_show = NULL;
 
   if (display == NULL || !device_is_ready(display)) {
@@ -602,13 +610,19 @@ static void display_work_handler(struct k_work *work) {
     ssd1683_set_fast_update(display, true);
   }
 
+  /* Signal sync caller AFTER force_lvgl_flush: EPD SPI is fully done. */
+  if (job.type == JOB_SHOW_THANKS && atomic_get(&thanks_sync_waiting)) {
+    atomic_set(&thanks_sync_waiting, 0);
+    k_sem_give(&thanks_done_sem);
+  }
+
   rail_manager_release_3v3a();
 
-  /* If more jobs queued, run the next one quickly (100ms settle time).
-   * The initial DISPLAY_WORK_DELAY_MS was for LoRa SPI sharing and only
-   * applies to the first job after an uplink. Follow-up jobs can run fast. */
+  /* If more jobs queued, run the next one with its proper delay. Follow-up
+   * jobs that arrive while this handler ran got delay=0 from the queue, but
+   * they should also apply DISPLAY_WORK_DELAY_MS for LoRa RX protection. */
   if (k_msgq_num_used_get(&display_jobq) > 0) {
-    (void)k_work_reschedule(&display_work, K_MSEC(100));
+    (void)k_work_reschedule(&display_work, K_MSEC(DISPLAY_WORK_DELAY_MS));
   }
 }
 
@@ -627,18 +641,24 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
    * job and reschedule itself at 100 ms. As a safety net, if the handler has
    * already passed its tail-check, force a short reschedule.
    *
-   * Instant (0 delay): LOGO, CONNECTING, THANKS. THANKS shows with LED for
-   * immediate UX. Button uplink is unconfirmed so no critical LoRa RX window;
-   * worst case EPD refresh may delay uplink ~2s. Other jobs use
-   * DISPLAY_WORK_DELAY_MS to avoid blocking LoRa SPI during RX. */
-  bool instant = (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
-                  type == JOB_SHOW_THANKS);
-  uint32_t delay_ms = instant ? 0U : DISPLAY_WORK_DELAY_MS;
+   * EPD and LoRa share SPI. Defer EPD until past LoRa RX windows to avoid
+   * missing downlinks. LOGO, CONNECTING: 0 delay (no uplink racing). THANKS:
+   * DISPLAY_THANKS_DELAY_MS (button triggers uplink). Others:
+   * DISPLAY_WORK_DELAY_MS. */
+  uint32_t delay_ms;
+  if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING) {
+    delay_ms = 0U;
+  } else {
+    /* THANKS from button uses display_show_thanks_sync (0 delay, blocks).
+     * Async THANKS (if used) and others use DISPLAY_WORK_DELAY_MS. */
+    delay_ms = DISPLAY_WORK_DELAY_MS;
+  }
   int ret = k_work_schedule(&display_work, K_MSEC(delay_ms));
   if (ret == 0 && !k_work_delayable_is_pending(&display_work)) {
-    /* Work is running right now; handler may have already passed its
-     * tail-check. Schedule a short follow-up to guarantee processing. */
-    (void)k_work_reschedule(&display_work, K_MSEC(200));
+    /* Work is running right now and has not yet re-scheduled itself. Force
+     * reschedule with the FULL delay so LAST_CLEANED / CLEANING don't fire
+     * at the 200ms fallback and land in LoRa RX windows. */
+    (void)k_work_reschedule(&display_work, K_MSEC(delay_ms));
   }
 }
 
@@ -741,6 +761,21 @@ void display_show_last_cleaned(void) {
 void display_show_thanks(void) {
 #if EPD_ENABLED
   enqueue_job(JOB_SHOW_THANKS, 0);
+#endif
+}
+
+/** Show THANKS and block until EPD render completes. Use for button press:
+ * EPD first (all SPI work), then LoRa/EEPROM run with clear SPI for RX. */
+void display_show_thanks_sync(void) {
+#if EPD_ENABLED
+  struct display_job job = {.type = JOB_SHOW_THANKS, .epoch = 0};
+  if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+    return;
+  }
+  atomic_set(&thanks_sync_waiting, 1);
+  (void)k_work_schedule(&display_work, K_MSEC(0));
+  (void)k_sem_take(&thanks_done_sem, K_MSEC(10000));
+  atomic_set(&thanks_sync_waiting, 0);
 #endif
 }
 
