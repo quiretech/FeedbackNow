@@ -184,6 +184,23 @@ int lora_app_init(void) {
     return ret;
   }
 
+  // // NEW CHANNEL MASK SUB BAND 2
+  //   uint16_t mask[6] = {
+  //     0xFF00,
+  //     0x0000,
+  //     0x0000,
+  //     0x0000,
+  //     0x0000,
+  //     0x0000
+  // };
+
+  // int ret_mask = lorawan_set_channels_mask(mask, ARRAY_SIZE(mask));
+  // if (ret_mask < 0) {
+  //     LOG_ERR("Failed to set channel mask: %d", ret_mask);
+  // } else {
+  //     LOG_INF("Channel mask set to FSB2 (channels 8–15)");
+  // }
+
   static struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
                                              .cb = lora_app_dl_callback};
   lorawan_register_downlink_callback(&dl_cb);

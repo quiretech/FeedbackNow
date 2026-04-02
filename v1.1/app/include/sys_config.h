@@ -51,7 +51,7 @@
 /** After this many consecutive lorawan_send() failures, clear joined and
  * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
  * disable. Typical: 3. */
-#define LORA_SEND_FAILURES_BEFORE_BACKOFF 5
+#define LORA_SEND_FAILURES_BEFORE_BACKOFF 4
 #define LORA_BUTTON_PORT 2
 
 /** Uplink confirmation policy (field-stable profile)
@@ -82,7 +82,7 @@
 #define BUTTON_THREAD_STACK_SIZE 1536
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_COOLDOWN_MS 5000
+#define BUTTON_COOLDOWN_MS 12000 // was 5000, should be 12ish
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
  * reset). */
@@ -178,9 +178,9 @@
  */
 /** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
  * is uninitialized. */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h France CET
-#define TZ_OFFSET_MIN_MINUTES (-1440)
-#define TZ_OFFSET_MAX_MINUTES (1440)
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h
+#define TZ_OFFSET_MIN_MINUTES           (-1440)
+#define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
  * RTC / time sync
  * =============================================================================
@@ -257,7 +257,7 @@
  * prod: 1; BACKOFF TEST: 0 (heartbeat every 120s). */
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 120
+#define HOUSEKEEPING_INTERVAL_SECONDS 60
 /** Seconds per day (for daily schedule). */
 #define SECONDS_PER_DAY 86400
 /** Minutes per day (for offset modulo). */
@@ -276,7 +276,7 @@
  * EPD (Variant A vs B) — set to 0 for build without display
  * =============================================================================
  */
-#define EPD_ENABLED 1
+#define EPD_ENABLED 0
 /** Thanks screen duration before returning to last cleaned (ms). */
 #define EPD_THANKS_DISPLAY_MS 1500
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms).

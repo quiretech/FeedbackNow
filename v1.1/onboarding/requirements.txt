@@ -2,3 +2,4 @@
 grpcio>=1.50.0
 protobuf>=4.21.0
 chirpstack-api>=4.0.0
+boto3
