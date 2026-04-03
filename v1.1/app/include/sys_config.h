@@ -82,7 +82,12 @@
 #define BUTTON_THREAD_STACK_SIZE 1536
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
-#define BUTTON_COOLDOWN_MS 12000 // was 5000, should be 12ish
+
+#ifdef EPD_ENABLED
+#define BUTTON_COOLDOWN_MS 12000 // was 5000, should be 12ish EPD
+#else
+#define BUTTON_COOLDOWN_MS 5000 // NON EPD
+#endif
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
  * reset). */

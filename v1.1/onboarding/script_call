@@ -9,7 +9,8 @@ python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_device
 
 
 1. US915
-PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1> python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
+PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1> 
+python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
   --region us-east-1 \
   --device-profile-id 9ca0d988-eb68-485a-ab92-a210e134ab82 \
   --service-profile-id 9a8d999b-81d6-4071-8282-755b51d65d2e \
