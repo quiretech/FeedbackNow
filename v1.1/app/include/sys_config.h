@@ -84,9 +84,9 @@
 #define BUTTON_DEBOUNCE_MS 50
 
 #ifdef EPD_ENABLED
-#define BUTTON_COOLDOWN_MS 12000 // was 5000, should be 12ish EPD
+#define BUTTON_COOLDOWN_MS 12000 // was 5000, should be 12ish to sync up w/ epd update
 #else
-#define BUTTON_COOLDOWN_MS 5000 // NON EPD
+#define BUTTON_COOLDOWN_MS 5000 // NON EPD version
 #endif
 
 /* Input layer: combo scan period and session recovery (held→0 for this long =
@@ -183,7 +183,7 @@
  */
 /** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
  * is uninitialized. */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // UTC-7h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -259,10 +259,10 @@
  */
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
- * prod: 1; BACKOFF TEST: 0 (heartbeat every 120s). */
+ * prod: 1; BACKOFF TEST; 0 (heartbeat every 120s). */
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
-#define HOUSEKEEPING_INTERVAL_SECONDS 60
+#define HOUSEKEEPING_INTERVAL_SECONDS 86400
 /** Seconds per day (for daily schedule). */
 #define SECONDS_PER_DAY 86400
 /** Minutes per day (for offset modulo). */
