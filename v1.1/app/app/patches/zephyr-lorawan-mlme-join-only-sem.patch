@@ -1,0 +1,16 @@
+--- a/subsys/lorawan/lorawan.c
++++ b/subsys/lorawan/lorawan.c
+@@ -223,7 +223,12 @@ static void mlme_confirm_handler(MlmeConfirm_t *mlme_confirm)
+ 
+ out_sem:
+ 	last_mlme_confirm_status = mlme_confirm->Status;
+-	k_sem_give(&mlme_confirm_sem);
++	/* Only join waits on mlme_confirm_sem; other MLME confirms must not
++	 * unblock lorawan_join() or OTAA can return before JoinAccept.
++	 */
++	if (mlme_confirm->MlmeRequest == MLME_JOIN) {
++		k_sem_give(&mlme_confirm_sem);
++	}
+ }
+ 
+ static void mlme_indication_handler(MlmeIndication_t *mlme_indication)

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlexBox DL Builder</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #08090d;
+    --panel: #0f1117;
+    --border: #1c2233;
+    --accent: #f0c040;
+    --green: #3dffa0;
+    --blue: #4db8ff;
+    --red: #ff6b6b;
+    --muted: #3a4155;
+    --text: #d4daf0;
+    --dim: #606880;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 36px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-image: radial-gradient(ellipse at 50% 0%, #1a1500 0%, transparent 60%);
+  }
+
+  h1 { font-family: 'Syne', sans-serif; font-size: 1.7rem; font-weight: 800; color: var(--accent); letter-spacing: -1px; margin-bottom: 4px; }
+  .sub { font-size: 0.72rem; color: var(--dim); margin-bottom: 32px; letter-spacing: 1px; }
+  .wrap { width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 16px; }
+
+  .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 5px; flex-wrap: wrap; }
+  .tab { flex: 1; min-width: 120px; background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--dim); font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; padding: 9px 6px; cursor: pointer; transition: all 0.15s; text-align: center; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: #1a1700; border-color: var(--accent); color: var(--accent); }
+  .tab-cmd { display: none; }
+  .tab-cmd.visible { display: flex; flex-direction: column; gap: 14px; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; }
+  .danger-card { background: #130a0a; border: 1px solid #3a1515; border-radius: 10px; padding: 20px 22px; }
+  .card-title { font-size: 0.63rem; letter-spacing: 2px; text-transform: uppercase; color: var(--dim); margin-bottom: 14px; }
+  .danger-title { font-size: 0.63rem; letter-spacing: 2px; text-transform: uppercase; color: var(--red); margin-bottom: 10px; }
+  .card-desc { font-size: 0.72rem; color: var(--dim); margin-bottom: 0; line-height: 1.6; }
+
+  .presets-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .preset-btn { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s; font-family: 'JetBrains Mono', monospace; }
+  .preset-btn:hover { border-color: var(--accent); background: #14150e; }
+  .preset-btn.active { border-color: var(--accent); background: #1a1700; }
+  .preset-city { font-size: 0.82rem; font-weight: 600; color: var(--text); display: block; margin-bottom: 2px; }
+  .preset-tz { font-size: 0.68rem; color: var(--dim); }
+  .preset-offset { font-size: 0.75rem; color: var(--accent); float: right; margin-top: -18px; }
+
+  .row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+  label { font-size: 0.68rem; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px; }
+  select, input[type=number], input[type=text] { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 8px 12px; outline: none; transition: border-color 0.15s; }
+  select:focus, input:focus { border-color: var(--accent); }
+  select { min-width: 260px; }
+  input[type=number] { width: 130px; }
+
+  .dst-row { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--dim); padding-bottom: 2px; }
+  input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+
+  .out-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #13161f; gap: 12px; }
+  .out-row:last-child { border-bottom: none; }
+  .out-label { font-size: 0.7rem; color: var(--dim); min-width: 190px; }
+  .out-val { font-size: 0.85rem; color: var(--green); flex: 1; word-break: break-all; }
+  .out-val.yellow { color: var(--accent); }
+  .out-val.blue { color: var(--blue); }
+  .out-val.red { color: var(--red); }
+
+  .copy-btn { background: transparent; border: 1px solid var(--muted); border-radius: 5px; color: var(--dim); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 4px 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .copy-btn:hover { border-color: var(--green); color: var(--green); }
+  .copy-btn.ok { border-color: var(--green); color: var(--green); background: #00ff9d18; }
+
+  .c-block { background: #070809; border: 1px solid var(--border); border-radius: 8px; padding: 16px 16px 16px 16px; font-size: 0.78rem; line-height: 1.9; position: relative; }
+  .c-copy { position: absolute; top: 10px; right: 10px; }
+  .kw { color: #7b7fff; } .num { color: var(--accent); } .cmt { color: #3a4a3a; } .def { color: var(--blue); }
+
+  .aws-block { background: #070c09; border: 1px solid #1a2e1a; border-radius: 8px; padding: 16px 18px; font-size: 0.74rem; line-height: 1.8; color: var(--green); position: relative; white-space: pre-wrap; word-break: break-all; min-height: 48px; }
+  .aws-copy { position: absolute; top: 10px; right: 10px; }
+
+  .badge { display: inline-block; background: #1a1700; border: 1px solid var(--accent); border-radius: 4px; color: var(--accent); font-size: 0.62rem; padding: 2px 7px; margin-left: 8px; vertical-align: middle; }
+  .badge.blue { background: #00111a; border-color: var(--blue); color: var(--blue); }
+  .badge.red { background: #1a0000; border-color: var(--red); color: var(--red); }
+
+  .device-bar { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .device-bar label { margin: 0; }
+  .device-bar input { flex: 1; min-width: 260px; background: #07080b; border: 1px solid var(--border); border-radius: 6px; color: var(--blue); font-size: 0.8rem; padding: 7px 12px; outline: none; }
+  .device-bar input::placeholder { color: var(--muted); }
+  .device-bar input:focus { border-color: var(--blue); }
+
+
+  .epoch-helper { font-size: 0.7rem; color: var(--dim); margin-top: 6px; min-height: 18px; }
+  .epoch-helper span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>FlexBox DL Builder</h1>
+<p class="sub">// downlink command builder · hex · base64 · AWS CLI — v1.3 · uplink: F20 HK incl. 0x13 (tz+last cleaned) · F21 = 0x14 after DL 0x08 only</p>
+
+<div class="wrap">
+
+<div class="device-bar">
+  <label>Device ID</label>
+  <input type="text" id="deviceId" placeholder="paste AWS IoT Wireless device ID here" oninput="updateAllAWS()">
+
+  <label>Transmit Mode</label>
+  <select id="txMode" onchange="updateAllAWS()">
+    <option value="0">0 — Unconfirmed</option>
+    <option value="1">1 — Confirmed</option>
+  </select>
+
+  <span style="font-size:0.68rem;color:var(--dim)">
+    used in all AWS CLI snippets below
+  </span>
+</div>
+
+  <div class="tabs">
+    <button class="tab active"  onclick="switchTab(0)">0x03 · Timezone</button>
+    <button class="tab"         onclick="switchTab(1)">0x01 · EPD Update</button>
+    <button class="tab"         onclick="switchTab(2)">0x02 · EPD Refresh</button>
+    <button class="tab"         onclick="switchTab(3)">0x04 · Status Req</button>
+    <button class="tab"         onclick="switchTab(4)">0x05 · Reset Counters</button>
+    <button class="tab"         onclick="switchTab(5)">0x06 · Factory Reset</button>
+    <button class="tab"         onclick="switchTab(6)">0x07 · Reboot</button>
+    <button class="tab"         onclick="switchTab(7)">0x08 · FW/HW query</button>
+  </div>
+
+  <!-- TAB 0 — Timezone -->
+  <div class="tab-cmd visible" id="tab0">
+    <div class="card" style="padding:14px 18px">
+      <div class="card-desc" style="margin:0;line-height:1.55">On apply, firmware stores the offset and queues <strong>EVT_DEVICE_STATE_SNAPSHOT (0x13)</strong> on uplink <strong>FPort 20</strong> (last cleaned + tz) for backend visibility.</div>
+    </div>
+    <div id="presetsGrid" class="presets-grid"></div>
+    <div class="card">
+      <div class="card-title">Custom / Override</div>
+      <div class="row">
+        <div>
+          <label>Timezone</label>
+          <select id="tzSelect" onchange="onSelectChange()"></select>
+        </div>
+        <div>
+          <label>Manual offset (min)</label>
+          <input type="number" id="manualOffset" value="-300" min="-1440" max="1440" oninput="onManualChange()">
+        </div>
+        <div class="dst-row">
+          <input type="checkbox" id="dstCheck" onchange="onDSTChange()">
+          <label for="dstCheck">DST active (+60 min)</label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x03 Timezone</div>
+      <div class="out-row"><span class="out-label">Offset (minutes)</span><span class="out-val yellow" id="outMin"></span><button class="copy-btn" onclick="copyEl('outMin',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">int16 hex (BE)</span><span class="out-val" id="outHex"></span><button class="copy-btn" onclick="copyEl('outHex',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val" id="outPayloadHex"></span><button class="copy-btn" onclick="copyEl('outPayloadHex',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue" id="outB64"></span><button class="copy-btn" onclick="copyEl('outB64',this)">copy</button></div>
+    </div>
+    <div class="c-block">
+      <button class="copy-btn c-copy" id="cCopyBtn" onclick="copyCBlock()">copy</button>
+      <div id="cBlock"></div>
+    </div>
+    <div class="aws-block" id="awsTZ"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsTZ',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 1 — EPD Update -->
+  <div class="tab-cmd" id="tab1">
+    <div class="card">
+      <div class="card-title">0x01 — EPD Update <span class="badge blue">5 bytes</span></div>
+      <div class="card-desc" style="margin-bottom:16px">Sets the "Last Cleaned" timestamp on the e-paper display. Provide a UTC epoch (unix seconds).</div>
+      <div class="row">
+        <div>
+          <label>UTC Epoch (seconds)</label>
+          <input type="number" id="epdEpoch" placeholder="e.g. 1771131600" style="width:200px" oninput="updateEPD()">
+          <div class="epoch-helper" id="epdHuman"></div>
+        </div>
+        <div>
+          <button class="copy-btn" style="padding:8px 14px;font-size:0.72rem;margin-bottom:20px" onclick="setEPDNow()">use now</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x01 EPD Update</div>
+      <div class="out-row"><span class="out-label">Epoch hex (uint32 BE)</span><span class="out-val" id="epdHex">—</span><button class="copy-btn" onclick="copyEl('epdHex',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val" id="epdPayloadHex">—</span><button class="copy-btn" onclick="copyEl('epdPayloadHex',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue" id="epdB64">—</span><button class="copy-btn" onclick="copyEl('epdB64',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsEPD"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsEPD',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 2 — EPD Refresh -->
+  <div class="tab-cmd" id="tab2">
+    <div class="card">
+      <div class="card-title">0x02 — EPD Refresh <span class="badge blue">1 byte</span></div>
+      <div class="card-desc">Triggers a full e-paper refresh to clear ghosting. No parameters needed.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x02 EPD Refresh</div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val">02</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue">Ag==</span><button class="copy-btn" onclick="copyText('Ag==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsRefresh"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsRefresh',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 3 — Status Request -->
+  <div class="tab-cmd" id="tab3">
+    <div class="card">
+      <div class="card-title">0x04 — Status Request <span class="badge blue">1 byte</span></div>
+      <div class="card-desc">Runs full housekeeping: battery (EVT 0x10), link check, time sync, counter sync (0x12), then <strong>EVT_DEVICE_STATE_SNAPSHOT 0x13</strong> on <strong>FPort 20</strong> (last cleaned EEPROM + tz). Device must uplink first — queue for RX1/RX2.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x04 Status Request</div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val">04</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue">BA==</span><button class="copy-btn" onclick="copyText('BA==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsStatus"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsStatus',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 4 — Reset Counters -->
+  <div class="tab-cmd" id="tab4">
+    <div class="card">
+      <div class="card-title">0x05 — Reset Counters <span class="badge">1 byte</span></div>
+      <div class="card-desc">Sets all 6 button counters to 0. No reboot. Backend counter reconciliation will be needed after this.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x05 Reset Counters</div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val">05</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue">BQ==</span><button class="copy-btn" onclick="copyText('BQ==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsReset"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsReset',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 5 — Factory Reset -->
+  <div class="tab-cmd" id="tab5">
+    <div class="danger-card">
+      <div class="danger-title">⚠ Danger — Factory Reset</div>
+      <div class="card-desc" style="color:#c08080">Clears counters, devnonce, and has_joined_once. Device reboots into first-boot behavior and waits for manual join combo (Staff + 0+1+2). Only use on bench or when intentionally re-provisioning.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x06 Factory Reset <span class="badge red">destructive</span></div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val red">06</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val red">Bg==</span><button class="copy-btn" onclick="copyText('Bg==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsFactory" style="border-color:#3a1515"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsFactory',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 6 — Reboot -->
+  <div class="tab-cmd" id="tab6">
+    <div class="card">
+      <div class="card-title">0x07 — Reboot <span class="badge blue">1 byte</span></div>
+      <div class="card-desc">Posts to SMF: LED power-on pattern, then cold reboot after <code>REBOOT_LED_MS</code>. Same path as Staff combo reboot cleanup.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x07 Reboot</div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val">07</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue">Bw==</span><button class="copy-btn" onclick="copyText('Bw==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsReboot"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsReboot',this)">copy</button></div>
+  </div>
+
+  <!-- TAB 7 — FW/HW version query (0x08 → uplink EVT 0x14, FPort 21) -->
+  <div class="tab-cmd" id="tab7">
+    <div class="card">
+      <div class="card-title">0x08 — Firmware / hardware version query <span class="badge blue">1 byte</span></div>
+      <div class="card-desc">Device queues a single confirmed uplink: <strong>EVT_DEVICE_VERSION_INFO (0x14)</strong> on <strong>FPort 21</strong> (fw/hw semver). TZ and last cleaned are <em>not</em> sent here — they ride on <strong>FPort 20</strong> as EVT <strong>0x13</strong> after join, daily HK, 0x04, or successful 0x03.</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — 0x08 FW/HW version query</div>
+      <div class="out-row"><span class="out-label">Payload hex</span><span class="out-val">08</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue">CA==</span><button class="copy-btn" onclick="copyText('CA==',this)">copy</button></div>
+    </div>
+    <div class="aws-block" id="awsQueryVer"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsQueryVer',this)">copy</button></div>
+  </div>
+
+
+</div>
+
+<script>
+let currentOffset = -300;
+let dstActive = false;
+
+function switchTab(idx) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
+  document.querySelectorAll('.tab-cmd').forEach((c,i) => c.classList.toggle('visible', i===idx));
+}
+
+function toHex16(val) { return ('0000'+(val&0xFFFF).toString(16).toUpperCase()).slice(-4); }
+function toHex32(val) { return ('00000000'+(val>>>0).toString(16).toUpperCase()).slice(-8); }
+function hexToB64(hex) {
+  const b=[];
+  for(let i=0;i<hex.length;i+=2) b.push(parseInt(hex.slice(i,i+2),16));
+  return btoa(String.fromCharCode(...b));
+}
+function getDeviceId() { return document.getElementById('deviceId').value.trim() || '<YOUR_DEVICE_ID>'; }
+
+function awsCLI(b64) {
+  return `aws iotwireless send-data-to-wireless-device \
+  --id "${getDeviceId()}" \
+  --transmit-mode ${getTxMode()} \
+  --payload-data "${b64}" \
+  --wireless-metadata "LoRaWAN={FPort=1}" \
+  --region us-east-1`;
+}
+
+function setBlock(id, b64) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const cli = awsCLI(b64);
+  el._b64 = b64;
+  el._raw = cli;
+  Array.from(el.childNodes).forEach(n => { if(n.nodeType===3) n.remove(); });
+  el.insertBefore(document.createTextNode(cli), el.querySelector('button'));
+}
+
+function copyEl(id, btn) { copyText(document.getElementById(id).textContent, btn); }
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    if(!btn) return;
+    btn.textContent='copied!'; btn.classList.add('ok');
+    setTimeout(()=>{ btn.textContent='copy'; btn.classList.remove('ok'); }, 1800);
+  });
+}
+function copyBlockRaw(id, btn) { copyText(document.getElementById(id)._raw||'', btn); }
+function copyCBlock() {
+  const btn = document.getElementById('cCopyBtn');
+  copyText(document.getElementById('cBlock')._raw||'', btn);
+}
+
+// ── TZ ─────────────────────────────────────────────────
+const TZ_LIST = [
+  {city:"New York",label:"EST",base:-300},{city:"New York",label:"EDT",base:-240},
+  {city:"Chicago",label:"CST",base:-360},{city:"Chicago",label:"CDT",base:-300},
+  {city:"Denver",label:"MST",base:-420},{city:"Denver",label:"MDT",base:-360},
+  {city:"San Francisco",label:"PST",base:-480},{city:"San Francisco",label:"PDT",base:-420},
+  {city:"London",label:"GMT",base:0},{city:"London",label:"BST",base:60},
+  {city:"Amsterdam",label:"CET",base:60},{city:"Amsterdam",label:"CEST",base:120},
+  {city:"Paris",label:"CET",base:60},{city:"Paris",label:"CEST",base:120},
+  {city:"Berlin",label:"CET",base:60},{city:"Berlin",label:"CEST",base:120},
+  {city:"Dubai",label:"GST",base:240},{city:"Singapore",label:"SGT",base:480},
+  {city:"Tokyo",label:"JST",base:540},{city:"Sydney",label:"AEST",base:600},
+  {city:"Sydney",label:"AEDT",base:660},{city:"UTC",label:"UTC",base:0},
+];
+
+const PRESETS = [
+  {city:"New York EST",base:-300},{city:"New York EDT",base:-240},
+  {city:"London GMT",base:0},{city:"London BST",base:60},
+  {city:"Amsterdam CET",base:60},{city:"San Francisco PST",base:-480},
+  {city:"Denver MST",base:-420},{city:"Chicago CST",base:-360},
+  {city:"Dubai GST",base:240},{city:"Tokyo JST",base:540},{city:"UTC",base:0},
+];
+
+function buildPresets() {
+  const grid = document.getElementById('presetsGrid');
+  PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    const sign = p.base>=0?'+':'';
+    btn.innerHTML = `<span class="preset-city">${p.city}</span><span class="preset-tz">${sign}${p.base} min</span><span class="preset-offset">${sign}${(p.base/60).toFixed(1)}h</span>`;
+    btn.onclick = () => {
+      document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('manualOffset').value = p.base;
+      document.getElementById('dstCheck').checked = false;
+      dstActive = false; currentOffset = p.base; updateTZ();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function buildSelect() {
+  const sel = document.getElementById('tzSelect');
+  TZ_LIST.forEach(tz => {
+    const sign = tz.base>=0?'+':'';
+    const opt = document.createElement('option');
+    opt.value = tz.base;
+    opt.textContent = `${tz.city} (${tz.label}) — UTC${sign}${tz.base/60}h`;
+    sel.appendChild(opt);
+  });
+  sel.value = -300;
+}
+
+function onSelectChange() {
+  currentOffset = parseInt(document.getElementById('tzSelect').value);
+  document.getElementById('manualOffset').value = currentOffset;
+  document.getElementById('dstCheck').checked = false; dstActive = false;
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  updateTZ();
+}
+function onManualChange() {
+  currentOffset = parseInt(document.getElementById('manualOffset').value)||0;
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  updateTZ();
+}
+function onDSTChange() { dstActive = document.getElementById('dstCheck').checked; updateTZ(); }
+
+function updateTZ() {
+  const off = currentOffset + (dstActive?60:0);
+  const hex16 = toHex16(off);
+  const payloadHex = '03'+hex16;
+  const b64 = hexToB64(payloadHex);
+  const sign = off>=0?'+':'';
+
+  document.getElementById('outMin').textContent = `${sign}${off}`;
+  document.getElementById('outHex').textContent = hex16;
+  document.getElementById('outPayloadHex').textContent = payloadHex;
+  document.getElementById('outB64').textContent = b64;
+
+  const cRaw =
+    `#define DEFAULT_TIMEZONE_OFFSET_MINUTES (${off}) // UTC${sign}${off/60}h\n`+
+    `#define TZ_OFFSET_MIN_MINUTES           (-1440)\n`+
+    `#define TZ_OFFSET_MAX_MINUTES           (1440)`;
+  const cEl = document.getElementById('cBlock');
+  cEl.innerHTML =
+    `<span class="kw">#define</span> <span class="def">DEFAULT_TIMEZONE_OFFSET_MINUTES</span> <span class="num">(${off})</span> <span class="cmt">// UTC${sign}${off/60}h</span>\n`+
+    `<span class="kw">#define</span> <span class="def">TZ_OFFSET_MIN_MINUTES</span>           <span class="num">(-1440)</span>\n`+
+    `<span class="kw">#define</span> <span class="def">TZ_OFFSET_MAX_MINUTES</span>           <span class="num">(1440)</span>`;
+  cEl._raw = cRaw;
+  setBlock('awsTZ', b64);
+}
+
+// ── EPD Update ─────────────────────────────────────────
+function setEPDNow() {
+  document.getElementById('epdEpoch').value = Math.floor(Date.now()/1000);
+  updateEPD();
+}
+
+function updateEPD() {
+  const epoch = parseInt(document.getElementById('epdEpoch').value)||0;
+  if (epoch <= 0) return;
+  const hex32 = toHex32(epoch);
+  const payloadHex = '01'+hex32;
+  const b64 = hexToB64(payloadHex);
+
+  document.getElementById('epdHex').textContent = hex32;
+  document.getElementById('epdPayloadHex').textContent = payloadHex;
+  document.getElementById('epdB64').textContent = b64;
+
+  const d = new Date(epoch*1000);
+  document.getElementById('epdHuman').innerHTML = `→ <span>${d.toUTCString()}</span>`;
+  setBlock('awsEPD', b64);
+}
+
+function getTxMode() {
+  return document.getElementById('txMode')?.value || "0";
+}
+
+
+// ── Update all AWS CLI blocks when device ID changes ───
+function updateAllAWS() {
+  updateTZ();
+  updateEPD();
+  setBlock('awsRefresh','Ag==');
+  setBlock('awsStatus', 'BA==');
+  setBlock('awsReset',  'BQ==');
+  setBlock('awsFactory','Bg==');
+  setBlock('awsReboot', 'Bw==');
+  setBlock('awsQueryVer','CA==');
+}
+
+// ── Init ───────────────────────────────────────────────
+buildPresets();
+buildSelect();
+setEPDNow();
+updateTZ();
+updateAllAWS();
+</script>
+</body>
+</html>

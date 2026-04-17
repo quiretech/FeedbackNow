@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TZ → Firmware</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
+
+  :root {
+    --bg: #08090d;
+    --panel: #0f1117;
+    --border: #1c2233;
+    --accent: #f0c040;
+    --green: #3dffa0;
+    --blue: #4db8ff;
+    --muted: #3a4155;
+    --text: #d4daf0;
+    --dim: #606880;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    padding: 36px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-image: radial-gradient(ellipse at 50% 0%, #1a1500 0%, transparent 60%);
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: -1px;
+    margin-bottom: 4px;
+  }
+
+  .sub {
+    font-size: 0.72rem;
+    color: var(--dim);
+    margin-bottom: 32px;
+    letter-spacing: 1px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 780px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Presets grid ── */
+  .presets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+
+  .preset-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .preset-btn:hover { border-color: var(--accent); background: #14150e; }
+  .preset-btn.active { border-color: var(--accent); background: #1a1700; }
+
+  .preset-city {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text);
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .preset-tz {
+    font-size: 0.68rem;
+    color: var(--dim);
+  }
+
+  .preset-offset {
+    font-size: 0.75rem;
+    color: var(--accent);
+    float: right;
+    margin-top: -18px;
+  }
+
+  /* ── Custom input ── */
+  .row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  label {
+    font-size: 0.7rem;
+    color: var(--dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  select, input[type=number] {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  select:focus, input[type=number]:focus { border-color: var(--accent); }
+
+  select { min-width: 260px; }
+  input[type=number] { width: 100px; }
+
+  /* ── Output card ── */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+  }
+
+  .card-title {
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 14px;
+  }
+
+  .out-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #13161f;
+    gap: 12px;
+  }
+
+  .out-row:last-child { border-bottom: none; }
+
+  .out-label { font-size: 0.72rem; color: var(--dim); min-width: 170px; }
+
+  .out-val {
+    font-size: 0.85rem;
+    color: var(--green);
+    flex: 1;
+  }
+
+  .out-val.yellow { color: var(--accent); }
+  .out-val.blue   { color: var(--blue); }
+
+  .copy-btn {
+    background: transparent;
+    border: 1px solid var(--muted);
+    border-radius: 5px;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .copy-btn:hover { border-color: var(--green); color: var(--green); }
+  .copy-btn.ok { border-color: var(--green); color: var(--green); background: #00ff9d18; }
+
+  /* ── C snippet ── */
+  .c-block {
+    background: #070809;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 0.78rem;
+    line-height: 1.9;
+    position: relative;
+  }
+
+  .c-copy {
+    position: absolute;
+    top: 10px; right: 10px;
+  }
+
+  .kw  { color: #7b7fff; }
+  .num { color: var(--accent); }
+  .cmt { color: #3a4a3a; }
+  .def { color: var(--blue); }
+
+  /* ── DST toggle ── */
+  .dst-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+
+  input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>TZ → Firmware</h1>
+<p class="sub">// downlink payload + C #define generator for LoRaWAN devices</p>
+<p class="sub" style="margin-top:-22px;margin-bottom:0;max-width:720px;line-height:1.55">After a successful <strong style="color:var(--accent)">0x03</strong> downlink, firmware uplinks <strong style="color:var(--accent)">EVT 0x13</strong> on <strong>FPort 20</strong> (EEPROM last cleaned + tz). FW/HW semver uses DL <strong>0x08</strong> → uplink <strong>0x14</strong> on <strong>FPort 21</strong> only.</p>
+
+<div class="wrap">
+
+  <!-- Preset buttons -->
+  <div id="presetsGrid" class="presets-grid"></div>
+
+  <!-- Controls -->
+  <div class="card">
+    <div class="card-title">Custom / Override</div>
+    <div class="row" style="gap:16px; flex-wrap:wrap;">
+      <div>
+        <label>Timezone</label><br>
+        <select id="tzSelect" onchange="onSelectChange()"></select>
+      </div>
+      <div>
+        <label>Manual offset (min)</label><br>
+        <input type="number" id="manualOffset" value="-300" min="-1440" max="1440" oninput="onManualChange()">
+      </div>
+      <div class="dst-row" style="margin-top:18px">
+        <input type="checkbox" id="dstCheck" onchange="onDSTChange()">
+        <label for="dstCheck">DST active (+60 min)</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="card" id="outputCard">
+    <div class="card-title">Output</div>
+
+    <div class="out-row">
+      <span class="out-label">Offset (minutes)</span>
+      <span class="out-val yellow" id="outMin"></span>
+      <button class="copy-btn" onclick="copyVal('outMin', this)">copy</button>
+    </div>
+    <div class="out-row">
+      <span class="out-label">int16 hex (BE)</span>
+      <span class="out-val" id="outHex"></span>
+      <button class="copy-btn" onclick="copyVal('outHex', this)">copy</button>
+    </div>
+    <div class="out-row">
+      <span class="out-label">Downlink payload hex</span>
+      <span class="out-val" id="outPayloadHex"></span>
+      <button class="copy-btn" onclick="copyVal('outPayloadHex', this)">copy</button>
+    </div>
+    <div class="out-row">
+      <span class="out-label">Downlink payload base64</span>
+      <span class="out-val blue" id="outB64"></span>
+      <button class="copy-btn" onclick="copyVal('outB64', this)">copy</button>
+    </div>
+  </div>
+
+  <!-- C define block -->
+  <div class="c-block">
+    <button class="copy-btn c-copy" id="cCopyBtn" onclick="copyCBlock()">copy</button>
+    <div id="cBlock"></div>
+  </div>
+
+</div>
+
+<script>
+const TZ_LIST = [
+  { city: "New York",       label: "EST",  base: -300 },
+  { city: "New York",       label: "EDT",  base: -240 },
+  { city: "Chicago",        label: "CST",  base: -360 },
+  { city: "Chicago",        label: "CDT",  base: -300 },
+  { city: "Denver",         label: "MST",  base: -420 },
+  { city: "Denver",         label: "MDT",  base: -360 },
+  { city: "San Francisco",  label: "PST",  base: -480 },
+  { city: "San Francisco",  label: "PDT",  base: -420 },
+  { city: "London",         label: "GMT",  base:    0 },
+  { city: "London",         label: "BST",  base:   60 },
+  { city: "Amsterdam",      label: "CET",  base:   60 },
+  { city: "Amsterdam",      label: "CEST", base:  120 },
+  { city: "Paris",          label: "CET",  base:   60 },
+  { city: "Paris",          label: "CEST", base:  120 },
+  { city: "Berlin",         label: "CET",  base:   60 },
+  { city: "Berlin",         label: "CEST", base:  120 },
+  { city: "Dubai",          label: "GST",  base:  240 },
+  { city: "Singapore",      label: "SGT",  base:  480 },
+  { city: "Tokyo",          label: "JST",  base:  540 },
+  { city: "Sydney",         label: "AEST", base:  600 },
+  { city: "Sydney",         label: "AEDT", base:  660 },
+  { city: "UTC",            label: "UTC",  base:    0 },
+];
+
+// Detect current offset suggestion
+function guessCurrentOffset() {
+  return -(new Date().getTimezoneOffset());
+}
+
+let currentOffset = guessCurrentOffset();
+let dstActive = false;
+
+// Build preset buttons (show base offsets only, no DST dupes for common ones)
+const PRESETS = [
+  { city: "New York EST",      base: -300 },
+  { city: "New York EDT",      base: -240 },
+  { city: "Chicago CST",       base: -360 },
+  { city: "Denver MST",        base: -420 },
+  { city: "San Francisco PST", base: -480 },
+  { city: "London GMT",        base:    0 },
+  { city: "Amsterdam CET",     base:   60 },
+  { city: "Dubai GST",         base:  240 },
+  { city: "Singapore SGT",     base:  480 },
+  { city: "Tokyo JST",         base:  540 },
+  { city: "UTC",               base:    0 },
+];
+
+function buildPresets() {
+  const grid = document.getElementById('presetsGrid');
+  PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    const sign = p.base >= 0 ? '+' : '';
+    btn.innerHTML = `<span class="preset-city">${p.city}</span><span class="preset-tz">${sign}${p.base} min</span><span class="preset-offset">${sign}${(p.base/60).toFixed(1)}h</span>`;
+    btn.onclick = () => {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('manualOffset').value = p.base;
+      document.getElementById('dstCheck').checked = false;
+      dstActive = false;
+      currentOffset = p.base;
+      update();
+    };
+    grid.appendChild(btn);
+  });
+}
+
+function buildSelect() {
+  const sel = document.getElementById('tzSelect');
+  TZ_LIST.forEach((tz, i) => {
+    const sign = tz.base >= 0 ? '+' : '';
+    const opt = document.createElement('option');
+    opt.value = tz.base;
+    opt.textContent = `${tz.city} (${tz.label}) — UTC${sign}${tz.base/60}h`;
+    sel.appendChild(opt);
+  });
+  sel.value = -300;
+}
+
+function onSelectChange() {
+  const val = parseInt(document.getElementById('tzSelect').value);
+  document.getElementById('manualOffset').value = val;
+  document.getElementById('dstCheck').checked = false;
+  dstActive = false;
+  currentOffset = val;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  update();
+}
+
+function onManualChange() {
+  currentOffset = parseInt(document.getElementById('manualOffset').value) || 0;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  update();
+}
+
+function onDSTChange() {
+  dstActive = document.getElementById('dstCheck').checked;
+  update();
+}
+
+function toHex16(val) {
+  return ('0000' + (val & 0xFFFF).toString(16).toUpperCase()).slice(-4);
+}
+
+function toBase64(hex) {
+  const bytes = [];
+  for (let i = 0; i < hex.length; i += 2)
+    bytes.push(parseInt(hex.slice(i, i+2), 16));
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function update() {
+  const off = currentOffset + (dstActive ? 60 : 0);
+  const hex16 = toHex16(off);
+  const payloadHex = '03' + hex16;
+  const b64 = toBase64(payloadHex);
+  const sign = off >= 0 ? '+' : '';
+
+  document.getElementById('outMin').textContent = `${sign}${off}`;
+  document.getElementById('outHex').textContent = hex16;
+  document.getElementById('outPayloadHex').textContent = payloadHex;
+  document.getElementById('outB64').textContent = b64;
+
+  // C block
+  const cRaw =
+`#define DEFAULT_TIMEZONE_OFFSET_MINUTES (${off}) // UTC${sign}${off/60}h\n` +
+`#define TZ_OFFSET_MIN_MINUTES           (-1440)\n` +
+`#define TZ_OFFSET_MAX_MINUTES           (1440)`;
+
+  document.getElementById('cBlock').innerHTML =
+    `<span class="kw">#define</span> <span class="def">DEFAULT_TIMEZONE_OFFSET_MINUTES</span> <span class="num">(${off})</span> <span class="cmt">// UTC${sign}${off/60}h</span>\n` +
+    `<span class="kw">#define</span> <span class="def">TZ_OFFSET_MIN_MINUTES</span>           <span class="num">(-1440)</span>\n` +
+    `<span class="kw">#define</span> <span class="def">TZ_OFFSET_MAX_MINUTES</span>           <span class="num">(1440)</span>`;
+
+  document.getElementById('cBlock')._raw = cRaw;
+}
+
+function copyVal(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 1800);
+  });
+}
+
+function copyCBlock() {
+  const raw = document.getElementById('cBlock')._raw;
+  navigator.clipboard.writeText(raw).then(() => {
+    const btn = document.getElementById('cCopyBtn');
+    btn.textContent = 'copied!';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 1800);
+  });
+}
+
+buildPresets();
+buildSelect();
+update();
+</script>
+</body>
+</html>
