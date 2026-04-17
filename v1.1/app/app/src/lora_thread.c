@@ -157,8 +157,11 @@ static bool lora_mac_probe_after_join(void) {
  * LORA_JOIN_BACKOFF_HOURS) when this returns false.
  *
  * @return true if joined, false if all attempts in this cycle failed.
+ * @param show_join_led true for Staff / deliberate join (LORA_CMD_JOIN); false
+ *                      for LORA_CMD_JOIN_SILENT (no customer-visible LED).
  */
-static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
+static bool run_join_cycle(struct lorawan_join_config *join_cfg,
+                           bool show_join_led) {
   int ret;
   uint16_t dev_nonce;
 
@@ -166,8 +169,10 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
    */
   LOG_SECTION_INF("STARTING LORA JOIN LOOP");
   LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
-  (void)led_manager_show(
-      0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
+  if (show_join_led) {
+    (void)led_manager_show(
+        0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
+  }
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++) {
     /* Hold 3.3A (and 3.3V) for devnonce read and for the whole join attempt so
@@ -234,7 +239,9 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
 
       (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
       rail_manager_request_3v3a();
-      (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
+      if (show_join_led) {
+        (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
+      }
       (void)join_state_store_set_has_joined_once();
       rail_manager_release_3v3a();
       LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
@@ -260,7 +267,9 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg) {
 
   LOG_WRN("Join failed after %d attempts (assume no gateway / genuine failure)",
           LORA_JOIN_ATTEMPTS_PER_CYCLE);
-  (void)led_manager_show(0, LED_PATTERN_OFF); /* stop joining blink */
+  if (show_join_led) {
+    (void)led_manager_show(0, LED_PATTERN_OFF); /* stop joining blink */
+  }
   return false;
 }
 
@@ -300,7 +309,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
   }
 
-  while (!run_join_cycle(&join_cfg)) {
+  while (!run_join_cycle(&join_cfg, cmd == LORA_CMD_JOIN)) {
     (void)smf_post_event(SMF_EVT_JOIN_CYCLE_FAILED, 0, k_uptime_get());
     LOG_WRN("Will retry join in %d hour(s)", (int)LORA_JOIN_BACKOFF_HOURS);
     if (LORA_JOIN_BACKOFF_HOURS > 0) {
@@ -406,7 +415,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           if (cmd == LORA_CMD_JOIN) {
             (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
           }
-          if (!run_join_cycle(&join_cfg)) {
+          if (!run_join_cycle(&join_cfg, cmd == LORA_CMD_JOIN)) {
             /* Join cycle failed (e.g. 20 attempts); schedule retry after
              * backoff. */
             k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0

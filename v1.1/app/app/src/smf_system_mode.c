@@ -473,8 +473,15 @@ static void smf_thread_fn(void *a, void *b, void *c) {
             uplink.confirmed = LORA_NFC_UPLINK_CONFIRMED;
             uplink.len = PAYLOAD_LEN_BYTES;
             memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
-            if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
-              LOG_INF("[SMF] NFC uplink queued (intent=%u)", intent);
+            if (lora_is_joined()) {
+              if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
+                LOG_INF("[SMF] NFC uplink queued (intent=%u)", intent);
+              } else {
+                LOG_WRN("[SMF] NFC uplink queue failed (intent=%u)", intent);
+              }
+            } else {
+              LOG_INF("[SMF] NFC uplink skipped (not joined), intent=%u",
+                      intent);
             }
           }
           if (intent != NFC_INTENT_CHECK_OUT &&

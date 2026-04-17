@@ -86,7 +86,7 @@
 /** Delay between queuing each counter-sync uplink (see counter_sync.c). 0 =
  * back-to-back; LoRa thread enforces LORA_UPLINK_MIN_INTERVAL_MS. A small
  * non-zero value (e.g. 100–200) reduces burst load on MAC/SPI-heavy builds. */
-#define COUNTER_SYNC_DELAY_MS 150
+#define COUNTER_SYNC_DELAY_MS 100
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1; gpio-keys aliases in DT overlay)
@@ -100,7 +100,7 @@
 #define BUTTON_DEBOUNCE_MS 50
 
 #ifdef EPD_ENABLED
-#define BUTTON_COOLDOWN_MS 15000 // was 5000, should be 12ish to sync up w/ epd update
+#define BUTTON_COOLDOWN_MS 15000 // was 5000, should be 15000 to sync up w/ epd update
 #else
 #define BUTTON_COOLDOWN_MS 5000 // NON EPD version
 #endif

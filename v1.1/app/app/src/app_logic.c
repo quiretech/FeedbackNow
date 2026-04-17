@@ -10,7 +10,6 @@
 #include "rtc.h"
 #include "sys_config.h"
 
-#include <errno.h>
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -78,16 +77,20 @@ void app_logic_public_vote(uint8_t button_id) {
   msg.len = PAYLOAD_LEN_BYTES;
   memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
 
-  ret = lora_put_event(&msg, K_NO_WAIT);
-  if (ret == -ENOTCONN) {
-    LOG_WRN("Not joined; dropped button id=%u", payload_button_id);
+  /* Local UX + counter already done; only queue uplink when joined. */
+  if (lora_is_joined()) {
+    ret = lora_put_event(&msg, K_NO_WAIT);
+    if (ret != 0) {
+      LOG_ERR("Queue button uplink failed: %d", ret);
+    } else {
+      last_accepted_any_press_ms = now_ms;
+      LOG_INF("Queued button uplink: btn=%u ctr=%u ts=%u", payload_button_id,
+              new_counter, epoch_s);
+    }
+  } else {
     last_accepted_any_press_ms =
         now_ms; /* Cooldown same as when joined (no EPD flood). */
-  } else if (ret != 0) {
-    LOG_ERR("Queue button uplink failed: %d", ret);
-  } else {
-    last_accepted_any_press_ms = now_ms;
-    LOG_INF("Queued button uplink: btn=%u ctr=%u ts=%u", payload_button_id,
-            new_counter, epoch_s);
+    LOG_INF("[app_logic] Not joined; uplink skipped (btn=%u ctr=%u)",
+            payload_button_id, new_counter);
   }
 }
