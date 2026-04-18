@@ -176,7 +176,7 @@ enables {
 	ssd1683: ssd1683@1 {
 	compatible = "solomon,ssd1683";
 	reg = <1>;
-	spi-max-frequency = <4000000>;
+	spi-max-frequency = <7000000>;
 	/* Display dimensions */
 	width = <400>;
 	height = <300>;
@@ -184,7 +184,6 @@ enables {
 	dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 	reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
 	busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
-
 	};
 
 	pn5180: pn5180@2 {

@@ -206,7 +206,7 @@
  * RTC / time sync
  * =============================================================================
  */
-#define RTC_SET_TIME_ON_BOOT 1
+#define RTC_SET_TIME_ON_BOOT 0
 #define RTC_FORCE_SET_TIME_ON_BOOT                                             \
   0 /* prod: 0 (do not overwrite RTC from build-time) */
 #define RTC_SET_YEAR 2026
@@ -263,7 +263,7 @@
  * =============================================================================
  */
 /** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
- * run. */
+ * run. And reduce epd artifacts when cutting power rail*/
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS 20000 /* prod: 20s (EEPROM flush 5s) */
 
 /* =============================================================================
