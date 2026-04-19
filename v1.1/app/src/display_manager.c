@@ -90,6 +90,9 @@ static lv_obj_t *screen_device_info;
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
 /* Device Info screen labels */
 static lv_obj_t *dev_info_heading;
+static lv_obj_t *dev_info_unit_caption;
+static lv_obj_t *dev_info_unit_value;
+static lv_obj_t *dev_info_deveui_caption;
 static lv_obj_t *dev_info_deveui;
 static lv_obj_t *dev_info_fw;
 static lv_obj_t *dev_info_counters;
@@ -157,6 +160,9 @@ static atomic_t last_cleaned_sync_waiting = ATOMIC_INIT(0);
 /* For display_show_cleaning_sync: NFC check-in / immediate cleaning screen. */
 K_SEM_DEFINE(cleaning_done_sem, 0, 1);
 static atomic_t cleaning_sync_waiting = ATOMIC_INIT(0);
+
+K_SEM_DEFINE(device_info_done_sem, 0, 1);
+static atomic_t device_info_sync_waiting = ATOMIC_INIT(0);
 
 /* 1 while display_work_handler holds SPI for EPD (LoRa shares arduino_spi). */
 static atomic_t display_epd_spi_busy = ATOMIC_INIT(0);
@@ -286,8 +292,8 @@ static void create_lvgl_screens(void) {
 
   lv_obj_add_flag(screen_connecting, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: DEVICE_INFO – center aligned, flex, heading 32.c, info 28.c, order:
-   * heading, eui, counters, fw */
+  /* Screen: DEVICE_INFO – flex column: heading, device id, LoRa DevEUI,
+   * counters, fw, footer */
   screen_device_info = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_device_info, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_device_info, LV_OPA_COVER, LV_PART_MAIN);
@@ -303,19 +309,52 @@ static void create_lvgl_screens(void) {
   lv_obj_set_flex_flow(cont_devinfo, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(cont_devinfo, LV_FLEX_ALIGN_CENTER,
                         LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-  lv_obj_set_style_pad_row(cont_devinfo, 14, LV_PART_MAIN);
+  lv_obj_set_style_pad_row(cont_devinfo, 10, LV_PART_MAIN);
 
   /* Heading */
   dev_info_heading = lv_label_create(cont_devinfo);
-  lv_label_set_text(dev_info_heading, "FeedBackNow FlexBox");
+  lv_label_set_text(dev_info_heading, "FeedBackNow FlexBox+");
   lv_obj_set_style_text_font(dev_info_heading, &roboto_32, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_heading, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_heading, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
 
-  /* DevEUI as second line */
+  /* Unit / asset id (from sys_config.h; gen_euis.py keeps in sync with registry) */
+  dev_info_unit_caption = lv_label_create(cont_devinfo);
+  lv_label_set_text(dev_info_unit_caption, "Device ID");
+  lv_obj_set_style_text_font(dev_info_unit_caption, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_unit_caption, lv_color_hex(0x555555),
+                              LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_unit_caption, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
+
+  dev_info_unit_value = lv_label_create(cont_devinfo);
+  lv_label_set_text(dev_info_unit_value, DEVICE_UNIT_ID_STRING);
+  lv_obj_set_width(dev_info_unit_value, 380);
+  lv_label_set_long_mode(dev_info_unit_value, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_font(dev_info_unit_value, &roboto_32, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_unit_value, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_unit_value, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
+
+  /* LoRa DevEUI (caption + hex from LORAWAN_DEV_EUI on show) */
+  dev_info_deveui_caption = lv_label_create(cont_devinfo);
+  lv_label_set_text(dev_info_deveui_caption, "LoRaWAN DevEUI");
+  lv_obj_set_style_text_font(dev_info_deveui_caption, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(dev_info_deveui_caption, lv_color_hex(0x555555),
+                              LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_deveui_caption, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
+
   dev_info_deveui = lv_label_create(cont_devinfo);
-  lv_label_set_text(dev_info_deveui, "DevEUI: 00:00:00:00:00:00:00:00");
+  lv_label_set_text(dev_info_deveui, "00:00:00:00:00:00:00:00");
+  lv_obj_set_width(dev_info_deveui, 380);
+  lv_label_set_long_mode(dev_info_deveui, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_font(dev_info_deveui, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_deveui, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_deveui, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
 
   /* Button counters next */
   dev_info_counters = lv_label_create(cont_devinfo);
@@ -323,12 +362,15 @@ static void create_lvgl_screens(void) {
   lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
                               LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_counters, LV_TEXT_ALIGN_CENTER,
+                              LV_PART_MAIN);
 
   /* FW version last */
   dev_info_fw = lv_label_create(cont_devinfo);
   lv_label_set_text(dev_info_fw, "Version: " FW_VERSION_STRING);
   lv_obj_set_style_text_font(dev_info_fw, &roboto_28, LV_PART_MAIN);
   lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(dev_info_fw, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
   /* Footer: QuireTech LLC 2026, centered, roboto20 font */
   lv_obj_t *dev_info_footer = lv_label_create(cont_devinfo);
@@ -339,6 +381,38 @@ static void create_lvgl_screens(void) {
                               LV_PART_MAIN);
 
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Refresh unit id, DevEUI, and button counters on the device-info screen. */
+static void refresh_device_info_dynamic(void) {
+  if (dev_info_unit_value) {
+    lv_label_set_text(dev_info_unit_value, DEVICE_UNIT_ID_STRING);
+  }
+  if (dev_info_deveui) {
+    static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
+    char deveui_str[40];
+    (void)snprintf(deveui_str, sizeof(deveui_str),
+                   "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0],
+                   dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5],
+                   dev_eui[6], dev_eui[7]);
+    lv_label_set_text(dev_info_deveui, deveui_str);
+  }
+  if (dev_info_counters) {
+    char counters_str[64];
+    uint32_t cnt[NUM_BUTTONS];
+    int pos = 0;
+    for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
+      (void)button_counter_store_get(i, &cnt[i]);
+    }
+    pos = snprintf(counters_str, sizeof(counters_str), "B0:%lx",
+                   (unsigned long)cnt[0]);
+    for (uint8_t i = 1;
+         i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 8); i++) {
+      pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
+                      " B%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
+    }
+    lv_label_set_text(dev_info_counters, counters_str);
+  }
 }
 
 /* Format epoch as yyyy/mm/dd hh:mm (UTC). Buffer at least 17 bytes. */
@@ -444,40 +518,10 @@ static void do_render(const struct device *display, enum display_job_type type,
     LOG_INF("[EPD] show CONNECTING");
     scr_to_show = screen_connecting;
     break;
-  case JOB_SHOW_DEVICE_INFO: {
+  case JOB_SHOW_DEVICE_INFO:
     LOG_INF("[EPD] show DEVICE_INFO");
-    /* Format DevEUI */
-    if (dev_info_deveui) {
-      static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
-      char deveui_str[32];
-      (void)snprintf(deveui_str, sizeof(deveui_str),
-                     "EUI: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0],
-                     dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5],
-                     dev_eui[6], dev_eui[7]);
-      lv_label_set_text(dev_info_deveui, deveui_str);
-    }
-    /* FW version is static text, already set in create_lvgl_screens */
-    /* Format button counters in hexadecimal */
-    if (dev_info_counters) {
-      char counters_str[64];
-      uint32_t cnt[NUM_BUTTONS];
-      int pos = 0;
-      for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
-        (void)button_counter_store_get(i, &cnt[i]);
-      }
-      /* Display values in hex (lowercase, as 0x%lx). */
-      pos = snprintf(counters_str, sizeof(counters_str), "B0:%lx",
-                     (unsigned long)cnt[0]);
-      for (uint8_t i = 1;
-           i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 8); i++) {
-        pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
-                        " B%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
-      }
-      lv_label_set_text(dev_info_counters, counters_str);
-    }
     scr_to_show = screen_device_info;
     break;
-  }
   case JOB_FULL_REFRESH:
     LOG_INF("[EPD] full refresh");
     /* Show current screen again to force refresh */
@@ -506,6 +550,10 @@ static void do_render(const struct device *display, enum display_job_type type,
     break;
   default:
     break;
+  }
+
+  if (scr_to_show == screen_device_info) {
+    refresh_device_info_dynamic();
   }
 
   if (scr_to_show) {
@@ -543,6 +591,12 @@ static void display_signal_sync_aborted(enum display_job_type type) {
     if (atomic_get(&cleaning_sync_waiting) != 0) {
       atomic_set(&cleaning_sync_waiting, 0);
       k_sem_give(&cleaning_done_sem);
+    }
+    break;
+  case JOB_SHOW_DEVICE_INFO:
+    if (atomic_get(&device_info_sync_waiting) != 0) {
+      atomic_set(&device_info_sync_waiting, 0);
+      k_sem_give(&device_info_done_sem);
     }
     break;
   default:
@@ -702,6 +756,11 @@ static void display_work_handler(struct k_work *work) {
     atomic_set(&cleaning_sync_waiting, 0);
     k_sem_give(&cleaning_done_sem);
   }
+  if (job.type == JOB_SHOW_DEVICE_INFO &&
+      atomic_get(&device_info_sync_waiting)) {
+    atomic_set(&device_info_sync_waiting, 0);
+    k_sem_give(&device_info_done_sem);
+  }
 
   atomic_set(&display_epd_spi_busy, 0);
 
@@ -731,11 +790,12 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
    * already passed its tail-check, force a short reschedule.
    *
    * EPD and LoRa share SPI. Defer EPD until past LoRa RX windows to avoid
-   * missing downlinks. LOGO, CONNECTING: 0 delay (no uplink racing). THANKS:
-   * DISPLAY_THANKS_DELAY_MS (button triggers uplink). Others:
-   * DISPLAY_WORK_DELAY_MS. */
+   * missing downlinks. LOGO, CONNECTING, DEVICE_INFO: 0 delay (boot/join/staff
+   * UI; no fresh uplink on that path). THANKS: DISPLAY_THANKS_DELAY_MS (button
+   * triggers uplink). Others: DISPLAY_WORK_DELAY_MS. */
   uint32_t delay_ms;
-  if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING) {
+  if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
+      type == JOB_SHOW_DEVICE_INFO) {
     delay_ms = 0U;
   } else {
     /* THANKS from button uses display_show_thanks_sync (0 delay, blocks).
@@ -956,6 +1016,22 @@ void display_show_connecting(void) {
 void display_show_device_info(void) {
 #if EPD_ENABLED
   enqueue_job(JOB_SHOW_DEVICE_INFO, 0);
+#endif
+}
+
+void display_show_device_info_sync(void) {
+#if EPD_ENABLED
+  struct display_job job = {.type = JOB_SHOW_DEVICE_INFO, .epoch = 0};
+  if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+    LOG_WRN("[EPD] device_info sync: job queue full");
+    return;
+  }
+  atomic_set(&device_info_sync_waiting, 1);
+  (void)k_work_schedule(&display_work, K_MSEC(0));
+  if (k_sem_take(&device_info_done_sem, K_MSEC(10000)) != 0) {
+    LOG_WRN("[EPD] device_info sync timeout");
+  }
+  atomic_set(&device_info_sync_waiting, 0);
 #endif
 }
 

@@ -14,6 +14,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
@@ -42,7 +43,26 @@ static uint32_t last_uplink_ms;
 /* Consecutive send failures; when >= LORA_SEND_FAILURES_BEFORE_BACKOFF we
  * clear joined and schedule re-join after backoff. */
 static uint32_t consecutive_send_failures;
+
+/* Next LORA_CMD_JOIN_SILENT may show join LED only when this is non-zero (set
+ * for the auto-post right after boot when has_joined_once; cleared before
+ * backoff rejoin and when handling LORA_CMD_JOIN). */
+static atomic_t silent_join_installer_led_armed;
+
 K_SEM_DEFINE(lora_ready_sem, 0, 1);
+
+/** Join LED: deliberate join always; silent only for first cycle after boot
+ *  auto-post (installer at power-on), never for backoff rejoin. */
+static bool join_installer_led_for_cmd(uint8_t cmd) {
+  if (cmd == LORA_CMD_JOIN) {
+    (void)atomic_set(&silent_join_installer_led_armed, 0);
+    return true;
+  }
+  if (cmd == LORA_CMD_JOIN_SILENT) {
+    return atomic_set(&silent_join_installer_led_armed, 0) != 0;
+  }
+  return false;
+}
 
 static void join_after_backoff_timer_expiry(struct k_timer *timer);
 static void join_after_backoff_work_handler(struct k_work *work);
@@ -58,6 +78,9 @@ static void join_after_backoff_timer_expiry(struct k_timer *timer) {
 static void join_after_backoff_work_handler(struct k_work *work) {
   (void)work;
   LOG_INF("Link backoff elapsed; posting LORA_CMD_JOIN_SILENT");
+  /* Customer-facing rejoin: no join LED (installer LED only for deliberate join
+   * or first silent join right after power-on). */
+  atomic_set(&silent_join_installer_led_armed, 0);
   int ret;
   for (int attempt = 0; attempt < 5; attempt++) {
     ret = lora_cmd_put(LORA_CMD_JOIN_SILENT);
@@ -157,8 +180,9 @@ static bool lora_mac_probe_after_join(void) {
  * LORA_JOIN_BACKOFF_HOURS) when this returns false.
  *
  * @return true if joined, false if all attempts in this cycle failed.
- * @param show_join_led true for Staff / deliberate join (LORA_CMD_JOIN); false
- *                      for LORA_CMD_JOIN_SILENT (no customer-visible LED).
+ * @param show_join_led true: joining / success / fail-off LED for installer
+ *                      (deliberate join, or first silent join after power-on).
+ *                      false: silent background join (e.g. after link backoff).
  */
 static bool run_join_cycle(struct lorawan_join_config *join_cfg,
                            bool show_join_led) {
@@ -171,7 +195,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
   LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
   if (show_join_led) {
     (void)led_manager_show(
-        0, LED_PATTERN_JOINING); /* 2s on, 1s off for devices without EPD */
+        0, LED_PATTERN_JOINING);
   }
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++) {
@@ -237,11 +261,14 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       k_msleep(LORA_POST_JOIN_MAC_SETTLE_MS);
 #endif
 
-      (void)smf_post_event(SMF_EVT_JOINED, 0, k_uptime_get());
+      /* Join-success LED before JOINED so the burst starts first; SMF delays
+       * LAST_CLEANED when installer_led (see POST_JOIN_LED_BEFORE_EPD_MS). */
       rail_manager_request_3v3a();
       if (show_join_led) {
         (void)led_manager_show(0, LED_PATTERN_JOIN_SUCCESS);
       }
+      (void)smf_post_event(SMF_EVT_JOINED, show_join_led ? 1u : 0u,
+                           k_uptime_get());
       (void)join_state_store_set_has_joined_once();
       rail_manager_release_3v3a();
       LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
@@ -291,13 +318,17 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                          .otaa.dev_nonce = 0};
 
   /* Join is command-driven: first boot waits for SMF (Staff+COMBO_JOIN);
-   * subsequent boot auto-posts LORA_CMD_JOIN_SILENT (no Connecting screen).
+   * subsequent boot auto-posts LORA_CMD_JOIN_SILENT (no Connecting screen;
+   * join LED once for installer, not on backoff rejoin).
    * join_state_store is inited from main before this thread starts. */
   bool has_joined_once = false;
   (void)join_state_store_has_joined_once(&has_joined_once);
   LOG_INF("has_joined_once=%d (EEPROM_JOIN_STATE_CLEAR_ON_BOOT=%d)",
           has_joined_once, EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
   if (has_joined_once) {
+    /* One join cycle with LED after power-on so installers see progress without
+     * logs; backoff rejoin clears this flag before posting JOIN_SILENT. */
+    (void)atomic_set(&silent_join_installer_led_armed, 1);
     (void)lora_cmd_put(
         LORA_CMD_JOIN_SILENT); /* Auto-join: no Connecting screen */
   } else {
@@ -309,7 +340,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
   }
 
-  while (!run_join_cycle(&join_cfg, cmd == LORA_CMD_JOIN)) {
+  while (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd))) {
     (void)smf_post_event(SMF_EVT_JOIN_CYCLE_FAILED, 0, k_uptime_get());
     LOG_WRN("Will retry join in %d hour(s)", (int)LORA_JOIN_BACKOFF_HOURS);
     if (LORA_JOIN_BACKOFF_HOURS > 0) {
@@ -415,7 +446,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           if (cmd == LORA_CMD_JOIN) {
             (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
           }
-          if (!run_join_cycle(&join_cfg, cmd == LORA_CMD_JOIN)) {
+          if (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd))) {
             /* Join cycle failed (e.g. 20 attempts); schedule retry after
              * backoff. */
             k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0

@@ -62,16 +62,18 @@ static bool advance_finite(uint8_t id, int64_t now_ms, uint8_t count,
   return false;
 }
 
-/* 1 Hz repeat: 500 on, 500 off until next command */
-static void advance_1hz(uint8_t id, int64_t now_ms) {
-  bool currently_on = (led_state[id].step & 1) != 0;
-  led_apply(id, !currently_on);
+/* NFC scan: soft pulse until next command (see LED_NFC_WAITING_* in sys_config) */
+static void advance_nfc_waiting(uint8_t id, int64_t now_ms) {
+  bool phys_on = (led_state[id].step & 1) != 0;
+  led_apply(id, !phys_on);
   led_state[id].step++;
+  bool after_on = !phys_on;
   led_state[id].next_ms =
-      now_ms + (currently_on ? LED_NFC_1HZ_ON_MS : LED_NFC_1HZ_OFF_MS);
+      now_ms +
+      (after_on ? LED_NFC_WAITING_ON_MS : LED_NFC_WAITING_OFF_MS);
 }
 
-/* Joining: 2s on, 1s off, repeat until next command (e.g. JOIN_SUCCESS or OFF) */
+/* Joining: fast on/off repeat until next command (e.g. JOIN_SUCCESS or OFF) */
 static void advance_joining(uint8_t id, int64_t now_ms) {
   bool currently_on = (led_state[id].step & 1) == 0;
   led_apply(id, !currently_on);
@@ -118,7 +120,7 @@ static void run_timeout(uint8_t id, int64_t now_ms) {
     advance_joining(id, now_ms);
     break;
   case LED_PATTERN_NFC_WAITING:
-    advance_1hz(id, now_ms);
+    advance_nfc_waiting(id, now_ms);
     break;
   default:
     break;
@@ -173,7 +175,7 @@ static void start_pattern(uint8_t id, enum led_pattern_id pattern,
   case LED_PATTERN_NFC_WAITING:
     led_apply(id, true);
     led_state[id].step = 1;
-    led_state[id].next_ms = now_ms + LED_NFC_1HZ_ON_MS;
+    led_state[id].next_ms = now_ms + LED_NFC_WAITING_ON_MS;
     break;
   default:
     led_apply(id, false);

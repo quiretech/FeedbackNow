@@ -70,8 +70,14 @@ void display_show_cleaning_sync(void);
 /** Show connecting. */
 void display_show_connecting(void);
 
-/** Show device info (optional). */
+/** Show device info (async; uses DISPLAY_WORK_DELAY_MS after uplink-prone paths). */
 void display_show_device_info(void);
+
+/**
+ * Show device info with 0 ms queue delay and block until EPD SPI flush completes.
+ * Use from SMF after LED/rail changes so staff combo → LED → panel stay ordered.
+ */
+void display_show_device_info_sync(void);
 
 /**
  * Set pending last cleaned epoch (from downlink 0x01). Applied when we next show

@@ -18,6 +18,14 @@
  */
 
 /* =============================================================================
+ * Unit identity (written by onboarding/gen_euis.py — matches eui_registry)
+ * =============================================================================
+ */
+/* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
+#define DEVICE_UNIT_ID_STRING "ZZ-UNIT-HM-TEST"
+/* END UNIT_ID (gen_euis.py) */
+
+/* =============================================================================
  * LoRa (FRD 4.5)
  * =============================================================================
  */
@@ -133,34 +141,70 @@
  * LED (FRD 4.4) — on/off only; patterns are blink counts and timings
  * =============================================================================
  */
-#define NUM_LEDS 1
-/* Button press accepted: LED solid ON, then OFF. prod: 600. */
-#define LED_BUTTON_ACCEPTED_MS 600
-/* Join success: LED blinks 3 times (3 x 60ms ON, 60ms OFF; total ~360ms) */
-#define LED_JOIN_BLINKS 3
-#define LED_JOIN_ON_MS 60
-#define LED_JOIN_OFF_MS 60
-/* While joining (no EPD): LED ON for 2s, then OFF for 1s, repeats until done */
-#define LED_JOINING_ON_MS 2000
-#define LED_JOINING_OFF_MS 1000
-/* NFC waiting: LED blinks at 1 Hz (500ms ON, 500ms OFF) */
-#define LED_NFC_1HZ_ON_MS 500
-#define LED_NFC_1HZ_OFF_MS 500
-/* NFC read fail: LED blinks 2 times (2 x 400ms ON, 200ms OFF; total ~800ms) */
-#define LED_NFC_FAIL_BLINKS 2
-#define LED_NFC_FAIL_ON_MS 400
-#define LED_NFC_FAIL_OFF_MS 200
-/* Check-in/out/Registered vote: LED blinks 2 times (2 x 150ms ON, 100ms OFF;
- * total ~400ms) */
-#define LED_CONFIRM_BLINKS 2
-#define LED_CONFIRM_ON_MS 150
-#define LED_CONFIRM_OFF_MS 100
-/* Reboot indication: LED solid ON for 3s, then OFF (reboot handled elsewhere)
- */
-#define LED_REBOOT_HOLD_MS 3000
-/* Power on: LED blinks 2 times (2 x 100ms ON; total ~200ms) */
-#define LED_POWER_ON_BLINKS 2
-#define LED_POWER_ON_MS 100
+ #define NUM_LEDS 1
+
+ /* -------------------------
+  * BUTTON
+  * ------------------------- */
+ /* Button press accepted: quick confirmation pulse */
+ #define LED_BUTTON_ACCEPTED_MS 600
+ 
+ 
+ /* -------------------------
+  * JOIN (LoRa / network)
+  * ------------------------- */
+ 
+ /* While joining: calm breathing (waiting / searching) */
+ #define LED_JOINING_ON_MS   800
+ #define LED_JOINING_OFF_MS  800
+ 
+ /* Join success: clear celebration burst */
+ #define LED_JOIN_BLINKS   4
+ #define LED_JOIN_ON_MS    180
+ #define LED_JOIN_OFF_MS   180
+ /* After installer join: SMF waits this long so JOIN_SUCCESS LED can finish
+  * before LAST_CLEANED (silent join uses 0 ms). Slightly > real burst length. */
+ #define POST_JOIN_LED_BEFORE_EPD_MS 1700
+ 
+ 
+ /* -------------------------
+  * NFC
+  * ------------------------- */
+ 
+ /* NFC scanning: steady “ready / waiting for tag” */
+ #define LED_NFC_WAITING_ON_MS   600
+ #define LED_NFC_WAITING_OFF_MS  600
+ 
+ /* NFC read fail: gentle retry signal */
+ #define LED_NFC_FAIL_BLINKS  3
+ #define LED_NFC_FAIL_ON_MS   160
+ #define LED_NFC_FAIL_OFF_MS  240
+ 
+ /* NFC success: clean confirmation burst */
+ #define LED_CONFIRM_BLINKS  3
+ #define LED_CONFIRM_ON_MS   140
+ #define LED_CONFIRM_OFF_MS  140
+ 
+ 
+ /* -------------------------
+  * SYSTEM STATES
+  * ------------------------- */
+ 
+ /* Power on: identity blink */
+ #define LED_POWER_ON_BLINKS  2
+ #define LED_POWER_ON_MS      120
+ #define LED_POWER_ON_OFF_MS  120
+ 
+ /* Reboot: stable ON presence */
+ #define LED_REBOOT_HOLD_MS  2000
+ 
+ 
+ /* -------------------------
+  * TIMING CONTROL
+  * ------------------------- */
+ 
+ /* Allow NFC / confirm burst to complete cleanly */
+ #define LED_CONFIRM_SMF_BLOCK_MS  500
 
 /* =============================================================================
  * EEPROM / persistent storage
@@ -310,8 +354,12 @@
  * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first
  * (block until done), then LoRa/EEPROM with clear SPI for downlinks.
  *
- * DISPLAY_WORK_DELAY_MS: delay for LAST_CLEANED, CLEANING, etc. (e.g. after
- * thanks_timer). Must be >= 4500 to avoid blocking LoRa RX.
+ * DISPLAY_WORK_DELAY_MS: delay for async LAST_CLEANED / CLEANING from
+ * enqueue_job (e.g. thanks_timer). DEVICE_INFO / CONNECTING / LOGO use 0 ms
+ * (staff or join UI, no uplink race). SMF uses display_show_*_sync for
+ * last-cleaned after Device Info timeout and device-info entry so LED/rail
+ * and EPD flush stay ordered. Must be >= ~4500 ms when scheduling after
+ * confirmed uplinks to reduce LoRa RX contention.
  */
 #define DISPLAY_WORK_DELAY_MS 5000
 

@@ -18,10 +18,10 @@ enum led_pattern_id {
   LED_PATTERN_ON, /**< Solid on until next command (Staff, Reboot hold) */
   LED_PATTERN_BUTTON_ACCEPTED, /**< Solid 1s then off */
   LED_PATTERN_JOIN_SUCCESS,    /**< 3 quick flashes */
-  LED_PATTERN_JOINING,         /**< 2s on, 1s off repeat (no EPD: show join in progress) */
-  LED_PATTERN_NFC_WAITING,     /**< 1 Hz blink until next command */
-  LED_PATTERN_NFC_FAIL,        /**< 3 fast blinks then off */
-  LED_PATTERN_CONFIRM,     /**< 3 blinks ~2s (check-in/out/registered vote) */
+  LED_PATTERN_JOINING, /**< Fast on/off repeat while OTAA join in progress */
+  LED_PATTERN_NFC_WAITING, /**< Slow “searching” pulse while NFC tag expected */
+  LED_PATTERN_NFC_FAIL,    /**< Quick triple tap (read failed / try again) */
+  LED_PATTERN_CONFIRM, /**< Fast success burst after NFC read (before EPD) */
   LED_PATTERN_REBOOT_HOLD, /**< Solid for REBOOT_MS then off */
   LED_PATTERN_POWER_ON,    /**< 2 quick flashes (e.g. at boot) */
   LED_PATTERN_COUNT

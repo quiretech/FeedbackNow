@@ -36,7 +36,8 @@ enum smf_ev_type {
   SMF_EVT_NFC_TIMEOUT,
   SMF_EVT_DEVICE_INFO_TIMEOUT,
   /* LoRa / NFC (Phase 2+) */
-  SMF_EVT_JOINED,
+  SMF_EVT_JOINED, /* button_id: 1 = delay before EPD (installer join LED), 0 =
+                      silent */
   SMF_EVT_JOIN_STARTED,   /* LoRa thread started join (orchestration visibility)
                            */
   SMF_EVT_JOIN_CYCLE_FAILED, /* Join failed after N attempts; show Last Cleaned

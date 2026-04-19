@@ -33,6 +33,13 @@
 
 LOG_MODULE_REGISTER(smf, CONFIG_LOG_DEFAULT_LEVEL);
 
+/** Queue NFC success LED burst; block until it can finish, then SMF may drive
+ *  EPD (contrast: slow “scanning” pulse vs fast “found it” burst). */
+static void smf_nfc_success_led_hold_for_epd(void) {
+  (void)led_manager_show(0, LED_PATTERN_CONFIRM);
+  k_msleep(LED_CONFIRM_SMF_BLOCK_MS);
+}
+
 enum system_mode {
   MODE_NORMAL,
   MODE_STAFF,
@@ -72,13 +79,11 @@ static void smf_msgq_peak_note(void) {
 /* Mode timeout: timer posts this event so SMF returns to Normal (atomic: timer
  * vs SMF thread) */
 static atomic_t mode_timeout_ev = ATOMIC_INIT(0); /* 0 = SMF_EVT_NONE */
-static void smf_joined_work_handler(struct k_work *work);
 static void smf_housekeeping_work_handler(struct k_work *work);
 static void smf_join_started_ui_work_handler(struct k_work *work);
 static void smf_join_failed_ui_work_handler(struct k_work *work);
 static void mode_timeout_work_handler(struct k_work *work);
 static void reboot_work_handler(struct k_work *work);
-K_WORK_DEFINE(smf_joined_work, smf_joined_work_handler);
 K_WORK_DEFINE(smf_housekeeping_work, smf_housekeeping_work_handler);
 K_WORK_DEFINE(smf_join_started_ui_work, smf_join_started_ui_work_handler);
 K_WORK_DEFINE(smf_join_failed_ui_work, smf_join_failed_ui_work_handler);
@@ -209,19 +214,6 @@ static const char *smf_mode_str(enum system_mode mode) {
   }
 }
 
-static void smf_joined_work_handler(struct k_work *work) {
-  ARG_UNUSED(work);
-  rail_manager_request_3v3a();
-  /* LoRa thread runs post-join MAC probe before EVT_JOINED; no extra sleep or
-   * queue drain here — counter sync / time sync ordering is handled in stack
-   * + LoRa thread uplink spacing. */
-  counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
-  lora_request_time_sync();
-  display_show_last_cleaned();
-  downlink_queue_housekeeping_state_snapshot();
-  rail_manager_release_3v3a();
-}
-
 static void smf_housekeeping_work_handler(struct k_work *work) {
   ARG_UNUSED(work);
   housekeeping_run();
@@ -296,8 +288,20 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           rail_manager_release_3v3a();
         }
       } else if (msg.ev_type == SMF_EVT_JOINED) {
-        LOG_DBG("[SMF] state=Normal -> JOINED -> counter_sync");
-        (void)k_work_submit(&smf_joined_work);
+        /* Run on SMF thread (not system workqueue): display_show_last_cleaned_sync
+         * blocks on display_work; same-thread would deadlock if submitted from
+         * k_work. button_id: 1 = installer join LED already queued — pause so
+         * burst finishes before LAST_CLEANED; 0 = silent join, no pause. */
+        LOG_DBG("[SMF] state=Normal -> JOINED -> last_cleaned + counter_sync");
+        rail_manager_request_3v3a();
+        if (msg.button_id != 0) {
+          k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
+        }
+        display_show_last_cleaned_sync();
+        counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
+        lora_request_time_sync();
+        downlink_queue_housekeeping_state_snapshot();
+        rail_manager_release_3v3a();
 
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         (void)k_work_submit(&smf_join_started_ui_work);
@@ -355,7 +359,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
-        display_show_device_info();
+        /* EPD immediately after LED/rail (sync flush; async used 5s RX delay). */
+        display_show_device_info_sync();
         LOG_INF("[SMF] Staff -> DeviceInfo (%u ms timeout)",
                 DEVICE_INFO_TIMEOUT_MS);
         atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
@@ -396,7 +401,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         LOG_INF("[SMF] DeviceInfo -> Normal (timeout)");
-        display_show_last_cleaned();
+        display_show_last_cleaned_sync();
         /* No rail to release: we released 3.3A when leaving Staff for
          * DeviceInfo */
       }
@@ -440,23 +445,24 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           memcpy(data_4, msg.payload.nfc.data_4, sizeof(data_4));
 
           if (intent == NFC_INTENT_CHECK_IN) {
-            (void)led_manager_show(0, LED_PATTERN_CONFIRM);
+            smf_nfc_success_led_hold_for_epd();
 #if EPD_ENABLED
             rail_manager_request_3v3a();
             display_show_cleaning_sync();
             rail_manager_release_3v3a();
 #endif
           } else if (intent == NFC_INTENT_CHECK_OUT) {
-            /* Rapid CONFIRM replaces NFC_WAITING; EPD sync runs immediately after
-             * (blink continues on LED thread). EEPROM needs 3.3A after NFC refs
-             * released above. */
-            (void)led_manager_show(0, LED_PATTERN_CONFIRM);
+            /* Success burst on LED thread, then EPD once burst has finished. */
+            smf_nfc_success_led_hold_for_epd();
             rail_manager_request_3v3a();
             (void)last_cleaned_store_set(epoch_s);
 #if EPD_ENABLED
             display_show_last_cleaned_sync();
 #endif
             rail_manager_release_3v3a();
+          } else {
+            /* Vote: success LED immediately (no EPD in this path). */
+            smf_nfc_success_led_hold_for_epd();
           }
 
           int pret = -EINVAL;
@@ -483,10 +489,6 @@ static void smf_thread_fn(void *a, void *b, void *c) {
               LOG_INF("[SMF] NFC uplink skipped (not joined), intent=%u",
                       intent);
             }
-          }
-          if (intent != NFC_INTENT_CHECK_OUT &&
-              intent != NFC_INTENT_CHECK_IN) {
-            (void)led_manager_show(0, LED_PATTERN_CONFIRM);
           }
         } else {
           (void)led_manager_show(0, LED_PATTERN_NFC_FAIL);

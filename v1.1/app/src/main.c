@@ -137,7 +137,7 @@ static int system_init(void) {
 int main(void) {
   int ret;
 
-  LOG_SECTION_INF("FeedbackNow FlexBox v" FW_VERSION_STRING " Starting");
+  LOG_SECTION_INF("FeedbackNow FlexBox+ v" FW_VERSION_STRING " Starting");
 
   k_sleep(K_SECONDS(1));
 

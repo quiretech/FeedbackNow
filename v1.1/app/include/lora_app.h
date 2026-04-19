@@ -35,7 +35,8 @@ void lora_app_dr_changed(enum lorawan_datarate dr);
  */
 enum lora_cmd_type {
   LORA_CMD_JOIN = 0,   /* Deliberate join (Staff+0+1+2): show Connecting on EPD */
-  LORA_CMD_JOIN_SILENT, /* Auto-join / rejoin: no EPD change, join in background */
+  LORA_CMD_JOIN_SILENT, /* Auto-join / rejoin: no EPD; LED only first silent after
+                         * boot, not after link backoff */
   LORA_CMD_TIME_SYNC,   /* Request DeviceTimeReq/Ans and update RTC */
   LORA_CMD_TIME_SYNC_RETRY, /* Retry DeviceTimeReq in active sync cycle */
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
