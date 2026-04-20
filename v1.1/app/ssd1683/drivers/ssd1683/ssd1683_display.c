@@ -96,6 +96,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
   struct ssd1683_display_data *data = dev->data;
   int ret;
   bool partial_update;
+  const int64_t t_start = k_uptime_get();
 
   LOG_DBG("Writing to display: x=%d, y=%d, w=%d, h=%d", x, y, desc->width,
           desc->height);
@@ -130,7 +131,8 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
   partial_update =
       (desc->width < SSD1683_WIDTH) || (desc->height < SSD1683_HEIGHT);
 
-  LOG_DBG("Update type: %s", partial_update ? "partial" : "full");
+  LOG_INF("Write: area=%ux%u@%u,%u -> %s update", desc->width, desc->height, x,
+          y, partial_update ? "partial" : "full");
 
   // STEP 1: Write image data to CURRENT buffer (0x24)
   ret = ssd1683_write_image(dev, (const uint8_t *)buf, x, y, desc->width,
@@ -156,7 +158,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
     return ret;
   }
 
-  LOG_DBG("Display write completed successfully");
+  LOG_INF("Write: done in %lld ms", (long long)(k_uptime_get() - t_start));
   return 0;
 }
 

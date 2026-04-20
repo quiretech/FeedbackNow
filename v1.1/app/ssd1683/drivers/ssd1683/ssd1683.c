@@ -220,13 +220,7 @@ static int _ssd1683_init_display(const struct device *dev) {
     return 0;
   }
 
-  // Reset if hibernating (like reference)
-  if (data->is_hibernating) {
-    ret = _ssd1683_reset(cfg);
-    if (ret < 0)
-      return ret;
-  }
-
+  /* Hardware reset once (was twice when hibernating — ~60 ms wasted). */
   ret = _ssd1683_reset(cfg);
   if (ret < 0)
     return ret;
@@ -486,9 +480,11 @@ static int _ssd1683_power_on(const struct device *dev) {
   int ret;
 
   if (data->is_powered_on) {
-    LOG_DBG("Display already powered on");
+    LOG_DBG("Power-on: already powered on (skip)");
     return 0;
   }
+
+  const int64_t t0 = k_uptime_get();
 
   ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
   if (ret < 0)
@@ -505,7 +501,8 @@ static int _ssd1683_power_on(const struct device *dev) {
   ret = _ssd1683_wait_busy(cfg);
   if (ret == 0) {
     data->is_powered_on = true;
-    LOG_DBG("Power on completed");
+    LOG_INF("Power-on: quick-resume OK in %lld ms",
+            (long long)(k_uptime_get() - t0));
     return 0;
   }
 
@@ -513,10 +510,12 @@ cold_start:
   /* Busy timeout or SPI failure — EPD was likely power-cycled (rail off/on).
    * The driver state says "initialized" but the hardware lost all register
    * configuration. Force a full re-initialization with hardware reset. */
-  LOG_WRN("Power-on failed, forcing full re-init (cold start recovery)");
+  LOG_WRN("Power-on: quick-resume failed after %lld ms, cold-start recovery",
+          (long long)(k_uptime_get() - t0));
   data->is_initialized = false;
-  data->is_hibernating = false;
+  data->is_hibernating = true; /* force _ssd1683_reset before re-init */
 
+  const int64_t t_cold = k_uptime_get();
   ret = _ssd1683_init_display(dev);
   if (ret < 0) {
     LOG_ERR("Cold start recovery failed: %d", ret);
@@ -524,7 +523,9 @@ cold_start:
   }
 
   data->is_powered_on = true;
-  LOG_INF("Cold start recovery successful");
+  LOG_INF("Power-on: cold-start recovery OK in %lld ms (total %lld ms)",
+          (long long)(k_uptime_get() - t_cold),
+          (long long)(k_uptime_get() - t0));
   return 0;
 }
 
@@ -881,12 +882,21 @@ int ssd1683_refresh(const struct device *dev, bool partial) {
     return -EINVAL;
   }
 
-  // Like reference refresh logic
+  struct ssd1683_data *data = dev->data;
+  const int64_t t0 = k_uptime_get();
+  int ret;
+
   if (partial) {
-    return _ssd1683_update_partial(dev);
+    ret = _ssd1683_update_partial(dev);
+    LOG_INF("Refresh partial: %lld ms (ret=%d)",
+            (long long)(k_uptime_get() - t0), ret);
   } else {
-    return _ssd1683_update_full(dev);
+    ret = _ssd1683_update_full(dev);
+    LOG_INF("Refresh full (%s): %lld ms (ret=%d)",
+            data->use_fast_update ? "fast" : "slow",
+            (long long)(k_uptime_get() - t0), ret);
   }
+  return ret;
 }
 
 int ssd1683_set_fast_update(const struct device *dev, bool fast_update) {

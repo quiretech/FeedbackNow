@@ -447,18 +447,29 @@ static void do_render(const struct device *display, enum display_job_type type,
     return;
   }
 
-  /* Power on EPD. Retry if SPI is busy (shared with LoRa radio). */
-  for (int attempt = 0; attempt < 3; attempt++) {
-    ret = display_blanking_off(display);
-    if (ret == 0) {
-      break;
+  /* Power on EPD. Skip the blanking_off dance (which issues a DISPLAY_UPDATE
+   * quick-resume that can trip into cold-start when the panel is in deep sleep
+   * or lost rail) when the controller reports it is still powered — i.e. we
+   * just came off a partial refresh and the rail keep-alive kept it warm. */
+  if (ssd1683_is_powered_on(display)) {
+    LOG_DBG("[EPD] panel already powered, skip blanking_off");
+    ret = 0;
+  } else {
+    const int64_t t_blank = k_uptime_get();
+    for (int attempt = 0; attempt < 3; attempt++) {
+      ret = display_blanking_off(display);
+      if (ret == 0) {
+        break;
+      }
+      LOG_WRN("[EPD] blanking_off failed: %d (attempt %d/3)", ret, attempt + 1);
+      k_msleep(2000);
     }
-    LOG_WRN("[EPD] blanking_off failed: %d (attempt %d/3)", ret, attempt + 1);
-    k_msleep(2000);
-  }
-  if (ret < 0) {
-    LOG_ERR("[EPD] blanking_off failed after retries: %d", ret);
-    return;
+    if (ret < 0) {
+      LOG_ERR("[EPD] blanking_off failed after retries: %d", ret);
+      return;
+    }
+    LOG_INF("[EPD] blanking_off in %lld ms",
+            (long long)(k_uptime_get() - t_blank));
   }
 
   /* Hide all screens first */

@@ -36,7 +36,7 @@
 #define LORA_THREAD_PRIORITY 7
 /** Field-stable: 20s between join attempts (was 15). Reduces join-cycle load.
  */
-#define LORA_JOIN_RETRY_DELAY_SECONDS 20
+#define LORA_JOIN_RETRY_DELAY_SECONDS 30
 /** Number of join attempts in one "cycle" before assuming genuine failure (e.g.
  * no gateway). */
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
@@ -94,7 +94,7 @@
 /** Delay between queuing each counter-sync uplink (see counter_sync.c). 0 =
  * back-to-back; LoRa thread enforces LORA_UPLINK_MIN_INTERVAL_MS. A small
  * non-zero value (e.g. 100–200) reduces burst load on MAC/SPI-heavy builds. */
-#define COUNTER_SYNC_DELAY_MS 100
+#define COUNTER_SYNC_DELAY_MS 50
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1; gpio-keys aliases in DT overlay)
@@ -306,9 +306,15 @@
  * Power gating (rail manager)
  * =============================================================================
  */
-/** 3.3A keep-alive (ms) after last release so delayed EEPROM flush (5s) can
- * run. And reduce epd artifacts when cutting power rail*/
-#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 20000 /* prod: 20s (EEPROM flush 5s) */
+/** 3.3A keep-alive (ms) after last release. Covers:
+ *  - deferred EEPROM flush (~5s),
+ *  - EPD panel register retention so back-to-back renders hit
+ *    quick-resume (~40 ms) instead of cold-start recovery (~250 ms + cold
+ *    refresh waveform),
+ *  - staff/NFC multi-step flows (check-in → check-out, staff-combo → device
+ *    info → back to last cleaned). display_manager bumps this again on every
+ *    EPD job release so keep-alive is always measured from the last render. */
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 60000
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
