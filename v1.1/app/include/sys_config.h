@@ -250,7 +250,7 @@
  * RTC / time sync
  * =============================================================================
  */
-#define RTC_SET_TIME_ON_BOOT 0
+#define RTC_SET_TIME_ON_BOOT 1
 #define RTC_FORCE_SET_TIME_ON_BOOT                                             \
   0 /* prod: 0 (do not overwrite RTC from build-time) */
 #define RTC_SET_YEAR 2026
@@ -316,6 +316,14 @@
  *    EPD job release so keep-alive is always measured from the last render. */
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS 60000
 
+/** 3.6V keep-alive (ms) after last release. Holds PN5180 powered between
+ *  back-to-back NFC scans (e.g. staff check-in → check-out) so the worker can
+ *  skip pn5180_init+configure (~150 ms power settle + ~40-80 ms chip init) and
+ *  start the inventory loop immediately. Set to 0 to disable keep-alive and
+ *  cut 3.6V the moment ref-count hits 0 (saves a few mA·s per scan, loses the
+ *  warm-path latency win). */
+#define RAIL_MANAGER_3V6_KEEPALIVE_MS 15000
+
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
  * =============================================================================
@@ -344,6 +352,25 @@
 #define NFC_READ_BLOCK 5
 /** Max time to wait for card read before posting timeout (ms). */
 #define NFC_SCAN_TIMEOUT_MS 5000
+/** Delay after 3.6V rail is turned on before touching PN5180 (ms). Covers
+ *  regulator settle + chip internal POR. */
+#define NFC_POWER_SETTLE_MS 150
+/** Inventory/read retry cadence inside the scan loop (ms). */
+#define NFC_POLL_INTERVAL_MS 200
+
+/** Max attempts for pn5180_init + pn5180_configure before giving up and
+ *  posting a fault. Attempt 1 is a normal init after standard settle;
+ *  attempts 2..N cycle the 3.6V rail to clear a wedged chip state. */
+#define NFC_INIT_MAX_ATTEMPTS 3
+/** Duration (ms) 3.6V is held off during recovery cycle (attempt 2). */
+#define NFC_RECOVERY_OFF_MS 50
+/** Settle (ms) after re-enabling 3.6V during recovery cycle (attempt 2). */
+#define NFC_RECOVERY_SETTLE_MS 300
+/** Escalated off duration (ms) on attempt 3+ — longer drain to fully clear
+ *  any residual charge on the chip supply. */
+#define NFC_RECOVERY_OFF_MS_ESCALATED 200
+/** Escalated settle (ms) after re-enabling on attempt 3+. */
+#define NFC_RECOVERY_SETTLE_MS_ESCALATED 500
 
 /* =============================================================================
  * EPD (Variant A vs B) — set to 0 for build without display

@@ -4,22 +4,22 @@ overview: Product defaults locked—**all uplinks unconfirmed**, **no LinkCheck 
 todos:
   - id: audit-zephyr-apis
     content: "NCS v3.0.2 sdk-zephyr: grep lorawan.h + lorawan.c for LinkCheckAns / MLME-MCPS hooks vs upstream main"
-    status: pending
+    status: cancelled
   - id: patch-workflow-ncs
     content: Document or script apply of app/patches/*.patch against sdk-zephyr in NCS tree (CI + local)
     status: pending
   - id: spec-monitor-policy
     content: All application uplinks unconfirmed; link health from ENOTCONN, probe success, optional LinkCheck stats
-    status: pending
+    status: cancelled
   - id: implement-monitor
     content: Link monitor + lorawan_request_link_check(true) every 6h from LoRa thread (k_timer→work→LORA_CMD); not from housekeeping
-    status: pending
+    status: cancelled
   - id: smf-disconnected-state
     content: "SMF: handle DISCONNECTED as mode/flag—UI unchanged; votes bump EEPROM+EPD; skip lora_put_event; rejoin backoff unchanged; post-reboot counter sync"
     status: pending
   - id: tune-sys-config
     content: "sys_config: all LORA_*_UPLINK_CONFIRMED 0; LORA_JOIN_BACKOFF_HOURS 3; add LORA_LINK_CHECK_INTERVAL_HOURS 6; remove HK link_check line"
-    status: pending
+    status: cancelled
 isProject: false
 ---
 

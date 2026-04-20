@@ -112,7 +112,10 @@
 
 <div class="device-bar">
   <label>Device ID</label>
+  <div id="deviceQuickSelect" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
   <input type="text" id="deviceId" placeholder="paste AWS IoT Wireless device ID here" oninput="updateAllAWS()">
+
+
 
   <label>Transmit Mode</label>
   <select id="txMode" onchange="updateAllAWS()">
@@ -467,12 +470,66 @@ function updateAllAWS() {
   setBlock('awsQueryVer','CA==');
 }
 
+const DEVICES = [
+  {
+    name: "ZZ-UNIT-HM-TEST",
+    id: "d81a6c9b-3855-4d2f-b71a-f97200cac959",
+    devEUI: "464c58d039797cf4"
+  },
+  {
+    name: "ZZ-UNIT-QT-TEST",
+    id: "d61819a6-78ca-49bc-aed4-deb2b8cbe659",
+    devEUI: "6b1b0de12"
+  }
+];
+
+function buildDeviceQuickSelect() {
+  const container = document.getElementById('deviceQuickSelect');
+
+  DEVICES.forEach(dev => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn'; // reuse your styling
+    btn.style.padding = "6px 10px";
+
+    btn.innerHTML = `
+      <span class="preset-city">${dev.name}</span>
+      <span class="preset-tz" style="font-size:0.65rem">${dev.devEUI}</span>
+    `;
+
+    btn.onclick = () => {
+      document.getElementById('deviceId').value = dev.id;
+
+      // highlight active
+      document.querySelectorAll('#deviceQuickSelect .preset-btn')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      updateAllAWS();
+    };
+
+    container.appendChild(btn);
+  });
+}
+
+function selectDefaultDevice() {
+  if (DEVICES.length > 0) {
+    document.getElementById('deviceId').value = DEVICES[0].id;
+    updateAllAWS();
+
+    const firstBtn = document.querySelector('#deviceQuickSelect .preset-btn');
+    if (firstBtn) firstBtn.classList.add('active');
+  }
+}
+
+
 // ── Init ───────────────────────────────────────────────
 buildPresets();
 buildSelect();
 setEPDNow();
 updateTZ();
 updateAllAWS();
+buildDeviceQuickSelect();
+selectDefaultDevice();
 </script>
 </body>
 </html>

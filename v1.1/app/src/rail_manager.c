@@ -13,6 +13,7 @@
 LOG_MODULE_REGISTER(rail_manager, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define KEEPALIVE_MS RAIL_MANAGER_3V3A_KEEPALIVE_MS
+#define KEEPALIVE_3V6_MS RAIL_MANAGER_3V6_KEEPALIVE_MS
 
 static struct k_mutex lock;
 static int ref_3v3;
@@ -22,6 +23,8 @@ static int ref_3v6;
 
 /* When 3.3A ref goes to 0, we delay turning off by KEEPALIVE_MS */
 static volatile bool keepalive_pending;
+/* Same idea for 3.6V so back-to-back NFC scans skip re-init. */
+static volatile bool keepalive_pending_3v6;
 
 static void set_rail(enum power_domain domain, bool on) {
   int r = power_ctrl_set(domain, on);
@@ -47,6 +50,19 @@ static void keepalive_expiry(struct k_work *work) {
 /* Static definition so handler is never re-inited; avoids null handler in work queue. */
 K_WORK_DELAYABLE_DEFINE(keepalive_work, keepalive_expiry);
 
+static void keepalive_3v6_expiry(struct k_work *work) {
+  ARG_UNUSED(work);
+  k_mutex_lock(&lock, K_FOREVER);
+  keepalive_pending_3v6 = false;
+  if (ref_3v6 == 0) {
+    set_rail(POWER_EN_3V6, false);
+    LOG_DBG("3.6V off after keepalive");
+  }
+  k_mutex_unlock(&lock);
+}
+
+K_WORK_DELAYABLE_DEFINE(keepalive_work_3v6, keepalive_3v6_expiry);
+
 int rail_manager_init(void) {
   k_mutex_init(&lock);
   ref_3v3 = 0;
@@ -54,6 +70,7 @@ int rail_manager_init(void) {
   ref_3v3a = 0;
   ref_3v6 = 0;
   keepalive_pending = false;
+  keepalive_pending_3v6 = false;
   LOG_INF("Rail manager init (ref-counts 0)");
   return 0;
 }
@@ -63,6 +80,10 @@ void rail_manager_enter_idle(void) {
   if (keepalive_pending) {
     (void)k_work_cancel_delayable(&keepalive_work);
     keepalive_pending = false;
+  }
+  if (keepalive_pending_3v6) {
+    (void)k_work_cancel_delayable(&keepalive_work_3v6);
+    keepalive_pending_3v6 = false;
   }
   ref_3v3 = 0;
   ref_3v3a = 0;
@@ -165,6 +186,10 @@ void rail_manager_release_3v3a(void) {
 
 void rail_manager_request_3v6(void) {
   k_mutex_lock(&lock, K_FOREVER);
+  if (keepalive_pending_3v6) {
+    (void)k_work_cancel_delayable(&keepalive_work_3v6);
+    keepalive_pending_3v6 = false;
+  }
   if (ref_3v6++ == 0) {
     set_rail(POWER_EN_3V6, true);
   }
@@ -180,7 +205,14 @@ void rail_manager_release_3v6(void) {
     ref_3v6 = 0;
   }
   if (ref_3v6 == 0) {
+#if RAIL_MANAGER_3V6_KEEPALIVE_MS > 0
+    keepalive_pending_3v6 = true;
+    k_mutex_unlock(&lock);
+    (void)k_work_schedule(&keepalive_work_3v6, K_MSEC(KEEPALIVE_3V6_MS));
+    return;
+#else
     set_rail(POWER_EN_3V6, false);
+#endif
   }
   k_mutex_unlock(&lock);
 }
@@ -200,4 +232,35 @@ void rail_manager_keepalive_3v3a(void) {
     return;
   }
   k_mutex_unlock(&lock);
+}
+
+bool rail_manager_is_3v6_on(void) {
+  k_mutex_lock(&lock, K_FOREVER);
+  bool on = (ref_3v6 > 0) || keepalive_pending_3v6;
+  k_mutex_unlock(&lock);
+  return on;
+}
+
+void rail_manager_pulse_3v6_recovery(uint32_t off_ms, uint32_t settle_ms) {
+  k_mutex_lock(&lock, K_FOREVER);
+  if (ref_3v6 == 0) {
+    LOG_WRN("pulse_3v6_recovery: no caller holds 3v6 ref; skipping");
+    k_mutex_unlock(&lock);
+    return;
+  }
+  /* Kill pending keep-alive (if any) so expiry doesn't race with us. */
+  if (keepalive_pending_3v6) {
+    (void)k_work_cancel_delayable(&keepalive_work_3v6);
+    keepalive_pending_3v6 = false;
+  }
+  set_rail(POWER_EN_3V6, false);
+  k_mutex_unlock(&lock);
+
+  k_msleep(off_ms);
+
+  k_mutex_lock(&lock, K_FOREVER);
+  set_rail(POWER_EN_3V6, true);
+  k_mutex_unlock(&lock);
+
+  k_msleep(settle_ms);
 }
