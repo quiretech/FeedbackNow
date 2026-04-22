@@ -68,6 +68,18 @@
  * retries to 0 to disable (not recommended without the Zephyr patch). */
 #define LORA_POST_JOIN_MAC_PROBE_RETRIES 30
 #define LORA_POST_JOIN_MAC_PROBE_RETRY_MS 500
+/** After a successful post-join MAC probe, sleep this many ms so the LoRaWAN
+ *  stack has time to deliver the LinkCheckAns in RX1/RX2 before we leave the
+ *  probe and the install-screen stats are read. 0 = don't wait. Typical RX2
+ *  close is ~2s after TX; 2500 covers it with margin. */
+#define LORA_POST_JOIN_ANS_SETTLE_MS 2500
+/** Number of EXTRA LinkCheckReqs to send after the normal post-join probe to
+ *  enrich the install-screen sample. 0 = reuse post-join probe Ans only.
+ *  >0 = each extra request is spaced LORA_INSTALL_EXTRA_LINK_SPACING_MS apart
+ *  and waits LORA_POST_JOIN_ANS_SETTLE_MS for its Ans. Keep small: each is a
+ *  real airtime burst. */
+#define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
+#define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
 /** After this many consecutive lorawan_send() failures, clear joined and
  * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
  * disable. Typical: 3. */
@@ -383,6 +395,26 @@
  * prod: 45; test: 1–3. */
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
+
+/* =============================================================================
+ * Install / commissioning screen (Stage 3+) — demod margin + gateway count
+ * =============================================================================
+ * Shown once per boot after first JOIN (or first JOIN_CYCLE_FAILED) on
+ * commissioning-class resets (cold power-on, reset pin, deliberate sys_reboot).
+ * Not shown on watchdog/brownout or runtime backoff rejoins.
+ *
+ * Link quality label is derived from the best demod margin seen during the
+ * boot-join LinkCheck probe. Gateway count is shown alongside as context.
+ */
+/** How long to hold the install screen before auto-transition to Last Cleaned. */
+#define EPD_INSTALL_INFO_DISPLAY_MS 15000
+/** Demod margin (dB) thresholds for 4-tier label. Picked to be conservative
+ *  on LoRaWAN SF7/125 (DR3 US915): margin here is how far above demod floor
+ *  the nearest gateway received our uplink, so higher is better. */
+#define INSTALL_LINK_MARGIN_EXCELLENT_DB 15
+#define INSTALL_LINK_MARGIN_GOOD_DB 10
+#define INSTALL_LINK_MARGIN_FAIR_DB 5
+/* Below INSTALL_LINK_MARGIN_FAIR_DB => WEAK. No Ans at all => WEAK. */
 /**
  * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first
  * (block until done), then LoRa/EEPROM with clear SPI for downlinks.

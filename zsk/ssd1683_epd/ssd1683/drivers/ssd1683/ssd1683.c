@@ -1,849 +1,686 @@
 /**
  * @file ssd1683.c
- * @brief SSD1683 E-Paper Display Driver Implementation
+ * @brief SSD1683 E-Paper Display Driver - low level
  *
- * This file implements a clean Zephyr-style driver for the SSD1683
- * e-paper display controller with proper state management and error handling.
+ * Layout:
+ *   - Section 1: SPI / GPIO low-level helpers.
+ *   - Section 2: Init script, address-range helpers.
+ *   - Section 3: Shadow framebuffer push + refresh sequences.
+ *   - Section 4: Workqueue handler with partial/full decision.
+ *   - Section 5: Public API.
  */
 
 #include "ssd1683.h"
+#include <string.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/byteorder.h>
 
 LOG_MODULE_REGISTER(ssd1683, LOG_LEVEL_INF);
 
-// ============================================================================
-// Section 1: Low-level SPI Communication Helpers
-// ============================================================================
+/* ------------------------------------------------------------------------ */
+/* Section 1: low-level SPI / GPIO                                          */
+/* ------------------------------------------------------------------------ */
 
-/**
- * @brief Wait for BUSY pin to go LOW
- *
- * @param cfg Configuration structure
- * @return 0 on success, -ETIMEDOUT on timeout
- */
-static int _ssd1683_wait_busy(const struct ssd1683_config *cfg) {
-  LOG_DBG("Waiting for BUSY pin...");
-
-  while (gpio_pin_get_dt(&cfg->busy)) {
-    k_msleep(10);
-  }
-  LOG_DBG("BUSY pin ready");
-  return 0;
-}
-
-/**
- * @brief Write command to display
- *
- * @param cfg Configuration structure
- * @param cmd Command byte
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_write_cmd(const struct ssd1683_config *cfg, uint8_t cmd) {
-  int ret;
-
-  ret = gpio_pin_set_dt(&cfg->dc, 0); // command mode
-  if (ret < 0) {
-    LOG_ERR("Failed to set DC pin: %d", ret);
-    return ret;
-  }
-
-  struct spi_buf buf = {.buf = &cmd, .len = 1};
-  struct spi_buf_set tx = {.buffers = &buf, .count = 1};
-
-  ret = spi_write_dt(&cfg->bus, &tx);
-  if (ret < 0) {
-    LOG_ERR("SPI write command failed: %d", ret);
-    return ret;
-  }
-
-  return 0;
-}
-
-/**
- * @brief Write data to display
- *
- * @param cfg Configuration structure
- * @param data Data byte
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_write_data(const struct ssd1683_config *cfg, uint8_t data) {
-  int ret;
-
-  ret = gpio_pin_set_dt(&cfg->dc, 1); // data mode
-  if (ret < 0) {
-    LOG_ERR("Failed to set DC pin: %d", ret);
-    return ret;
-  }
-
-  struct spi_buf buf = {.buf = &data, .len = 1};
-  struct spi_buf_set tx = {.buffers = &buf, .count = 1};
-
-  ret = spi_write_dt(&cfg->bus, &tx);
-  if (ret < 0) {
-    LOG_ERR("SPI write data failed: %d", ret);
-    return ret;
-  }
-
-  return 0;
-}
-
-// ============================================================================
-// Section 2: Hardware Control Functions
-// ============================================================================
-
-/**
- * @brief Reset the display hardware
- *
- * @param cfg Configuration structure
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_reset(const struct ssd1683_config *cfg) {
-  gpio_pin_set_dt(&cfg->rst, 0);
-  k_msleep(10);
-  gpio_pin_set_dt(&cfg->rst, 1);
-  k_msleep(10);
-  LOG_INF("Hardware reset completed");
-  return 0;
-}
-
-// ============================================================================
-// Section 3: Display Initialization
-// ============================================================================
-
-/**
- * @brief Set partial RAM area for display updates
- *
- * @param cfg Configuration structure
- * @param x X coordinate
- * @param y Y coordinate
- * @param w Width
- * @param h Height
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_set_partial_ram_area(const struct ssd1683_config *cfg,
-                                         uint16_t x, uint16_t y, uint16_t w,
-                                         uint16_t h) {
-  int ret;
-
-  ret = _ssd1683_write_cmd(cfg, 0x11); // set ram entry mode
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x03); // x increase, y increase : normal mode
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, 0x44);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, x / 8);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, (x + w - 1) / 8);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, 0x45);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, y % 256);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, y / 256);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, (y + h - 1) % 256);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, (y + h - 1) / 256);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, 0x4e);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, x / 8);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, 0x4f);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, y % 256);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, y / 256);
-  if (ret < 0)
-    return ret;
-
-  return 0;
-}
-
-/**
- * @brief Initialize display with proper sequence (like reference _InitDisplay)
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_init_display(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (data->is_initialized) {
-    LOG_DBG("Display already initialized");
+static int _wait_busy(const struct ssd1683_config *cfg, k_timeout_t timeout)
+{
+    int64_t deadline = k_uptime_get() + k_ticks_to_ms_floor64(timeout.ticks);
+    while (gpio_pin_get_dt(&cfg->busy)) {
+        if (k_uptime_get() > deadline) {
+            LOG_ERR("BUSY timeout");
+            return -ETIMEDOUT;
+        }
+        k_msleep(1);
+    }
     return 0;
-  }
-
-  // Reset if hibernating (like reference)
-  if (data->is_hibernating) {
-    ret = _ssd1683_reset(cfg);
-    if (ret < 0)
-      return ret;
-  }
-
-  k_msleep(10); // 10ms according to specs (like reference)
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_SWRESET);
-  if (ret < 0)
-    return ret;
-
-  k_msleep(10); // 10ms according to specs (like reference)
-
-  // Set MUX as 300 (like reference)
-  ret = _ssd1683_write_cmd(cfg, 0x01);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x2B);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x01);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x00);
-  if (ret < 0)
-    return ret;
-
-  // BorderWavefrom (like reference)
-  ret = _ssd1683_write_cmd(cfg, 0x3C);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x01);
-  if (ret < 0)
-    return ret;
-
-  // Read built-in temperature sensor (like reference)
-  ret = _ssd1683_write_cmd(cfg, 0x18);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x80);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_set_partial_ram_area(cfg, 0, 0, cfg->width, cfg->height);
-  if (ret < 0)
-    return ret;
-
-  data->is_initialized = true;
-  data->is_hibernating = false;
-  LOG_INF("Display initialization completed");
-  return 0;
-}
-
-// ============================================================================
-// Section 4: Display Memory Functions
-// ============================================================================
-
-/**
- * @brief Write screen buffer with specified value (like reference
- * _writeScreenBuffer) Supports both current (0x24) and previous (0x26) buffers
- *
- * @param dev Device pointer
- * @param command Buffer command (0x24 for current, 0x26 for previous)
- * @param value Fill value
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_write_screen_buffer(const struct device *dev,
-                                        uint8_t command, uint8_t value) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (!data->is_initialized) {
-    ret = _ssd1683_init_display(dev);
-    if (ret < 0)
-      return ret;
-  }
-
-  ret = _ssd1683_set_partial_ram_area(cfg, 0, 0, cfg->width, cfg->height);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, command);
-  if (ret < 0)
-    return ret;
-
-  // Fill screen with value
-  uint32_t total_bytes = (uint32_t)cfg->width * (uint32_t)cfg->height / 8;
-  for (uint32_t i = 0; i < total_bytes; i++) {
-    ret = _ssd1683_write_data(cfg, value);
-    if (ret < 0)
-      return ret;
-  }
-
-  return 0;
 }
 
 /**
- * @brief Update display with full refresh (like reference _Update_Full)
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
+ * @brief Single-shot tx helper.  Sends a command byte and, optionally,
+ *        a data payload.  Both are delivered in exactly one SPI transfer
+ *        each, with a single DC toggle.
  */
-static int _ssd1683_update_full(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x40); // bypass RED as 0
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x00); // single chip application
-  if (ret < 0)
-    return ret;
-
-  if (data->use_fast_update) {
-    ret = _ssd1683_write_cmd(cfg, 0x1A); // Write to temperature register
-    if (ret < 0)
-      return ret;
-
-    ret = _ssd1683_write_data(cfg, 0x6E); // 2024 version, ok for 2023 version
-    if (ret < 0)
-      return ret;
-
-    ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
-    if (ret < 0)
-      return ret;
-
-    ret = _ssd1683_write_data(cfg, 0xd7);
-    if (ret < 0)
-      return ret;
-  } else {
-    ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
-    if (ret < 0)
-      return ret;
-
-    ret = _ssd1683_write_data(cfg, 0xf7);
-    if (ret < 0)
-      return ret;
-  }
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_wait_busy(cfg);
-  if (ret < 0)
-    return ret;
-
-  data->is_powered_on = false;
-  data->is_first_refresh = false;
-  LOG_DBG("Full update completed");
-  return 0;
-}
-
-/**
- * @brief Update display with partial refresh (like reference _Update_Part)
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_update_partial(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x00); // RED normal
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x00); // single chip application
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0xfc);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_wait_busy(cfg);
-  if (ret < 0)
-    return ret;
-
-  data->is_powered_on = true; // Partial updates keep power on
-  LOG_DBG("Partial update completed");
-  return 0;
-}
-
-// ============================================================================
-// Section 5: Power Management
-// ============================================================================
-
-/**
- * @brief Power on the display
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_power_on(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (data->is_powered_on) {
-    LOG_DBG("Display already powered on");
-    return 0;
-  }
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0xe0);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_wait_busy(cfg);
-  if (ret < 0)
-    return ret;
-
-  data->is_powered_on = true;
-  LOG_DBG("Power on completed");
-  return 0;
-}
-
-/**
- * @brief Power off the display
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
- */
-static int _ssd1683_power_off(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (!data->is_powered_on) {
-    LOG_DBG("Display already powered off");
-    return 0;
-  }
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_POWER_OFF);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x83);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DISPLAY_UPDATE);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_wait_busy(cfg);
-  if (ret < 0)
-    return ret;
-
-  data->is_powered_on = false;
-  LOG_DBG("Power off completed");
-  return 0;
-}
-
-// ============================================================================
-// Public API Implementation
-// ============================================================================
-
-int ssd1683_init(const struct device *dev, const struct ssd1683_config *cfg) {
-  struct ssd1683_data *data = dev->data;
-
-  if (!cfg) {
-    LOG_ERR("Configuration is NULL");
-    return -EINVAL;
-  }
-
-  // Check if all devices are ready
-  if (!spi_is_ready_dt(&cfg->bus)) {
-    LOG_ERR("SPI bus not ready");
-    return -ENODEV;
-  }
-  if (!gpio_is_ready_dt(&cfg->dc)) {
-    LOG_ERR("DC GPIO not ready");
-    return -ENODEV;
-  }
-  if (!gpio_is_ready_dt(&cfg->rst)) {
-    LOG_ERR("RST GPIO not ready");
-    return -ENODEV;
-  }
-  if (!gpio_is_ready_dt(&cfg->busy)) {
-    LOG_ERR("BUSY GPIO not ready");
-    return -ENODEV;
-  }
-
-  // Configure GPIO pins
-  int ret;
-  ret = gpio_pin_configure_dt(&cfg->dc, GPIO_OUTPUT_ACTIVE);
-  if (ret < 0) {
-    LOG_ERR("Failed to configure DC pin: %d", ret);
-    return ret;
-  }
-  ret = gpio_pin_configure_dt(&cfg->rst, GPIO_OUTPUT_ACTIVE);
-  if (ret < 0) {
-    LOG_ERR("Failed to configure RST pin: %d", ret);
-    return ret;
-  }
-  ret = gpio_pin_configure_dt(&cfg->busy, GPIO_INPUT);
-  if (ret < 0) {
-    LOG_ERR("Failed to configure BUSY pin: %d", ret);
-    return ret;
-  }
-
-  // Initialize data structure (like reference)
-  data->is_powered_on = false;
-  data->is_initialized = false;
-  data->is_first_write = true;   // like _initial_write
-  data->is_first_refresh = true; // like _initial_refresh
-  data->use_fast_update = true;  // like _use_fast_update
-  data->is_hibernating = false;  // like _hibernating
-  data->last_update_time = 0;
-
-  ret = ssd1683_clear_screen(dev, 0xFF);
-  if (ret < 0) {
-    LOG_ERR("Failed to clear screen: %d", ret);
-    return ret;
-  }
-
-  LOG_INF("SSD1683 driver initialized");
-  return 0;
-}
-
-int ssd1683_power_on(const struct device *dev) {
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  return _ssd1683_power_on(dev);
-}
-
-int ssd1683_power_off(const struct device *dev) {
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  return _ssd1683_power_off(dev);
-}
-
-int ssd1683_hibernate(const struct device *dev) {
-  const struct ssd1683_config *cfg = dev->config;
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  ret = _ssd1683_power_off(dev);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, SSD1683_CMD_DEEP_SLEEP);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_data(cfg, 0x1); // enter deep sleep
-  if (ret < 0)
-    return ret;
-
-  data->is_hibernating = true;
-  data->is_initialized = false;
-  LOG_INF("Hibernate completed");
-  return 0;
-}
-
-int ssd1683_clear_screen(const struct device *dev, uint8_t value) {
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  // Like reference clearScreen: set both previous and current buffers
-  ret =
-      _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_PREVIOUS, value);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, value);
-  if (ret < 0)
-    return ret;
-
-  ret = ssd1683_refresh(dev, false);
-  if (ret < 0)
-    return ret;
-
-  data->is_first_write = false;
-  LOG_DBG("Screen cleared with value: 0x%02X", value);
-  return 0;
-}
-
-int ssd1683_write_screen_buffer(const struct device *dev, uint8_t value) {
-  struct ssd1683_data *data = dev->data;
-  int ret;
-
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  // Like reference writeScreenBuffer: only set current buffer
-  if (data->is_first_write) {
-    return ssd1683_clear_screen(dev, value);
-  }
-
-  ret = _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, value);
-  if (ret < 0)
-    return ret;
-
-  LOG_DBG("Screen buffer written with value: 0x%02X", value);
-  return 0;
-}
-
-int ssd1683_write_screen_buffer_again(const struct device *dev, uint8_t value) {
-  int ret;
-
-  if (!dev) {
-    return -EINVAL;
-  }
-
-  // Like reference writeScreenBufferAgain: set both current and previous
-  ret = _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, value);
-  if (ret < 0)
-    return ret;
-
-  ret =
-      _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_PREVIOUS, value);
-  if (ret < 0)
-    return ret;
-
-  LOG_DBG("Screen buffer written again with value: 0x%02X", value);
-  return 0;
-}
-
-/**
- * @brief Internal helper: Write image data to a specific RAM buffer
- *
- * This is the core image writing logic that can write to either
- * CURRENT (0x24) or PREVIOUS (0x26) buffer.
- */
-static int _ssd1683_write_image_buffer(const struct device *dev,
-                                       uint8_t command, const uint8_t *bitmap,
-                                       int16_t x, int16_t y, int16_t w,
-                                       int16_t h, bool invert, bool mirror_y) {
-  const struct ssd1683_config *cfg = dev->config;
-  int ret;
-
-  int16_t wb = (w + 7) / 8;   // width bytes, bitmaps are padded
-  x -= x % 8;                 // byte boundary
-  w = wb * 8;                 // byte boundary
-  int16_t x1 = x < 0 ? 0 : x; // limit
-  int16_t y1 = y < 0 ? 0 : y; // limit
-  int16_t w1 =
-      x + w < (int16_t)cfg->width ? w : (int16_t)cfg->width - x; // limit
-  int16_t h1 =
-      y + h < (int16_t)cfg->height ? h : (int16_t)cfg->height - y; // limit
-  int16_t dx = x1 - x;
-  int16_t dy = y1 - y;
-  w1 -= dx;
-  h1 -= dy;
-
-  if ((w1 <= 0) || (h1 <= 0)) {
-    LOG_WRN("Invalid image dimensions");
-    return -EINVAL;
-  }
-
-  ret = _ssd1683_set_partial_ram_area(cfg, x1, y1, w1, h1);
-  if (ret < 0)
-    return ret;
-
-  ret = _ssd1683_write_cmd(cfg, command);
-  if (ret < 0)
-    return ret;
-
-  // Write image data
-  for (int16_t i = 0; i < h1; i++) {
-    for (int16_t j = 0; j < w1 / 8; j++) {
-      uint8_t data_byte;
-      // use wb, h of bitmap for index!
-      int16_t idx = mirror_y ? j + dx / 8 + ((h - 1 - (i + dy))) * wb
-                             : j + dx / 8 + (i + dy) * wb;
-      data_byte = bitmap[idx];
-      if (invert) {
-        data_byte = ~data_byte;
-      }
-      ret = _ssd1683_write_data(cfg, data_byte);
-      if (ret < 0)
+static int _tx(const struct ssd1683_config *cfg, uint8_t cmd,
+               const void *data, size_t len)
+{
+    int ret;
+
+    ret = gpio_pin_set_dt(&cfg->dc, 0);
+    if (ret < 0) {
         return ret;
     }
-  }
 
-  return 0;
+    struct spi_buf cbuf = { .buf = &cmd, .len = 1 };
+    struct spi_buf_set ctx = { .buffers = &cbuf, .count = 1 };
+
+    ret = spi_write_dt(&cfg->bus, &ctx);
+    if (ret < 0) {
+        LOG_ERR("SPI cmd 0x%02X failed: %d", cmd, ret);
+        return ret;
+    }
+
+    if (data && len > 0) {
+        ret = gpio_pin_set_dt(&cfg->dc, 1);
+        if (ret < 0) {
+            return ret;
+        }
+        struct spi_buf dbuf = { .buf = (void *)data, .len = len };
+        struct spi_buf_set dtx = { .buffers = &dbuf, .count = 1 };
+        ret = spi_write_dt(&cfg->bus, &dtx);
+        if (ret < 0) {
+            LOG_ERR("SPI data (cmd 0x%02X, %u B) failed: %d", cmd,
+                    (unsigned)len, ret);
+            return ret;
+        }
+    }
+
+    return 0;
 }
 
-int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
-                        int16_t x, int16_t y, int16_t w, int16_t h, bool invert,
-                        bool mirror_y) {
-  struct ssd1683_data *data = dev->data;
-  int ret;
+static inline int _tx_u8(const struct ssd1683_config *cfg, uint8_t cmd,
+                         uint8_t d0)
+{
+    return _tx(cfg, cmd, &d0, 1);
+}
 
-  if (!dev || !bitmap) {
-    return -EINVAL;
-  }
+static int _hw_reset(const struct ssd1683_config *cfg)
+{
+    int ret;
 
-  if (!data->is_initialized) {
-    ret = _ssd1683_init_display(dev);
-    if (ret < 0)
-      return ret;
-  }
+    ret = gpio_pin_set_dt(&cfg->rst, 0);
+    if (ret < 0) {
+        return ret;
+    }
+    k_msleep(20);
 
-  if (data->is_first_write) {
-    ret =
-        _ssd1683_write_screen_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT,
-                                     0xFF); // initial full screen buffer clean
-    if (ret < 0)
-      return ret;
-  }
+    /* HIGH-LOW-HIGH pulse pattern required by many GDEY/SSD1683 modules to
+     * reliably trigger the on-chip power-on-reset block. */
+    gpio_pin_set_dt(&cfg->rst, 1);
+    k_msleep(5);
+    gpio_pin_set_dt(&cfg->rst, 0);
+    k_msleep(10);
+    gpio_pin_set_dt(&cfg->rst, 1);
+    k_msleep(20);
 
-  // Write to CURRENT buffer only (0x24)
-  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, bitmap,
-                                    x, y, w, h, invert, mirror_y);
-  if (ret < 0) {
-    LOG_ERR("Failed to write image to CURRENT buffer");
+    return _wait_busy(cfg, K_SECONDS(5));
+}
+
+/* ------------------------------------------------------------------------ */
+/* Section 2: init script and RAM addressing                                */
+/* ------------------------------------------------------------------------ */
+
+struct ssd1683_init_step {
+    uint8_t cmd;
+    uint8_t len;
+    uint8_t data[4];
+};
+
+/* Fixed portion of the init sequence (values independent of panel size). */
+static const struct ssd1683_init_step k_init_fixed[] = {
+    /* Soft start control - limits inrush current on low-power MCUs. */
+    { SSD1683_CMD_SOFT_START,             4, { 0x8B, 0x9C, 0x96, 0x0F } },
+    /* Gate driving voltage VGH = 20V (firm pixel lock). */
+    { SSD1683_CMD_GATE_DRIVING_VOLTAGE,   1, { 0x17 } },
+    /* Source driving: VSH1=15V, VSH2=5V, VSL=-15V. */
+    { SSD1683_CMD_SOURCE_DRIVING_VOLTAGE, 3, { 0x41, 0x00, 0x32 } },
+    /* VCOM = -1.0V (sweet spot for removing ghosting/grayness). */
+    { SSD1683_CMD_WRITE_VCOM,             1, { 0x36 } },
+    /* Border waveform: use LUT1 (white border for white background). */
+    { SSD1683_CMD_BORDER_WAVEFORM,        1, { 0x01 } },
+    /* Use built-in temperature sensor. */
+    { SSD1683_CMD_TEMP_SENSOR,            1, { 0x80 } },
+};
+
+static int _set_ram_area(const struct ssd1683_config *cfg,
+                         uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    int ret;
+
+    /* X increment, Y increment. */
+    ret = _tx_u8(cfg, SSD1683_CMD_DATA_ENTRY_MODE, 0x03);
+    if (ret < 0) return ret;
+
+    uint8_t xrange[2] = {
+        (uint8_t)(x / 8),
+        (uint8_t)((x + w - 1) / 8),
+    };
+    ret = _tx(cfg, SSD1683_CMD_SET_RAM_X, xrange, sizeof(xrange));
+    if (ret < 0) return ret;
+
+    uint8_t yrange[4] = {
+        (uint8_t)(y & 0xFF),            (uint8_t)((y >> 8) & 0xFF),
+        (uint8_t)((y + h - 1) & 0xFF),  (uint8_t)(((y + h - 1) >> 8) & 0xFF),
+    };
+    ret = _tx(cfg, SSD1683_CMD_SET_RAM_Y, yrange, sizeof(yrange));
+    if (ret < 0) return ret;
+
+    ret = _tx_u8(cfg, SSD1683_CMD_SET_RAM_X_COUNTER, (uint8_t)(x / 8));
+    if (ret < 0) return ret;
+
+    uint8_t yc[2] = { (uint8_t)(y & 0xFF), (uint8_t)((y >> 8) & 0xFF) };
+    return _tx(cfg, SSD1683_CMD_SET_RAM_Y_COUNTER, yc, sizeof(yc));
+}
+
+static int _run_init_script(const struct device *dev)
+{
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
+
+    if (data->is_initialized) {
+        return 0;
+    }
+
+    ret = _hw_reset(cfg);
+    if (ret < 0) return ret;
+    k_msleep(10);
+
+    ret = _tx(cfg, SSD1683_CMD_SWRESET, NULL, 0);
+    if (ret < 0) return ret;
+    ret = _wait_busy(cfg, K_SECONDS(2));
+    if (ret < 0) return ret;
+    k_msleep(10);
+
+    for (size_t i = 0; i < ARRAY_SIZE(k_init_fixed); i++) {
+        const struct ssd1683_init_step *s = &k_init_fixed[i];
+        ret = _tx(cfg, s->cmd, s->data, s->len);
+        if (ret < 0) return ret;
+    }
+
+    /* Driver output control (MUX) depends on panel height.  Writes
+     * (height-1) as 2 bytes + gate scan direction 0x00. */
+    uint16_t mux = cfg->height - 1;
+    uint8_t mux_data[3] = {
+        (uint8_t)(mux & 0xFF),
+        (uint8_t)((mux >> 8) & 0xFF),
+        0x00,
+    };
+    ret = _tx(cfg, SSD1683_CMD_DRIVER_OUTPUT_CTRL, mux_data, sizeof(mux_data));
+    if (ret < 0) return ret;
+
+    ret = _set_ram_area(cfg, 0, 0, cfg->width, cfg->height);
+    if (ret < 0) return ret;
+
+    data->is_initialized = true;
+    LOG_INF("hardware initialised");
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Section 3: push shadow to RAM, refresh sequences                         */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * @brief Push a byte-aligned rectangle from the shadow framebuffer into the
+ *        given RAM bank (0x24 CURRENT or 0x26 PREVIOUS).
+ *
+ * The rect is expected to already be byte aligned on X and clipped to the
+ * panel.  Internally writes one SPI transfer per row (max 50 bytes for a
+ * 400-px-wide panel), yielding ~H transfers for a full screen instead of
+ * W*H/8 (15 000) transfers like the old per-byte implementation.
+ */
+static int _push_rect(const struct ssd1683_config *cfg, uint8_t ram_cmd,
+                      const struct ssd1683_dirty_rect *r)
+{
+    int ret;
+    const uint16_t fb_stride = cfg->width / 8;
+    const uint16_t row_bytes = r->w / 8;
+
+    ret = _set_ram_area(cfg, r->x, r->y, r->w, r->h);
+    if (ret < 0) return ret;
+
+    /* Send the RAM write command once; then stream rows in data mode. */
+    ret = gpio_pin_set_dt(&cfg->dc, 0);
+    if (ret < 0) return ret;
+    struct spi_buf cbuf = { .buf = &ram_cmd, .len = 1 };
+    struct spi_buf_set ctx = { .buffers = &cbuf, .count = 1 };
+    ret = spi_write_dt(&cfg->bus, &ctx);
+    if (ret < 0) return ret;
+
+    ret = gpio_pin_set_dt(&cfg->dc, 1);
+    if (ret < 0) return ret;
+
+    for (uint16_t row = 0; row < r->h; row++) {
+        const uint8_t *line = cfg->shadow_fb +
+                              (r->y + row) * fb_stride + (r->x / 8);
+        struct spi_buf dbuf = { .buf = (void *)line, .len = row_bytes };
+        struct spi_buf_set dtx = { .buffers = &dbuf, .count = 1 };
+        ret = spi_write_dt(&cfg->bus, &dtx);
+        if (ret < 0) {
+            LOG_ERR("SPI row write failed: %d", ret);
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
+static int _update_full(const struct device *dev)
+{
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
+
+    /* Bypass RED (monochrome) + single chip. */
+    uint8_t upd_ctrl[2] = { 0x40, 0x00 };
+    ret = _tx(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL, upd_ctrl, 2);
+    if (ret < 0) return ret;
+
+    if (data->use_fast_update) {
+        ret = _tx_u8(cfg, SSD1683_CMD_WRITE_TEMP_REG, 0x6E);
+        if (ret < 0) return ret;
+        ret = _tx_u8(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL_2,
+                     SSD1683_UDC2_FULL_FAST);
+    } else {
+        ret = _tx_u8(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL_2,
+                     SSD1683_UDC2_FULL_SLOW);
+    }
+    if (ret < 0) return ret;
+
+    ret = _tx(cfg, SSD1683_CMD_MASTER_ACTIVATION, NULL, 0);
+    if (ret < 0) return ret;
+
+    ret = _wait_busy(cfg, K_SECONDS(5));
+    if (ret < 0) return ret;
+
+    data->is_powered_on = false; /* full update sequence ends with power off */
+    return 0;
+}
+
+static int _update_partial(const struct device *dev)
+{
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
+
+    uint8_t upd_ctrl[2] = { 0x00, 0x00 };
+    ret = _tx(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL, upd_ctrl, 2);
+    if (ret < 0) return ret;
+
+    ret = _tx_u8(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL_2,
+                 SSD1683_UDC2_PARTIAL);
+    if (ret < 0) return ret;
+
+    ret = _tx(cfg, SSD1683_CMD_MASTER_ACTIVATION, NULL, 0);
+    if (ret < 0) return ret;
+
+    ret = _wait_busy(cfg, K_SECONDS(3));
+    if (ret < 0) return ret;
+
+    data->is_powered_on = true; /* partial leaves the analog rail energised */
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Section 4: workqueue handler                                             */
+/* ------------------------------------------------------------------------ */
+
+static inline bool _rect_empty(const struct ssd1683_dirty_rect *r)
+{
+    return r->w == 0 || r->h == 0;
+}
+
+static inline bool _rect_is_full(const struct ssd1683_dirty_rect *r,
+                                 const struct ssd1683_config *cfg)
+{
+    return r->x == 0 && r->y == 0 &&
+           r->w == cfg->width && r->h == cfg->height;
+}
+
+static void _refresh_work_handler(struct k_work *w)
+{
+    struct k_work_delayable *dw = k_work_delayable_from_work(w);
+    struct ssd1683_data *data =
+        CONTAINER_OF(dw, struct ssd1683_data, refresh_work);
+    const struct device *dev = data->self;
+    const struct ssd1683_config *cfg = dev->config;
+    int ret;
+    int64_t t0 = k_uptime_get();
+
+    struct ssd1683_dirty_rect rect;
+    bool do_full;
+
+    k_mutex_lock(&data->lock, K_FOREVER);
+    rect = data->dirty;
+    data->dirty = (struct ssd1683_dirty_rect){ 0 };
+    do_full = data->force_full ||
+              data->partial_count >= CONFIG_SSD1683_PARTIAL_MAX_BEFORE_FULL ||
+              _rect_is_full(&rect, cfg);
+    k_mutex_unlock(&data->lock);
+
+    if (_rect_empty(&rect)) {
+        k_sem_give(&data->refresh_done);
+        return;
+    }
+
+    if (!data->is_initialized) {
+        ret = _run_init_script(dev);
+        if (ret < 0) {
+            LOG_ERR("init_script in work: %d", ret);
+            k_sem_give(&data->refresh_done);
+            return;
+        }
+    }
+
+    if (do_full) {
+        struct ssd1683_dirty_rect full_rect = {
+            .x = 0, .y = 0, .w = cfg->width, .h = cfg->height,
+        };
+        ret = _push_rect(cfg, SSD1683_CMD_WRITE_RAM_CURRENT, &full_rect);
+        if (ret < 0) goto out;
+        ret = _update_full(dev);
+        if (ret < 0) goto out;
+        /* Sync RAM-B with what was just displayed so the NEXT partial has a
+         * correct "previous" reference. */
+        ret = _push_rect(cfg, SSD1683_CMD_WRITE_RAM_PREVIOUS, &full_rect);
+        if (ret < 0) goto out;
+
+        data->partial_count = 0;
+        data->force_full = false;
+        LOG_INF("full refresh: %lld ms", k_uptime_get() - t0);
+    } else {
+        ret = _push_rect(cfg, SSD1683_CMD_WRITE_RAM_CURRENT, &rect);
+        if (ret < 0) goto out;
+        ret = _update_partial(dev);
+        if (ret < 0) goto out;
+        /* Sync RAM-B with new data for the updated rect only. */
+        ret = _push_rect(cfg, SSD1683_CMD_WRITE_RAM_PREVIOUS, &rect);
+        if (ret < 0) goto out;
+
+        data->partial_count++;
+        LOG_INF("partial refresh %ux%u@%u,%u : %lld ms (count=%u)",
+                rect.w, rect.h, rect.x, rect.y,
+                k_uptime_get() - t0, data->partial_count);
+    }
+
+out:
+    if (ret < 0) {
+        LOG_ERR("refresh failed: %d", ret);
+    }
+    k_sem_give(&data->refresh_done);
+}
+
+/* ------------------------------------------------------------------------ */
+/* Helper - union dirty rect                                                */
+/* ------------------------------------------------------------------------ */
+
+/* Must be called with data->lock held. */
+static void _dirty_union(struct ssd1683_dirty_rect *d,
+                         uint16_t x, uint16_t y, uint16_t w, uint16_t h)
+{
+    /* Byte-align on X to match how the SSD1683 addresses RAM. */
+    uint16_t x0 = (x / 8) * 8;
+    uint16_t x1 = ((x + w + 7) / 8) * 8;
+    uint16_t y0 = y;
+    uint16_t y1 = y + h;
+
+    if (_rect_empty(d)) {
+        d->x = x0; d->y = y0;
+        d->w = x1 - x0; d->h = y1 - y0;
+        return;
+    }
+    uint16_t dx0 = d->x;
+    uint16_t dx1 = d->x + d->w;
+    uint16_t dy0 = d->y;
+    uint16_t dy1 = d->y + d->h;
+
+    if (x0 < dx0) dx0 = x0;
+    if (x1 > dx1) dx1 = x1;
+    if (y0 < dy0) dy0 = y0;
+    if (y1 > dy1) dy1 = y1;
+
+    d->x = dx0; d->y = dy0;
+    d->w = dx1 - dx0; d->h = dy1 - dy0;
+}
+
+/* Exposed to the display wrapper (internal linkage across TUs is not
+ * convenient, so we just export it via the header-less static inline pattern
+ * is impossible; instead we add a non-static function below). */
+void _ssd1683_stage_rect(const struct device *dev, uint16_t x, uint16_t y,
+                         uint16_t w, uint16_t h, const uint8_t *src,
+                         uint16_t src_pitch);
+
+void _ssd1683_stage_rect(const struct device *dev, uint16_t x, uint16_t y,
+                         uint16_t w, uint16_t h, const uint8_t *src,
+                         uint16_t src_pitch)
+{
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+
+    k_mutex_lock(&data->lock, K_FOREVER);
+
+    /* Copy incoming MSB-first mono bytes into the shadow.  The Zephyr
+     * display shim for LVGL guarantees x is byte aligned when the panel
+     * advertises SCREEN_INFO_MONO_MSB_FIRST.  We still defensively align. */
+    uint16_t x_bytes = x / 8;
+    uint16_t w_bytes = (w + 7) / 8;
+    uint16_t fb_stride = cfg->width / 8;
+
+    for (uint16_t row = 0; row < h; row++) {
+        uint8_t *dst_row = cfg->shadow_fb + (y + row) * fb_stride + x_bytes;
+        const uint8_t *src_row = src + row * src_pitch;
+        memcpy(dst_row, src_row, w_bytes);
+    }
+
+    _dirty_union(&data->dirty, x, y, w, h);
+    k_sem_reset(&data->refresh_done);
+    k_mutex_unlock(&data->lock);
+
+    k_work_reschedule_for_queue(cfg->workq, &data->refresh_work,
+                                K_MSEC(CONFIG_SSD1683_FLUSH_DELAY_MS));
+}
+
+/* ------------------------------------------------------------------------ */
+/* Section 5: public API                                                    */
+/* ------------------------------------------------------------------------ */
+
+int ssd1683_flush(const struct device *dev, k_timeout_t timeout)
+{
+    if (!dev) return -EINVAL;
+    struct ssd1683_data *data = dev->data;
+    const struct ssd1683_config *cfg = dev->config;
+
+    /* Check if there's anything staged.  If so, kick the work now (bypass
+     * the coalescing delay). */
+    k_mutex_lock(&data->lock, K_FOREVER);
+    bool has_work = !_rect_empty(&data->dirty);
+    k_mutex_unlock(&data->lock);
+
+    if (has_work) {
+        k_work_reschedule_for_queue(cfg->workq, &data->refresh_work, K_NO_WAIT);
+    } else {
+        return 0;
+    }
+
+    int ret = k_sem_take(&data->refresh_done, timeout);
+    if (ret == -EAGAIN) {
+        LOG_WRN("ssd1683_flush: timeout");
+    }
     return ret;
-  }
-
-  LOG_DBG("Image written to CURRENT buffer");
-  return 0;
 }
 
-int ssd1683_write_image_again(const struct device *dev, const uint8_t *bitmap,
-                              int16_t x, int16_t y, int16_t w, int16_t h,
-                              bool invert, bool mirror_y) {
-  struct ssd1683_data *data = dev->data;
-  int ret;
+bool ssd1683_is_busy(const struct device *dev)
+{
+    if (!dev) return false;
+    struct ssd1683_data *data = dev->data;
 
-  if (!dev || !bitmap) {
-    return -EINVAL;
-  }
+    k_mutex_lock(&data->lock, K_FOREVER);
+    bool staged = !_rect_empty(&data->dirty);
+    k_mutex_unlock(&data->lock);
 
-  if (!data->is_initialized) {
-    LOG_ERR("Display not initialized");
-    return -EINVAL;
-  }
-
-  // Write to PREVIOUS buffer first (0x26) - this syncs it with what will be
-  // displayed
-  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_PREVIOUS, bitmap,
-                                    x, y, w, h, invert, mirror_y);
-  if (ret < 0) {
-    LOG_ERR("Failed to write image to PREVIOUS buffer");
-    return ret;
-  }
-
-  // Then write to CURRENT buffer (0x24)
-  ret = _ssd1683_write_image_buffer(dev, SSD1683_CMD_WRITE_RAM_CURRENT, bitmap,
-                                    x, y, w, h, invert, mirror_y);
-  if (ret < 0) {
-    LOG_ERR("Failed to write image to CURRENT buffer");
-    return ret;
-  }
-
-  LOG_DBG("Image written to BOTH buffers (synchronized)");
-  return 0;
+    if (staged) return true;
+    return k_work_delayable_busy_get(&data->refresh_work) != 0;
 }
 
-int ssd1683_refresh(const struct device *dev, bool partial) {
-  if (!dev) {
-    return -EINVAL;
-  }
+int ssd1683_force_full_refresh(const struct device *dev)
+{
+    if (!dev) return -EINVAL;
+    struct ssd1683_data *data = dev->data;
 
-  // Like reference refresh logic
-  if (partial) {
-    return _ssd1683_update_partial(dev);
-  } else {
-    return _ssd1683_update_full(dev);
-  }
+    k_mutex_lock(&data->lock, K_FOREVER);
+    data->force_full = true;
+    k_mutex_unlock(&data->lock);
+    return 0;
 }
 
-int ssd1683_set_fast_update(const struct device *dev, bool fast_update) {
-  struct ssd1683_data *data = dev->data;
+int ssd1683_clear_screen(const struct device *dev, uint8_t value)
+{
+    if (!dev) return -EINVAL;
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
 
-  if (!dev) {
-    return -EINVAL;
-  }
+    k_mutex_lock(&data->lock, K_FOREVER);
+    memset(cfg->shadow_fb, value, cfg->shadow_fb_size);
+    _dirty_union(&data->dirty, 0, 0, cfg->width, cfg->height);
+    data->force_full = true;
+    k_sem_reset(&data->refresh_done);
+    k_mutex_unlock(&data->lock);
 
-  data->use_fast_update = fast_update;
-  LOG_DBG("Fast update set to: %s", fast_update ? "true" : "false");
-  return 0;
+    k_work_reschedule_for_queue(cfg->workq, &data->refresh_work, K_NO_WAIT);
+    return k_sem_take(&data->refresh_done, K_SECONDS(6));
 }
 
-bool ssd1683_is_powered_on(const struct device *dev) {
-  if (!dev) {
-    return false;
-  }
+int ssd1683_power_on(const struct device *dev)
+{
+    if (!dev) return -EINVAL;
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
 
-  struct ssd1683_data *data = dev->data;
-  return data->is_powered_on;
+    if (data->is_powered_on) return 0;
+
+    if (!data->is_initialized) {
+        ret = _run_init_script(dev);
+        if (ret < 0) return ret;
+    }
+
+    ret = _tx_u8(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL_2,
+                 SSD1683_UDC2_POWER_ON);
+    if (ret < 0) return ret;
+    ret = _tx(cfg, SSD1683_CMD_MASTER_ACTIVATION, NULL, 0);
+    if (ret < 0) return ret;
+    ret = _wait_busy(cfg, K_SECONDS(2));
+    if (ret < 0) {
+        LOG_WRN("power_on quick-resume failed, forcing re-init");
+        data->is_initialized = false;
+        return _run_init_script(dev);
+    }
+
+    data->is_powered_on = true;
+    return 0;
 }
 
-bool ssd1683_is_initialized(const struct device *dev) {
-  if (!dev) {
-    return false;
-  }
+int ssd1683_power_off(const struct device *dev)
+{
+    if (!dev) return -EINVAL;
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
 
-  struct ssd1683_data *data = dev->data;
-  return data->is_initialized;
+    if (!data->is_powered_on) return 0;
+
+    ret = _tx_u8(cfg, SSD1683_CMD_DISPLAY_UPDATE_CTRL_2,
+                 SSD1683_UDC2_POWER_OFF_ANALOG);
+    if (ret < 0) return ret;
+    ret = _tx(cfg, SSD1683_CMD_MASTER_ACTIVATION, NULL, 0);
+    if (ret < 0) return ret;
+    ret = _wait_busy(cfg, K_SECONDS(2));
+    if (ret < 0) return ret;
+
+    data->is_powered_on = false;
+    return 0;
+}
+
+int ssd1683_hibernate(const struct device *dev)
+{
+    if (!dev) return -EINVAL;
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
+
+    ret = ssd1683_power_off(dev);
+    if (ret < 0) return ret;
+
+    ret = _tx_u8(cfg, SSD1683_CMD_DEEP_SLEEP, 0x01);
+    if (ret < 0) return ret;
+
+    data->is_initialized = false;
+    return 0;
+}
+
+int ssd1683_set_fast_update(const struct device *dev, bool fast_update)
+{
+    if (!dev) return -EINVAL;
+    struct ssd1683_data *data = dev->data;
+    data->use_fast_update = fast_update;
+    return 0;
+}
+
+bool ssd1683_is_powered_on(const struct device *dev)
+{
+    if (!dev) return false;
+    struct ssd1683_data *data = dev->data;
+    return data->is_powered_on;
+}
+
+bool ssd1683_is_initialized(const struct device *dev)
+{
+    if (!dev) return false;
+    struct ssd1683_data *data = dev->data;
+    return data->is_initialized;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Driver bring-up (called from the display wrapper's init)                 */
+/* ------------------------------------------------------------------------ */
+
+int _ssd1683_bringup(const struct device *dev);
+int _ssd1683_bringup(const struct device *dev)
+{
+    const struct ssd1683_config *cfg = dev->config;
+    struct ssd1683_data *data = dev->data;
+    int ret;
+
+    if (!spi_is_ready_dt(&cfg->bus))  { LOG_ERR("SPI not ready");  return -ENODEV; }
+    if (!gpio_is_ready_dt(&cfg->dc))  { LOG_ERR("DC not ready");   return -ENODEV; }
+    if (!gpio_is_ready_dt(&cfg->rst)) { LOG_ERR("RST not ready");  return -ENODEV; }
+    if (!gpio_is_ready_dt(&cfg->busy)){ LOG_ERR("BUSY not ready"); return -ENODEV; }
+
+    ret = gpio_pin_configure_dt(&cfg->dc,  GPIO_OUTPUT_ACTIVE);
+    if (ret < 0) return ret;
+    ret = gpio_pin_configure_dt(&cfg->rst, GPIO_OUTPUT_ACTIVE);
+    if (ret < 0) return ret;
+    ret = gpio_pin_configure_dt(&cfg->busy, GPIO_INPUT);
+    if (ret < 0) return ret;
+
+    data->self = dev;
+    data->is_initialized = false;
+    data->is_powered_on  = false;
+    data->is_blanked     = false;
+    data->use_fast_update = cfg->fast_mode;
+    data->force_full     = false;
+    data->partial_count  = 0;
+    data->dirty = (struct ssd1683_dirty_rect){ 0 };
+
+    k_mutex_init(&data->lock);
+    k_sem_init(&data->refresh_done, 0, 1);
+    k_work_init_delayable(&data->refresh_work, _refresh_work_handler);
+
+    static const struct k_work_queue_config wq_cfg = {
+        .name = "ssd1683_wq",
+    };
+    k_work_queue_init(cfg->workq);
+    k_work_queue_start(cfg->workq, cfg->workq_stack, cfg->workq_stack_size,
+                       CONFIG_SSD1683_WORKQUEUE_PRIORITY, &wq_cfg);
+
+    /* Initialise the shadow framebuffer to white. Hardware init is
+     * deferred: it runs lazily on the first power_on/refresh, after the
+     * application has enabled the panel's power rails. Doing SPI traffic
+     * here at POST_KERNEL would talk to an unpowered panel - BUSY would
+     * either be floating (hang the 5 s _wait_busy) or read low and let us
+     * "succeed" silently while having configured nothing.
+     */
+    memset(cfg->shadow_fb, 0xFF, cfg->shadow_fb_size);
+
+    LOG_INF("registered: %ux%u, fast=%d (hw init deferred)",
+            cfg->width, cfg->height, (int)data->use_fast_update);
+    return 0;
 }

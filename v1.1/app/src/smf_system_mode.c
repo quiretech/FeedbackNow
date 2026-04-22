@@ -11,6 +11,7 @@
  */
 #include "smf_system_mode.h"
 #include "app_logic.h"
+#include "boot_info.h"
 #include "counter_sync.h"
 #include "downlink_dispatch.h"
 #include "display_manager.h"
@@ -126,6 +127,50 @@ static void smf_join_failed_ui_work_handler(struct k_work *work) {
   ARG_UNUSED(work);
   display_show_last_cleaned();
   display_request_full_refresh();
+}
+
+/**
+ * One-shot: true after we've rendered the install screen once on this boot.
+ * Non-commissioning boots (watchdog/brownout) and later JOIN events (runtime
+ * backoff rejoin) are silent by construction. Read/written only by SMF thread.
+ */
+static bool install_info_shown_this_boot;
+
+/**
+ * Render the install screen and hold it for EPD_INSTALL_INFO_DISPLAY_MS,
+ * measured from render start so overlapping work (counter sync uplinks)
+ * counts toward the dwell. Caller owns the 3.3A rail.
+ *
+ * @param overlap_work  Optional fn to run while the install screen is visible
+ *                      (e.g. counter_sync_run). May be NULL for the JOIN_FAILED
+ *                      path where we have no post-join work to schedule.
+ */
+static void smf_show_install_info_with_dwell(void (*overlap_work)(void)) {
+  int64_t t0 = k_uptime_get();
+  display_show_install_info_sync();
+  if (overlap_work != NULL) {
+    /* Install screen is up, EPD SPI is idle — safe to run LoRa uplinks here.
+     * Counter sync is the big one (up to ~6 uplinks * interval). */
+    overlap_work();
+  }
+  int64_t elapsed = k_uptime_get() - t0;
+  if (elapsed < (int64_t)EPD_INSTALL_INFO_DISPLAY_MS) {
+    uint32_t remaining = (uint32_t)((int64_t)EPD_INSTALL_INFO_DISPLAY_MS - elapsed);
+    LOG_DBG("[SMF] install dwell: %u ms remaining after overlap (%lld ms used)",
+            (unsigned)remaining, (long long)elapsed);
+    k_msleep((int32_t)remaining);
+  } else {
+    LOG_DBG("[SMF] install dwell: overlap %lld ms >= dwell %u ms; no extra sleep",
+            (long long)elapsed, (unsigned)EPD_INSTALL_INFO_DISPLAY_MS);
+  }
+}
+
+/* Wrapper for smf_show_install_info_with_dwell overlap — runs the same
+ * post-join sequence the non-install path does. */
+static void smf_joined_overlap_work(void) {
+  counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
+  lora_request_time_sync();
+  downlink_queue_housekeeping_state_snapshot();
 }
 
 K_TIMER_DEFINE(mode_timeout_timer, mode_timeout_expiry, NULL);
@@ -297,17 +342,45 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         if (msg.button_id != 0) {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
         }
-        display_show_last_cleaned_sync();
-        counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
-        lora_request_time_sync();
-        downlink_queue_housekeeping_state_snapshot();
+
+        if (!install_info_shown_this_boot &&
+            boot_info_is_commission_boot()) {
+          /* Commissioning-class boot: show install screen first, run counter
+           * sync etc. while it dwells, then transition to last cleaned. */
+          install_info_shown_this_boot = true;
+          LOG_INF("[SMF] First-boot install screen (cause=%s)",
+                  boot_info_cause_str());
+          smf_show_install_info_with_dwell(smf_joined_overlap_work);
+          display_show_last_cleaned_sync();
+        } else {
+          display_show_last_cleaned_sync();
+          counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
+          lora_request_time_sync();
+          downlink_queue_housekeeping_state_snapshot();
+        }
         rail_manager_release_3v3a();
 
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         (void)k_work_submit(&smf_join_started_ui_work);
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
-        (void)k_work_submit(&smf_join_failed_ui_work);
+        if (!install_info_shown_this_boot &&
+            boot_info_is_commission_boot()) {
+          /* Commissioning boot, join failed: show install screen with WEAK
+           * link + the QR so the installer can still log the unit. Run on
+           * SMF thread (display sync API blocks on system workqueue). */
+          install_info_shown_this_boot = true;
+          LOG_INF("[SMF] First-boot install screen after JOIN_CYCLE_FAILED "
+                  "(cause=%s)",
+                  boot_info_cause_str());
+          rail_manager_request_3v3a();
+          smf_show_install_info_with_dwell(NULL);
+          display_show_last_cleaned_sync();
+          display_request_full_refresh();
+          rail_manager_release_3v3a();
+        } else {
+          (void)k_work_submit(&smf_join_failed_ui_work);
+        }
         LOG_INF("[SMF] Join cycle failed -> Last Cleaned (customer-facing)");
       } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
         LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));

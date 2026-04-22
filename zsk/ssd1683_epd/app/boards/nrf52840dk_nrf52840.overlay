@@ -36,7 +36,7 @@
 	ssd1683: ssd1683@0 {
 		compatible = "solomon,ssd1683";
 		reg = <0>;
-		spi-max-frequency = <400000>;
+		spi-max-frequency = <4000000>;
 		/* Display dimensions (400x300 pixels) */
 		width = <400>;
 		height = <300>;

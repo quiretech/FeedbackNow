@@ -5,12 +5,14 @@
 #include "button_counter_store.h"
 #include "eui_keys.h"
 #include "last_cleaned_store.h"
+#include "lora_link_stats.h"
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
 #include "tz_offset_store.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -50,6 +52,7 @@ enum display_job_type {
   JOB_SHOW_CLEANING,
   JOB_SHOW_CONNECTING,
   JOB_SHOW_DEVICE_INFO,
+  JOB_SHOW_INSTALL_INFO,
   JOB_FULL_REFRESH,
 };
 
@@ -87,6 +90,7 @@ static lv_obj_t *screen_thanks;
 static lv_obj_t *screen_cleaning;
 static lv_obj_t *screen_connecting;
 static lv_obj_t *screen_device_info;
+static lv_obj_t *screen_install_info;
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
 /* Device Info screen labels */
 static lv_obj_t *dev_info_heading;
@@ -96,6 +100,13 @@ static lv_obj_t *dev_info_deveui_caption;
 static lv_obj_t *dev_info_deveui;
 static lv_obj_t *dev_info_fw;
 static lv_obj_t *dev_info_counters;
+/* Install Info screen labels + QR code */
+static lv_obj_t *install_link_label;     /* "LINK: EXCELLENT" etc */
+static lv_obj_t *install_margin_label;   /* "margin  12 dB" */
+static lv_obj_t *install_gateways_label; /* "gateways  3" */
+static lv_obj_t *install_unit_label;     /* DEVICE_UNIT_ID_STRING */
+static lv_obj_t *install_deveui_label;   /* DevEUI hex */
+static lv_obj_t *install_qr;             /* lv_qrcode */
 
 /* LVGL draw buffers (monochrome: +8 bytes for palette)
  * For DIRECT mode: need full screen buffer
@@ -163,6 +174,9 @@ static atomic_t cleaning_sync_waiting = ATOMIC_INIT(0);
 
 K_SEM_DEFINE(device_info_done_sem, 0, 1);
 static atomic_t device_info_sync_waiting = ATOMIC_INIT(0);
+
+K_SEM_DEFINE(install_info_done_sem, 0, 1);
+static atomic_t install_info_sync_waiting = ATOMIC_INIT(0);
 
 /* 1 while display_work_handler holds SPI for EPD (LoRa shares arduino_spi). */
 static atomic_t display_epd_spi_busy = ATOMIC_INIT(0);
@@ -381,6 +395,224 @@ static void create_lvgl_screens(void) {
                               LV_PART_MAIN);
 
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
+
+  /* Screen: INSTALL_INFO (MVP) — 400x300.
+   *   y=  6..26   header      : "flexbox" (left)  |  DEVICE_UNIT_ID (right)    [roboto_20]
+   *   y= 44..86   link banner : "LINK: EXCELLENT/GOOD/FAIR/WEAK"               [roboto_bold_42]
+   *   y= 96       divider     : 1-px horizontal line, 360 wide
+   *   y=104..132  metrics row : "Gateways: N" (left)  "Margin: X dB" (right)   [roboto_28]
+   *   y=150..280  QR          : 130-px canvas, horizontally centered
+   * The QR payload carries full device identity (unit, DevEUI, FW, margin,
+   * gateways), so we don't reprint it alongside the QR — the header already
+   * gives a human-readable FW/HW cross-check for the installer.
+   */
+  screen_install_info = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen_install_info, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(screen_install_info, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(screen_install_info, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(screen_install_info, 0, LV_PART_MAIN);
+
+  /* Header row */
+  lv_obj_t *header = lv_obj_create(screen_install_info);
+  lv_obj_set_size(header, 400, 28);
+  lv_obj_set_pos(header, 0, 6);
+  lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(header, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_left(header, 14, LV_PART_MAIN);
+  lv_obj_set_style_pad_right(header, 14, LV_PART_MAIN);
+  lv_obj_set_style_pad_top(header, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_bottom(header, 0, LV_PART_MAIN);
+
+  lv_obj_t *install_title = lv_label_create(header);
+  lv_label_set_text(install_title, "flexbox");
+  lv_obj_set_style_text_font(install_title, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(install_title, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(install_title, LV_ALIGN_LEFT_MID, 0, 0);
+
+  install_unit_label = lv_label_create(header);
+  lv_label_set_text(install_unit_label, DEVICE_UNIT_ID_STRING);
+  lv_obj_set_style_text_font(install_unit_label, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(install_unit_label, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_align(install_unit_label, LV_ALIGN_RIGHT_MID, 0, 0);
+
+  /* --- Link quality banner (dominant glyph) --- */
+  install_link_label = lv_label_create(screen_install_info);
+  lv_label_set_text(install_link_label, "LINK: --");
+  lv_obj_set_style_text_font(install_link_label, &roboto_bold_42, LV_PART_MAIN);
+  lv_obj_set_style_text_color(install_link_label, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_align(install_link_label, LV_ALIGN_TOP_MID, 0, 44);
+
+  /* --- Divider --- */
+  lv_obj_t *install_divider = lv_obj_create(screen_install_info);
+  lv_obj_set_size(install_divider, 360, 1);
+  lv_obj_set_pos(install_divider, 20, 96);
+  lv_obj_set_style_bg_color(install_divider, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(install_divider, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(install_divider, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(install_divider, 0, LV_PART_MAIN);
+
+  /* --- Metrics row: gateways left, margin right on the SAME line.
+   * Transparent container just to anchor both ends within a shared baseline
+   * without flex layout (keeps refresh behaviour deterministic). */
+  lv_obj_t *metrics_row = lv_obj_create(screen_install_info);
+  lv_obj_set_size(metrics_row, 360, 30);
+  lv_obj_set_pos(metrics_row, 20, 104);
+  lv_obj_set_style_bg_opa(metrics_row, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(metrics_row, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(metrics_row, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(metrics_row, LV_OBJ_FLAG_SCROLLABLE);
+
+  install_gateways_label = lv_label_create(metrics_row);
+  lv_label_set_text(install_gateways_label, "Gateways: 0");
+  lv_obj_set_style_text_font(install_gateways_label, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(install_gateways_label, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_align(install_gateways_label, LV_ALIGN_LEFT_MID, 0, 0);
+
+  install_margin_label = lv_label_create(metrics_row);
+  lv_label_set_text(install_margin_label, "Margin: -- dB");
+  lv_obj_set_style_text_font(install_margin_label, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(install_margin_label, lv_color_black(),
+                              LV_PART_MAIN);
+  lv_obj_align(install_margin_label, LV_ALIGN_RIGHT_MID, 0, 0);
+
+  /* --- QR code: 130 px, horizontally centered under the metrics row. Size
+   * set here allocates the canvas; refresh_install_info_dynamic() calls
+   * lv_qrcode_update() to re-encode in place without reallocating. */
+  install_qr = lv_qrcode_create(screen_install_info);
+  lv_qrcode_set_size(install_qr, 130);
+  lv_qrcode_set_dark_color(install_qr, lv_color_black());
+  lv_qrcode_set_light_color(install_qr, lv_color_white());
+  lv_obj_align(install_qr, LV_ALIGN_TOP_MID, 0, 150);
+
+  /* MVP: DevEUI lives only in the QR payload (unit id is now in the header).
+   * Leaving this pointer NULL tells refresh_install_info_dynamic() to skip
+   * the DevEUI label write. */
+  install_deveui_label = NULL;
+
+  lv_obj_add_flag(screen_install_info, LV_OBJ_FLAG_HIDDEN);
+}
+
+/**
+ * Map best demod margin to a 4-tier install label. When we haven't received
+ * any LinkCheckAns (samples == 0), return WEAK with a "no-data" hint so the
+ * installer knows the gateway didn't answer — which is the conservative
+ * reading of the situation.
+ */
+static const char *install_link_label_for_stats(
+    const lora_link_stats_snapshot_t *ls) {
+  if (ls->samples == 0 || ls->best_demod_margin == LORA_LINK_STATS_MARGIN_NONE) {
+    return "LINK: WEAK";
+  }
+  int16_t m = ls->best_demod_margin;
+  if (m >= INSTALL_LINK_MARGIN_EXCELLENT_DB) {
+    return "LINK: EXCELLENT";
+  }
+  if (m >= INSTALL_LINK_MARGIN_GOOD_DB) {
+    return "LINK: GOOD";
+  }
+  if (m >= INSTALL_LINK_MARGIN_FAIR_DB) {
+    return "LINK: FAIR";
+  }
+  return "LINK: WEAK";
+}
+
+/**
+ * Refresh install-info labels + re-encode the QR from current stats.
+ *
+ * QR payload format (pipe-delimited; installer app parses by splitting on '|'
+ * and then '=' within each field):
+ *   FBN|v=1|uid=<unit>|dev=<deveui_hex>|fw=<x.y.z>|m=<margin_db>|g=<nb_gw>
+ *
+ * When no LinkCheckAns has landed yet, m and g are -1/0; app still gets a
+ * valid, scannable QR with device identity for commissioning logging.
+ */
+static void refresh_install_info_dynamic(void) {
+  if (screen_install_info == NULL) {
+    return;
+  }
+
+  lora_link_stats_snapshot_t ls;
+  memset(&ls, 0, sizeof(ls));
+  ls.last_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
+  ls.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
+  (void)lora_link_stats_get(&ls);
+
+  /* Link quality headline */
+  if (install_link_label) {
+    lv_label_set_text(install_link_label, install_link_label_for_stats(&ls));
+  }
+
+  /* Metrics — show best margin / best gateway count (installers care about
+   * peak capability of this location, not a single noisy sample). */
+  if (install_margin_label) {
+    char buf[32];
+    if (ls.samples > 0 &&
+        ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE) {
+      (void)snprintf(buf, sizeof(buf), "margin   %d dB",
+                     (int)ls.best_demod_margin);
+    } else {
+      (void)snprintf(buf, sizeof(buf), "margin   -- dB");
+    }
+    lv_label_set_text(install_margin_label, buf);
+  }
+  if (install_gateways_label) {
+    char buf[32];
+    (void)snprintf(buf, sizeof(buf), "gateways  %u",
+                   (unsigned)ls.best_nb_gateways);
+    lv_label_set_text(install_gateways_label, buf);
+  }
+
+  /* DevEUI hex (no colons — saves QR chars). Unit id comes straight from
+   * sys_config.h (kept in sync with eui_registry by gen_euis.py). */
+  static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
+  char deveui_colon[32];
+  char deveui_nocolon[20];
+  (void)snprintf(deveui_colon, sizeof(deveui_colon),
+                 "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0],
+                 dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5],
+                 dev_eui[6], dev_eui[7]);
+  (void)snprintf(deveui_nocolon, sizeof(deveui_nocolon),
+                 "%02x%02x%02x%02x%02x%02x%02x%02x", dev_eui[0], dev_eui[1],
+                 dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5], dev_eui[6],
+                 dev_eui[7]);
+
+  if (install_unit_label) {
+    lv_label_set_text(install_unit_label, DEVICE_UNIT_ID_STRING);
+  }
+  if (install_deveui_label) {
+    lv_label_set_text(install_deveui_label, deveui_colon);
+  }
+
+  /* QR payload. Keep short: QR version scales with length, and a bigger
+   * version means coarser modules on the 130 px canvas (harder to scan). */
+  if (install_qr) {
+    char payload[128];
+    int margin_for_qr = (ls.samples > 0 &&
+                         ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE)
+                            ? (int)ls.best_demod_margin
+                            : -1;
+    int n = snprintf(payload, sizeof(payload),
+                     "FBN|v=1|uid=%s|dev=%s|fw=%s|m=%d|g=%u",
+                     DEVICE_UNIT_ID_STRING, deveui_nocolon, FW_VERSION_STRING,
+                     margin_for_qr, (unsigned)ls.best_nb_gateways);
+    if (n < 0 || n >= (int)sizeof(payload)) {
+      LOG_WRN("[EPD] install QR payload truncated (len=%d)", n);
+      n = (int)sizeof(payload) - 1;
+    }
+    lv_result_t qr_res = lv_qrcode_update(install_qr, payload, (uint32_t)n);
+    if (qr_res != LV_RESULT_OK) {
+      LOG_WRN("[EPD] lv_qrcode_update failed (res=%d len=%d)", (int)qr_res, n);
+    } else {
+      LOG_DBG("[EPD] install QR: %s", payload);
+    }
+  }
+
+  LOG_INF("[EPD] install_info: %s margin=%d gw=%u samples=%u",
+          install_link_label_for_stats(&ls), (int)ls.best_demod_margin,
+          (unsigned)ls.best_nb_gateways, (unsigned)ls.samples);
 }
 
 /* Refresh unit id, DevEUI, and button counters on the device-info screen. */
@@ -491,6 +723,9 @@ static void do_render(const struct device *display, enum display_job_type type,
   if (screen_device_info) {
     lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
   }
+  if (screen_install_info) {
+    lv_obj_add_flag(screen_install_info, LV_OBJ_FLAG_HIDDEN);
+  }
 
   /* Show the requested screen */
   switch (type) {
@@ -533,6 +768,10 @@ static void do_render(const struct device *display, enum display_job_type type,
     LOG_INF("[EPD] show DEVICE_INFO");
     scr_to_show = screen_device_info;
     break;
+  case JOB_SHOW_INSTALL_INFO:
+    LOG_INF("[EPD] show INSTALL_INFO");
+    scr_to_show = screen_install_info;
+    break;
   case JOB_FULL_REFRESH:
     LOG_INF("[EPD] full refresh");
     /* Show current screen again to force refresh */
@@ -555,6 +794,9 @@ static void do_render(const struct device *display, enum display_job_type type,
     case DISPLAY_SCREEN_DEVICE_INFO:
       scr_to_show = screen_device_info;
       break;
+    case DISPLAY_SCREEN_INSTALL_INFO:
+      scr_to_show = screen_install_info;
+      break;
     default:
       break;
     }
@@ -565,6 +807,8 @@ static void do_render(const struct device *display, enum display_job_type type,
 
   if (scr_to_show == screen_device_info) {
     refresh_device_info_dynamic();
+  } else if (scr_to_show == screen_install_info) {
+    refresh_install_info_dynamic();
   }
 
   if (scr_to_show) {
@@ -608,6 +852,12 @@ static void display_signal_sync_aborted(enum display_job_type type) {
     if (atomic_get(&device_info_sync_waiting) != 0) {
       atomic_set(&device_info_sync_waiting, 0);
       k_sem_give(&device_info_done_sem);
+    }
+    break;
+  case JOB_SHOW_INSTALL_INFO:
+    if (atomic_get(&install_info_sync_waiting) != 0) {
+      atomic_set(&install_info_sync_waiting, 0);
+      k_sem_give(&install_info_done_sem);
     }
     break;
   default:
@@ -716,6 +966,22 @@ static void display_work_handler(struct k_work *work) {
     current_screen = DISPLAY_SCREEN_DEVICE_INFO;
     do_render(display, JOB_SHOW_DEVICE_INFO, 0);
     break;
+  case JOB_SHOW_INSTALL_INFO: {
+    /* Coming from LOGO / CONNECTING: fast-update ghosts badly against the
+     * dense install layout (QR blocks, large fonts). Do one full refresh so
+     * the installer sees crisp contrast. Restored after render below. */
+    bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
+                              current_screen == DISPLAY_SCREEN_CONNECTING);
+    if (need_full_refresh) {
+      ssd1683_set_fast_update(display, false);
+    }
+    current_screen = DISPLAY_SCREEN_INSTALL_INFO;
+    do_render(display, JOB_SHOW_INSTALL_INFO, 0);
+    if (need_full_refresh) {
+      ssd1683_set_fast_update(display, true);
+    }
+    break;
+  }
   case JOB_FULL_REFRESH:
     ssd1683_set_fast_update(display, false);
     do_render(display, JOB_FULL_REFRESH, 0);
@@ -772,6 +1038,11 @@ static void display_work_handler(struct k_work *work) {
     atomic_set(&device_info_sync_waiting, 0);
     k_sem_give(&device_info_done_sem);
   }
+  if (job.type == JOB_SHOW_INSTALL_INFO &&
+      atomic_get(&install_info_sync_waiting)) {
+    atomic_set(&install_info_sync_waiting, 0);
+    k_sem_give(&install_info_done_sem);
+  }
 
   atomic_set(&display_epd_spi_busy, 0);
 
@@ -806,7 +1077,7 @@ static void enqueue_job(enum display_job_type type, uint32_t epoch) {
    * triggers uplink). Others: DISPLAY_WORK_DELAY_MS. */
   uint32_t delay_ms;
   if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
-      type == JOB_SHOW_DEVICE_INFO) {
+      type == JOB_SHOW_DEVICE_INFO || type == JOB_SHOW_INSTALL_INFO) {
     delay_ms = 0U;
   } else {
     /* THANKS from button uses display_show_thanks_sync (0 delay, blocks).
@@ -1043,6 +1314,30 @@ void display_show_device_info_sync(void) {
     LOG_WRN("[EPD] device_info sync timeout");
   }
   atomic_set(&device_info_sync_waiting, 0);
+#endif
+}
+
+void display_show_install_info(void) {
+#if EPD_ENABLED
+  enqueue_job(JOB_SHOW_INSTALL_INFO, 0);
+#endif
+}
+
+void display_show_install_info_sync(void) {
+#if EPD_ENABLED
+  struct display_job job = {.type = JOB_SHOW_INSTALL_INFO, .epoch = 0};
+  if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+    LOG_WRN("[EPD] install_info sync: job queue full");
+    return;
+  }
+  atomic_set(&install_info_sync_waiting, 1);
+  (void)k_work_schedule(&display_work, K_MSEC(0));
+  /* Full refresh + QR encode can take several seconds on SSD1683; give a
+   * generous timeout. Mirrors logo_sync's 30s cap for boot-class screens. */
+  if (k_sem_take(&install_info_done_sem, K_MSEC(30000)) != 0) {
+    LOG_WRN("[EPD] install_info sync timeout");
+  }
+  atomic_set(&install_info_sync_waiting, 0);
 #endif
 }
 

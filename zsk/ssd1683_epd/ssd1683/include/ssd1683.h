@@ -2,6 +2,7 @@
 #define SSD1683_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
@@ -11,208 +12,129 @@
 /**
  * @brief SSD1683 E-Paper Display Driver
  *
- * This driver provides a clean Zephyr-style interface for the SSD1683
- * e-paper display controller. It supports 400x300 pixel displays with
- * both full and partial update capabilities.
+ * Zephyr display driver for the Solomon SSD1683 e-paper controller.
+ * The driver owns an in-RAM shadow framebuffer and a dedicated workqueue
+ * so that multiple LVGL flush callbacks per frame collapse into a single
+ * EPD refresh, and so that the hundreds of ms spent waiting on BUSY never
+ * block the caller.
  */
 
-// Display dimensions
-#define SSD1683_WIDTH 400
-#define SSD1683_HEIGHT 300
-#define SSD1683_WIDTH_VISIBLE SSD1683_WIDTH
+/* Commands */
+#define SSD1683_CMD_DRIVER_OUTPUT_CTRL      0x01
+#define SSD1683_CMD_GATE_DRIVING_VOLTAGE    0x03
+#define SSD1683_CMD_SOURCE_DRIVING_VOLTAGE  0x04
+#define SSD1683_CMD_SOFT_START              0x0C
+#define SSD1683_CMD_DEEP_SLEEP              0x10
+#define SSD1683_CMD_DATA_ENTRY_MODE         0x11
+#define SSD1683_CMD_SWRESET                 0x12
+#define SSD1683_CMD_TEMP_SENSOR             0x18
+#define SSD1683_CMD_MASTER_ACTIVATION       0x20
+#define SSD1683_CMD_DISPLAY_UPDATE_CTRL     0x21
+#define SSD1683_CMD_DISPLAY_UPDATE_CTRL_2   0x22
+#define SSD1683_CMD_WRITE_RAM_CURRENT       0x24 /* RAM-A (new) */
+#define SSD1683_CMD_WRITE_RAM_PREVIOUS      0x26 /* RAM-B (old) */
+#define SSD1683_CMD_WRITE_VCOM              0x2C
+#define SSD1683_CMD_WRITE_TEMP_REG          0x1A
+#define SSD1683_CMD_BORDER_WAVEFORM         0x3C
+#define SSD1683_CMD_SET_RAM_X               0x44
+#define SSD1683_CMD_SET_RAM_Y               0x45
+#define SSD1683_CMD_SET_RAM_X_COUNTER       0x4E
+#define SSD1683_CMD_SET_RAM_Y_COUNTER       0x4F
 
-// Timing constants (in ms)
-#define SSD1683_POWER_ON_TIME 100
-#define SSD1683_POWER_OFF_TIME 300
-#define SSD1683_FULL_REFRESH_TIME 1200
-#define SSD1683_PARTIAL_REFRESH_TIME 400
+/* DISPLAY_UPDATE_CTRL_2 (0x22) payload options.  The payload bitfield
+ * enables/disables specific phases of the update sequence. */
+#define SSD1683_UDC2_POWER_ON              0xE0 /* en clk, en analog, disp off */
+#define SSD1683_UDC2_FULL_SLOW             0xF7 /* en clk, en analog, LUT from OTP, display, dis analog, dis clk */
+#define SSD1683_UDC2_FULL_FAST             0xD7 /* skip LUT load, faster waveform (needs 0x1A temp write) */
+#define SSD1683_UDC2_PARTIAL               0xFC /* differential update using RAM-B as previous frame */
+#define SSD1683_UDC2_POWER_OFF_ANALOG      0x83 /* display, disable analog + clock */
 
-// Command definitions
-#define SSD1683_CMD_SWRESET 0x12
-#define SSD1683_CMD_DEEP_SLEEP 0x10
-#define SSD1683_CMD_SET_RAM_X 0x44
-#define SSD1683_CMD_SET_RAM_Y 0x45
-#define SSD1683_CMD_SET_RAM_X_COUNTER 0x4E
-#define SSD1683_CMD_SET_RAM_Y_COUNTER 0x4F
-#define SSD1683_CMD_WRITE_RAM_CURRENT 0x24 // Current buffer (what you see now)
-#define SSD1683_CMD_WRITE_RAM_PREVIOUS                                         \
-  0x26 // Previous buffer (what was there before)
-#define SSD1683_CMD_DISPLAY_UPDATE 0x20
-#define SSD1683_CMD_DISPLAY_UPDATE_CTRL 0x21
-#define SSD1683_CMD_POWER_OFF 0x22
-
-/**
- * @brief SSD1683 driver configuration structure
- *
- * Contains hardware-specific configuration including SPI bus,
- * GPIO pins, and display dimensions.
- */
 struct ssd1683_config {
-  struct spi_dt_spec bus;   /**< SPI bus specification */
-  struct gpio_dt_spec dc;   /**< Data/Command GPIO pin */
-  struct gpio_dt_spec rst;  /**< Reset GPIO pin */
-  struct gpio_dt_spec busy; /**< Busy GPIO pin */
-  uint16_t width;           /**< Display width in pixels */
-  uint16_t height;          /**< Display height in pixels */
+    struct spi_dt_spec bus;
+    struct gpio_dt_spec dc;
+    struct gpio_dt_spec rst;
+    struct gpio_dt_spec busy;
+    uint16_t width;
+    uint16_t height;
+    bool fast_mode;
+
+    /* Per-instance resources provided by the DEVICE_DT_DEFINE macro. */
+    uint8_t *shadow_fb;           /* WIDTH*HEIGHT/8 bytes, MSB-first mono */
+    size_t   shadow_fb_size;
+    struct k_work_q *workq;
+    k_thread_stack_t *workq_stack;
+    size_t workq_stack_size;
 };
 
-/**
- * @brief SSD1683 driver data structure
- *
- * Contains runtime state information for the driver instance.
- * Matches reference implementation state tracking.
- */
+struct ssd1683_dirty_rect {
+    uint16_t x, y, w, h; /* byte-aligned on X, w = 0 means empty */
+};
+
 struct ssd1683_data {
-  bool is_powered_on;  /**< Power state flag */
-  bool is_initialized; /**< Initialization state flag (like _init_display_done)
-                        */
-  bool is_first_write; /**< First write flag (like _initial_write) */
-  bool is_first_refresh; /**< First refresh flag (like _initial_refresh) */
-  bool use_fast_update;  /**< Fast update mode flag (like _use_fast_update) */
-  bool is_hibernating;   /**< Hibernation state flag (like _hibernating) */
-  uint32_t last_update_time; /**< Timestamp of last update */
+    const struct device *self;
+
+    bool is_initialized;
+    bool is_powered_on;
+    bool is_blanked;
+    bool use_fast_update;
+    bool force_full;
+
+    uint32_t partial_count;
+    struct ssd1683_dirty_rect dirty;
+
+    struct k_mutex lock;
+    struct k_sem refresh_done;
+    struct k_work_delayable refresh_work;
 };
 
 /**
- * @brief Initialize the SSD1683 display
+ * @brief Force pending coalesced writes to be flushed to the panel now and
+ *        block until the refresh sequence completes.
  *
- * @param dev Device pointer (for future Zephyr driver API compatibility)
- * @param cfg Configuration structure
- * @return 0 on success, negative error code on failure
+ * Safe to call from any thread except the driver's own workqueue thread.
+ *
+ * @param dev Device pointer.
+ * @param timeout Max time to wait for the refresh to finish.
+ * @return 0 on success, -EAGAIN on timeout, negative errno on failure.
  */
-int ssd1683_init(const struct device *dev, const struct ssd1683_config *cfg);
+int ssd1683_flush(const struct device *dev, k_timeout_t timeout);
 
 /**
- * @brief Power on the display
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
+ * @brief Query whether a refresh is currently in flight or scheduled.
  */
-int ssd1683_power_on(const struct device *dev);
+bool ssd1683_is_busy(const struct device *dev);
 
 /**
- * @brief Power off the display
- *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
+ * @brief Request that the next flush performs a full refresh instead of
+ *        partial, to clear accumulated ghosting.
  */
-int ssd1683_power_off(const struct device *dev);
+int ssd1683_force_full_refresh(const struct device *dev);
 
 /**
- * @brief Put display into hibernate mode
+ * @brief Fill the shadow framebuffer with @p value and force a full refresh.
+ *        Useful at boot or whenever the app wants a clean wipe.
  *
- * @param dev Device pointer
- * @return 0 on success, negative error code on failure
- */
-int ssd1683_hibernate(const struct device *dev);
-
-/**
- * @brief Clear the entire screen (like reference clearScreen)
- * Sets both previous and current buffers, then does full refresh
- *
- * @param dev Device pointer
- * @param value Fill value (0x00 = black, 0xFF = white)
- * @return 0 on success, negative error code on failure
+ * @param value 0x00 (black) or 0xFF (white).
  */
 int ssd1683_clear_screen(const struct device *dev, uint8_t value);
 
 /**
- * @brief Write screen buffer (like reference writeScreenBuffer)
- * Only sets current buffer (0x24)
- *
- * @param dev Device pointer
- * @param value Fill value (0x00 = black, 0xFF = white)
- * @return 0 on success, negative error code on failure
+ * @brief Power on / off / hibernate the EPD analog section.
+ * These map to DISPLAY_UPDATE_CTRL_2 sequences and (for hibernate) to the
+ * DEEP_SLEEP command.  They are primarily used by the display API wrapper
+ * (blanking_off / blanking_on) but are exported for direct use too.
  */
-int ssd1683_write_screen_buffer(const struct device *dev, uint8_t value);
+int ssd1683_power_on(const struct device *dev);
+int ssd1683_power_off(const struct device *dev);
+int ssd1683_hibernate(const struct device *dev);
 
 /**
- * @brief Write screen buffer again (like reference writeScreenBufferAgain)
- * Sets both current and previous buffers for differential update
- *
- * @param dev Device pointer
- * @param value Fill value (0x00 = black, 0xFF = white)
- * @return 0 on success, negative error code on failure
- */
-int ssd1683_write_screen_buffer_again(const struct device *dev, uint8_t value);
-
-/**
- * @brief Write image data to display memory (CURRENT buffer only)
- *
- * This writes the image to the CURRENT buffer (0x24). After a partial refresh,
- * you should call ssd1683_write_image_again() to synchronize the PREVIOUS
- * buffer.
- *
- * @param dev Device pointer
- * @param bitmap Image data buffer
- * @param x X coordinate
- * @param y Y coordinate
- * @param w Width in pixels
- * @param h Height in pixels
- * @param invert Invert image data
- * @param mirror_y Mirror image vertically
- * @return 0 on success, negative error code on failure
- */
-int ssd1683_write_image(const struct device *dev, const uint8_t *bitmap,
-                        int16_t x, int16_t y, int16_t w, int16_t h, bool invert,
-                        bool mirror_y);
-
-/**
- * @brief Write image data to BOTH display buffers (for differential updates)
- *
- * This is critical for partial refresh to work correctly. After a partial
- * refresh, call this function to synchronize the PREVIOUS buffer (0x26) with
- * the CURRENT buffer (0x24). This ensures the next partial refresh compares
- * against the correct previous state.
- *
- * Like the reference GxEPD2 library's writeImageAgain() function.
- *
- * @param dev Device pointer
- * @param bitmap Image data buffer
- * @param x X coordinate
- * @param y Y coordinate
- * @param w Width in pixels
- * @param h Height in pixels
- * @param invert Invert image data
- * @param mirror_y Mirror image vertically
- * @return 0 on success, negative error code on failure
- */
-int ssd1683_write_image_again(const struct device *dev, const uint8_t *bitmap,
-                              int16_t x, int16_t y, int16_t w, int16_t h,
-                              bool invert, bool mirror_y);
-
-/**
- * @brief Refresh the display
- *
- * @param dev Device pointer
- * @param partial True for partial update, false for full update
- * @return 0 on success, negative error code on failure
- */
-int ssd1683_refresh(const struct device *dev, bool partial);
-
-/**
- * @brief Set fast update mode
- *
- * @param dev Device pointer
- * @param fast_update Enable fast update mode
- * @return 0 on success, negative error code on failure
+ * @brief Enable or disable the fast full-refresh waveform.  Fast mode skips
+ *        the LUT-from-OTP load and shortens the update by ~30%.  Default on.
  */
 int ssd1683_set_fast_update(const struct device *dev, bool fast_update);
 
-/**
- * @brief Get current power state
- *
- * @param dev Device pointer
- * @return true if powered on, false otherwise
- */
 bool ssd1683_is_powered_on(const struct device *dev);
-
-/**
- * @brief Get initialization state
- *
- * @param dev Device pointer
- * @return true if initialized, false otherwise
- */
 bool ssd1683_is_initialized(const struct device *dev);
 
-#endif // SSD1683_H
+#endif /* SSD1683_H */

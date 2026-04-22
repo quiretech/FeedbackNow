@@ -13,6 +13,7 @@
 #include <zephyr/sys/util.h>
 
 #include "battery_adc.h"
+#include "boot_info.h"
 #include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
@@ -138,6 +139,11 @@ int main(void) {
   int ret;
 
   LOG_SECTION_INF("FeedbackNow FlexBox+ v" FW_VERSION_STRING " Starting");
+
+  /* Capture + clear reset cause before anything else so later code (Stage 3
+   * install screen) can gate UI on commissioning-class boots only. Failure is
+   * non-fatal; we just lose the gating signal. */
+  (void)boot_info_init();
 
   k_sleep(K_SECONDS(1));
 

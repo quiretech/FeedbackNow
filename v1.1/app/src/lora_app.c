@@ -6,6 +6,7 @@
 #include "battery_adc.h"
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "lora_link_stats.h"
 #include "smf_system_mode.h"
 #include "time_sync.h"
 
@@ -207,6 +208,12 @@ int lora_app_init(void) {
 
   /* Register battery level callback (cached from last ADC read; 255 unknown). */
   lorawan_register_battery_level_callback(lora_battery_level_cb);
+
+  /* LinkCheckAns capture: (demod_margin, nb_gateways) into atomic snapshot.
+   * Init clears stats before registering so a stale sample can't leak across
+   * a soft reboot in the same RAM image. */
+  lora_link_stats_init();
+  lora_link_stats_register();
 
   /* ADR disabled at init; re-enabled after time sync so DR sticks for
    * DeviceTimeAns (DR0 downlinks often fail). See lora_request_enable_adr(). */

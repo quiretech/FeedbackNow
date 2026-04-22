@@ -4,6 +4,7 @@
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "lora_link_stats.h"
 #include "rail_manager.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
@@ -153,6 +154,12 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 #if LORA_POST_JOIN_MAC_PROBE_RETRIES > 0
 /**
  * Confirm stack can run MCPS after join API returns. Empty uplink via LinkCheck.
+ *
+ * Side effect: each successful request emits a LinkCheckReq in an empty MCPS
+ * frame; any LinkCheckAns returned in RX1/RX2 lands in lora_link_stats via the
+ * MAC callback. We pause LORA_POST_JOIN_ANS_SETTLE_MS after a request returns
+ * 0 so the Ans has time to arrive before the probe loop tears down / the
+ * thread moves on.
  */
 static bool lora_mac_probe_after_join(void) {
   for (int i = 0; i < LORA_POST_JOIN_MAC_PROBE_RETRIES; i++) {
@@ -160,6 +167,22 @@ static bool lora_mac_probe_after_join(void) {
     if (sret == 0) {
       last_uplink_ms = (uint32_t)k_uptime_get();
       LOG_INF("Post-join MAC probe OK (attempt %d)", i + 1);
+#if LORA_POST_JOIN_ANS_SETTLE_MS > 0
+      /* Let RX1/RX2 deliver the LinkCheckAns so lora_link_stats updates before
+       * callers read the snapshot (Stage 3 install screen). Safe no-op if the
+       * Ans never arrives. */
+      k_msleep(LORA_POST_JOIN_ANS_SETTLE_MS);
+#endif
+      lora_link_stats_snapshot_t ls;
+      if (lora_link_stats_get(&ls) && ls.samples > 0) {
+        LOG_INF("[LINK] post-join stats: last margin=%d dB gw=%u "
+                "best margin=%d dB gw=%u samples=%u",
+                (int)ls.last_demod_margin, (unsigned)ls.last_nb_gateways,
+                (int)ls.best_demod_margin, (unsigned)ls.best_nb_gateways,
+                (unsigned)ls.samples);
+      } else {
+        LOG_INF("[LINK] post-join: probe OK but no LinkCheckAns yet");
+      }
       return true;
     }
     if (sret == -ENOTCONN) {

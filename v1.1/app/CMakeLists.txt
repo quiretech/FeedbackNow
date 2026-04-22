@@ -24,7 +24,9 @@ target_include_directories(app PRIVATE
 # This makes it much easier to read and maintain
 target_sources(app PRIVATE
   src/main.c
+  src/boot_info.c
   src/lora_app.c
+  src/lora_link_stats.c
   src/lora_thread.c
   src/devnonce_store.c
   src/join_state_store.c
