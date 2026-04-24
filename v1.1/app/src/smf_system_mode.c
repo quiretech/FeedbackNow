@@ -129,6 +129,7 @@ static void smf_join_failed_ui_work_handler(struct k_work *work) {
   display_request_full_refresh();
 }
 
+#if EPD_INSTALL_INFO_SCREEN
 /**
  * One-shot: true after we've rendered the install screen once on this boot.
  * Non-commissioning boots (watchdog/brownout) and later JOIN events (runtime
@@ -164,7 +165,9 @@ static void smf_show_install_info_with_dwell(void (*overlap_work)(void)) {
             (long long)elapsed, (unsigned)EPD_INSTALL_INFO_DISPLAY_MS);
   }
 }
+#endif
 
+#if EPD_INSTALL_INFO_SCREEN
 /* Wrapper for smf_show_install_info_with_dwell overlap — runs the same
  * post-join sequence the non-install path does. */
 static void smf_joined_overlap_work(void) {
@@ -172,6 +175,7 @@ static void smf_joined_overlap_work(void) {
   lora_request_time_sync();
   downlink_queue_housekeeping_state_snapshot();
 }
+#endif
 
 K_TIMER_DEFINE(mode_timeout_timer, mode_timeout_expiry, NULL);
 K_TIMER_DEFINE(reboot_timer, reboot_expiry, NULL);
@@ -343,8 +347,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
         }
 
-        if (!install_info_shown_this_boot &&
-            boot_info_is_commission_boot()) {
+#if EPD_INSTALL_INFO_SCREEN
+        if (!install_info_shown_this_boot && boot_info_is_commission_boot()) {
           /* Commissioning-class boot: show install screen first, run counter
            * sync etc. while it dwells, then transition to last cleaned. */
           install_info_shown_this_boot = true;
@@ -352,7 +356,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                   boot_info_cause_str());
           smf_show_install_info_with_dwell(smf_joined_overlap_work);
           display_show_last_cleaned_sync();
-        } else {
+        } else
+#endif
+        {
           display_show_last_cleaned_sync();
           counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
           lora_request_time_sync();
@@ -364,8 +370,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         (void)k_work_submit(&smf_join_started_ui_work);
         LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
-        if (!install_info_shown_this_boot &&
-            boot_info_is_commission_boot()) {
+#if EPD_INSTALL_INFO_SCREEN
+        if (!install_info_shown_this_boot && boot_info_is_commission_boot()) {
           /* Commissioning boot, join failed: show install screen with WEAK
            * link + the QR so the installer can still log the unit. Run on
            * SMF thread (display sync API blocks on system workqueue). */
@@ -378,7 +384,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           display_show_last_cleaned_sync();
           display_request_full_refresh();
           rail_manager_release_3v3a();
-        } else {
+        } else
+#endif
+        {
           (void)k_work_submit(&smf_join_failed_ui_work);
         }
         LOG_INF("[SMF] Join cycle failed -> Last Cleaned (customer-facing)");

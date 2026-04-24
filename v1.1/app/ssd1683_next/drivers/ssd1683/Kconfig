@@ -1,0 +1,51 @@
+config SSD1683
+	bool "SSD1683 E-Paper Display Driver"
+	default y
+	depends on DT_HAS_SOLOMON_SSD1683_ENABLED
+	depends on DISPLAY
+	depends on SPI
+	depends on GPIO
+	help
+	  Enable Zephyr display driver for the Solomon SSD1683 e-paper
+	  controller. Implements the Zephyr display API with a shadow
+	  framebuffer and dedicated workqueue so LVGL's per-region
+	  flushes coalesce into one panel refresh.
+
+if SSD1683
+
+config SSD1683_INIT_PRIORITY
+	int "SSD1683 initialization priority"
+	default 90
+	help
+	  Initialization priority. Must be higher than SPI and GPIO.
+
+config SSD1683_FLUSH_DELAY_MS
+	int "Coalescing delay before EPD refresh (ms)"
+	default 30
+	help
+	  After a display_write() stages pixels into the shadow FB,
+	  the driver waits this many milliseconds before kicking the
+	  refresh. Each additional write within the window only
+	  expands the dirty rectangle and re-arms the timer, so
+	  LVGL's N-flushes-per-frame become one refresh.
+
+config SSD1683_PARTIAL_MAX_BEFORE_FULL
+	int "Partial refreshes before a forced full refresh"
+	default 50
+	help
+	  E-paper panels accumulate ghosting after many partial updates.
+	  Every N partials the driver performs a full refresh to wipe
+	  the panel clean.
+
+config SSD1683_WORKQUEUE_STACK_SIZE
+	int "Driver workqueue stack size"
+	default 2048
+
+config SSD1683_WORKQUEUE_PRIORITY
+	int "Driver workqueue thread priority"
+	default 10
+	help
+	  Low priority is fine; the refresh takes hundreds of ms but
+	  mostly sleeps inside _wait_busy.
+
+endif # SSD1683

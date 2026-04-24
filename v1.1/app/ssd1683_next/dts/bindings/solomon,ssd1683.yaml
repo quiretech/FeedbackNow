@@ -1,0 +1,62 @@
+description: |
+  Solomon SSD1683 E-Paper Display Controller
+  
+  The SSD1683 is a tri-color (black/white/red) EPD controller supporting
+  displays up to 400x300 pixels. This driver currently operates in monochrome
+  mode only.
+  
+  Example device tree node:
+  
+    &arduino_spi {
+        ssd1683@0 {
+            compatible = "solomon,ssd1683";
+            reg = <0>;
+            spi-max-frequency = <4000000>;
+            width = <400>;
+            height = <300>;
+            dc-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+            reset-gpios = <&gpio0 14 GPIO_ACTIVE_HIGH>;
+            busy-gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+            fast-mode;
+        };
+    };
+
+compatible: "solomon,ssd1683"
+
+include: spi-device.yaml
+
+properties:
+  width:
+    type: int
+    required: true
+    description: Display width in pixels (typically 400)
+
+  height:
+    type: int
+    required: true
+    description: Display height in pixels (typically 300)
+
+  dc-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Data/Command control GPIO. Set low for commands, high for data.
+
+  reset-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Hardware reset GPIO. Active low reset signal.
+
+  busy-gpios:
+    type: phandle-array
+    required: true
+    description: |
+      Busy status GPIO input. High when display is busy, low when ready.
+
+  fast-mode:
+    type: boolean
+    description: |
+      Enable fast refresh mode. Provides faster screen updates with
+      slightly reduced image quality. Recommended for applications
+      requiring frequent updates.

@@ -255,7 +255,7 @@
  */
 /** Build-time default (e.g. -480 for San Francisco PST). Used when EEPROM block
  * is uninitialized. */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -399,22 +399,31 @@
 /* =============================================================================
  * Install / commissioning screen (Stage 3+) — demod margin + gateway count
  * =============================================================================
- * Shown once per boot after first JOIN (or first JOIN_CYCLE_FAILED) on
- * commissioning-class resets (cold power-on, reset pin, deliberate sys_reboot).
- * Not shown on watchdog/brownout or runtime backoff rejoins.
+ * When EPD_INSTALL_INFO_SCREEN is 1: shown once per boot after first JOIN (or
+ * first JOIN_CYCLE_FAILED) on commissioning-class resets (cold power-on,
+ * reset pin, deliberate sys_reboot). Not shown on watchdog/brownout or
+ * runtime backoff rejoins.
  *
- * Link quality label is derived from the best demod margin seen during the
- * boot-join LinkCheck probe. Gateway count is shown alongside as context.
+ * Set to 0 to omit the first-boot link-quality + QR install screen; SMF
+ * still runs counter sync / time sync on join success, and the join-fail path
+ * uses the same customer-facing "last cleaned" work as a non-commission boot.
  */
+#ifndef EPD_INSTALL_INFO_SCREEN
+#define EPD_INSTALL_INFO_SCREEN 0
+#endif
+
+#if EPD_INSTALL_INFO_SCREEN
 /** How long to hold the install screen before auto-transition to Last Cleaned. */
 #define EPD_INSTALL_INFO_DISPLAY_MS 15000
 /** Demod margin (dB) thresholds for 4-tier label. Picked to be conservative
  *  on LoRaWAN SF7/125 (DR3 US915): margin here is how far above demod floor
  *  the nearest gateway received our uplink, so higher is better. */
-#define INSTALL_LINK_MARGIN_EXCELLENT_DB 15
+#define INSTALL_LINK_MARGIN_EXCELLENT_DB 20
 #define INSTALL_LINK_MARGIN_GOOD_DB 10
-#define INSTALL_LINK_MARGIN_FAIR_DB 5
-/* Below INSTALL_LINK_MARGIN_FAIR_DB => WEAK. No Ans at all => WEAK. */
+#define INSTALL_LINK_MARGIN_FAIR_DB 3
+/* Below 3 dB => WEAK */
+/* <= 0 dB or no answer => VERY WEAK / FAIL */
+#endif
 /**
  * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first
  * (block until done), then LoRa/EEPROM with clear SPI for downlinks.

@@ -5,6 +5,7 @@
 #ifndef DISPLAY_MANAGER_H
 #define DISPLAY_MANAGER_H
 
+#include "sys_config.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -19,7 +20,9 @@ enum display_screen_id {
   DISPLAY_SCREEN_CLEANING,
   DISPLAY_SCREEN_CONNECTING,
   DISPLAY_SCREEN_DEVICE_INFO,
+#if EPD_INSTALL_INFO_SCREEN
   DISPLAY_SCREEN_INSTALL_INFO,
+#endif
   DISPLAY_SCREEN_COUNT
 };
 
@@ -80,6 +83,7 @@ void display_show_device_info(void);
  */
 void display_show_device_info_sync(void);
 
+#if EPD_INSTALL_INFO_SCREEN
 /**
  * Show install / commissioning info (link quality, margin, gateways, unit id,
  * DevEUI, scannable QR code). Renders from current lora_link_stats snapshot;
@@ -94,6 +98,7 @@ void display_show_install_info(void);
  * follow-ups run with clear SPI.
  */
 void display_show_install_info_sync(void);
+#endif
 
 /**
  * Set pending last cleaned epoch (from downlink 0x01). Applied when we next show

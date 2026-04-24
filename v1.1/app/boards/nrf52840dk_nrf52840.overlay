@@ -142,35 +142,35 @@ enables {
 	// };
 
 	// LR62E
-	lora_semtech_sx1262mb2das: sx1262@0 {
-	compatible = "semtech,sx1262";
-	reg = <0>;
-	spi-max-frequency = <7000000>;
-	label = "SX1262";
-	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
-	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
-	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-	dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-	dio2-tx-enable;
-	tcxo-power-startup-delay-ms = <10>;
+	// lora_semtech_sx1262mb2das: sx1262@0 {
+	// compatible = "semtech,sx1262";
+	// reg = <0>;
+	// spi-max-frequency = <7000000>;
+	// label = "SX1262";
+	// reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+	// busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+	// antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
+	// dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+	// dio2-tx-enable;
+	// tcxo-power-startup-delay-ms = <10>;
 
 	// SEEED WIO
-	// lora_semtech_sx1262mb2das: sx1262@0 {
-    // compatible = "semtech,sx1262";
-    // reg = <0>;
-    // /* SPI */
-    // spi-max-frequency = <7000000>;
-    // label = "SX1262";
-    // /* Control signals */
-    // reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; /* P0.03 */
-    // busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;        /* P0.31 */
-    // dio1-gpios  = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;        /* P0.19 */
-    // /* TCXO (Wio-SX1262 uses DIO3 @ 1.8V) */
-    // dio3-tcxo-voltage = <0x02>;
-    // tcxo-power-startup-delay-ms = <10>;
-    // /* RF switch handled internally via DIO2 */
-    // dio2-tx-enable;
-    // status = "okay";
+	lora_semtech_sx1262mb2das: sx1262@0 {
+    compatible = "semtech,sx1262";
+    reg = <0>;
+    /* SPI */
+    spi-max-frequency = <7000000>;
+    label = "SX1262";
+    /* Control signals */
+    reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; /* P0.03 */
+    busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;        /* P0.31 */
+    dio1-gpios  = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;        /* P0.19 */
+    /* TCXO (Wio-SX1262 uses DIO3 @ 1.8V) */
+    dio3-tcxo-voltage = <0x02>;
+    tcxo-power-startup-delay-ms = <10>;
+    /* RF switch handled internally via DIO2 */
+    dio2-tx-enable;
+    status = "okay";
 	};
 
 	ssd1683: ssd1683@1 {
@@ -184,12 +184,13 @@ enables {
 	dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 	reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
 	busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
+	// fast-mode;
 	};
 
 	pn5180: pn5180@2 {
  		compatible = "nxp,pn5180";
 		reg = <2>;
-		spi-max-frequency = <7000000>;
+		spi-max-frequency = <8000000>;
 		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
 		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
 		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
