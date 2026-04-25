@@ -22,7 +22,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "ZZ-UNIT-HM-TEST"
+#define DEVICE_UNIT_ID_STRING "UNIT-0306"
 /* END UNIT_ID (gen_euis.py) */
 
 /* =============================================================================

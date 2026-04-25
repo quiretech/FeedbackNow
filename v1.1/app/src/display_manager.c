@@ -30,6 +30,7 @@
   LV_FONT_DECLARE(roboto_28);
   LV_FONT_DECLARE(roboto_32);
   LV_FONT_DECLARE(roboto_36);
+  LV_FONT_DECLARE(roboto_bold_36);
   LV_FONT_DECLARE(roboto_bold_42);
   /* Boot logo image (from assets/logo/bootLogo.c) */
   LV_IMG_DECLARE(bootLogo);
@@ -260,8 +261,15 @@
     lv_obj_set_style_pad_row(cont, 40, LV_PART_MAIN);
 
     label = lv_label_create(cont);
-    lv_label_set_text(label, "LAST CLEANED");
-    lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
+    // lv_label_set_text(label, "LAST CLEANED");
+
+    // ITALY
+    // lv_label_set_text(label, "ULTIME PULIZIE");
+
+    // FRENCH
+    lv_label_set_text(label, "DERNIER NETTOYAGE");
+
+    lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     last_cleaned_label = lv_label_create(cont);

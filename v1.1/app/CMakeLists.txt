@@ -55,6 +55,7 @@ target_sources(app PRIVATE
   assets/fonts/roboto_32.c
   assets/fonts/roboto_28.c
   assets/fonts/roboto_36.c
+  assets/fonts/roboto_bold_36.c
   assets/fonts/roboto_bold_42.c
   assets/display_screens/bootLogo.c
   assets/display_screens/AckEng.c
