@@ -11,6 +11,7 @@
   #include "sys_config.h"
   #include "tz_offset_store.h"
 
+  #include <ctype.h>
   #include <stdio.h>
   #include <string.h>
   #include <time.h>
@@ -32,12 +33,14 @@
   LV_FONT_DECLARE(roboto_36);
   LV_FONT_DECLARE(roboto_bold_36);
   LV_FONT_DECLARE(roboto_bold_42);
-  /* Boot logo image (from assets/logo/bootLogo.c) */
-  LV_IMG_DECLARE(bootLogo);
-  /* Thanks/ack screen image (from assets/logo/AckEng.c) */
-  LV_IMG_DECLARE(ackEng);
-  /* Cleaning in progress image (from assets/display_screens/CleaningScreen.c) */
-  LV_IMG_DECLARE(cleaningScreen);
+  LV_IMG_DECLARE(boot_screen);
+#if EPD_LOCALE_FR_BITMAPS
+  LV_IMG_DECLARE(thanks_fr);
+  LV_IMG_DECLARE(cleaning_fr);
+#else
+  LV_IMG_DECLARE(thanks_en);
+  LV_IMG_DECLARE(cleaning_en);
+#endif
   #endif
 
   LOG_MODULE_REGISTER(display_mgr, CONFIG_LOG_DEFAULT_LEVEL);
@@ -99,15 +102,13 @@
   static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
   /* Device Info screen labels */
   static lv_obj_t *dev_info_heading;
-  static lv_obj_t *dev_info_unit_caption;
   static lv_obj_t *dev_info_unit_value;
-  static lv_obj_t *dev_info_deveui_caption;
   static lv_obj_t *dev_info_deveui;
   static lv_obj_t *dev_info_fw;
   static lv_obj_t *dev_info_counters;
 #if EPD_INSTALL_INFO_SCREEN
   /* Install Info screen labels + QR code */
-  static lv_obj_t *install_link_label;   /* "LINK: EXCELLENT" etc */
+  static lv_obj_t *install_link_label;   /* PREFIX + tier (sys_config macros) */
   static lv_obj_t *install_margin_label; /* "margin  12 dB" */
   static lv_obj_t *install_gateways_label; /* "gateways  3" */
   static lv_obj_t *install_unit_label;   /* DEVICE_UNIT_ID_STRING */
@@ -234,7 +235,7 @@
     lv_obj_set_style_bg_color(screen_logo, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_logo, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_t *img_logo = lv_img_create(screen_logo);
-    lv_img_set_src(img_logo, &bootLogo);
+    lv_img_set_src(img_logo, &boot_screen);
     lv_obj_center(img_logo);
     lv_obj_add_flag(screen_logo, LV_OBJ_FLAG_HIDDEN);
 
@@ -261,15 +262,9 @@
     lv_obj_set_style_pad_row(cont, 40, LV_PART_MAIN);
 
     label = lv_label_create(cont);
-    // lv_label_set_text(label, "LAST CLEANED");
+    lv_label_set_text(label, EPD_TEXT_LAST_CLEANED_HEADLINE);
 
-    // ITALY
-    // lv_label_set_text(label, "ULTIME PULIZIE");
-
-    // FRENCH
-    lv_label_set_text(label, "DERNIER NETTOYAGE");
-
-    lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     last_cleaned_label = lv_label_create(cont);
@@ -280,22 +275,29 @@
 
     lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: THANKS – ack image centered (same style as logo, from
-    * assets/logo/AckEng.c) */
+    /* Screen: THANKS — full-screen bitmap; locale via EPD_LOCALE_FR_BITMAPS */
     screen_thanks = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_t *img_thanks = lv_img_create(screen_thanks);
-    lv_img_set_src(img_thanks, &ackEng);
+#if EPD_LOCALE_FR_BITMAPS
+    lv_img_set_src(img_thanks, &thanks_fr);
+#else
+    lv_img_set_src(img_thanks, &thanks_en);
+#endif
     lv_obj_center(img_thanks);
     lv_obj_add_flag(screen_thanks, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: CLEANING – bitmap centered (same style as logo/thanks) */
+    /* Screen: CLEANING — full-screen bitmap (cleaning_en / cleaning_fr) */
     screen_cleaning = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_cleaning, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_cleaning, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_t *img_cleaning = lv_img_create(screen_cleaning);
-    lv_img_set_src(img_cleaning, &cleaningScreen);
+#if EPD_LOCALE_FR_BITMAPS
+    lv_img_set_src(img_cleaning, &cleaning_fr);
+#else
+    lv_img_set_src(img_cleaning, &cleaning_en);
+#endif
     lv_obj_center(img_cleaning);
     lv_obj_add_flag(screen_cleaning, LV_OBJ_FLAG_HIDDEN);
 
@@ -316,97 +318,78 @@
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     label = lv_label_create(cont_connecting);
-    lv_label_set_text(label, "Connecting...");
+    lv_label_set_text(label, EPD_TEXT_CONNECTING);
     lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     lv_obj_add_flag(screen_connecting, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: DEVICE_INFO – flex column: heading, device id, LoRa DevEUI,
-    * counters, fw, footer */
+    /* Screen: DEVICE_INFO — minimal lowercase stack (brand + id + lora + taps +
+    * fw) */
     screen_device_info = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_device_info, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_device_info, LV_OPA_COVER, LV_PART_MAIN);
 
-    // Flex container for device info
     lv_obj_t *cont_devinfo = lv_obj_create(screen_device_info);
     lv_obj_set_size(cont_devinfo, 400, 300);
     lv_obj_center(cont_devinfo);
     lv_obj_set_style_bg_color(cont_devinfo, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(cont_devinfo, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(cont_devinfo, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(cont_devinfo, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cont_devinfo, 4, LV_PART_MAIN);
     lv_obj_set_flex_flow(cont_devinfo, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_devinfo, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(cont_devinfo, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(cont_devinfo, 14, LV_PART_MAIN);
 
-    /* Heading */
     dev_info_heading = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_heading, "FeedBackNow FlexBox+");
-    lv_obj_set_style_text_font(dev_info_heading, &roboto_32, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_heading, lv_color_black(), LV_PART_MAIN);
+    lv_label_set_text(dev_info_heading, EPD_TEXT_BRAND_TITLE);
+    lv_obj_set_style_text_font(dev_info_heading, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(dev_info_heading, lv_color_hex(0x555555),
+                                LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_heading, LV_TEXT_ALIGN_CENTER,
-                                LV_PART_MAIN);
-
-    /* Unit / asset id (from sys_config.h; gen_euis.py keeps in sync with registry) */
-    dev_info_unit_caption = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_unit_caption, "Device ID");
-    lv_obj_set_style_text_font(dev_info_unit_caption, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_unit_caption, lv_color_hex(0x555555),
-                                LV_PART_MAIN);
-    lv_obj_set_style_text_align(dev_info_unit_caption, LV_TEXT_ALIGN_CENTER,
                                 LV_PART_MAIN);
 
     dev_info_unit_value = lv_label_create(cont_devinfo);
     lv_label_set_text(dev_info_unit_value, DEVICE_UNIT_ID_STRING);
     lv_obj_set_width(dev_info_unit_value, 380);
     lv_label_set_long_mode(dev_info_unit_value, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_font(dev_info_unit_value, &roboto_32, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_unit_value, lv_color_black(),
+    lv_obj_set_style_text_font(dev_info_unit_value, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(dev_info_unit_value, lv_color_hex(0x555555),
                                 LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_unit_value, LV_TEXT_ALIGN_CENTER,
-                                LV_PART_MAIN);
-
-    /* LoRa DevEUI (caption + hex from LORAWAN_DEV_EUI on show) */
-    dev_info_deveui_caption = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_deveui_caption, "LoRaWAN DevEUI");
-    lv_obj_set_style_text_font(dev_info_deveui_caption, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_deveui_caption, lv_color_hex(0x555555),
-                                LV_PART_MAIN);
-    lv_obj_set_style_text_align(dev_info_deveui_caption, LV_TEXT_ALIGN_CENTER,
                                 LV_PART_MAIN);
 
     dev_info_deveui = lv_label_create(cont_devinfo);
     lv_label_set_text(dev_info_deveui, "00:00:00:00:00:00:00:00");
     lv_obj_set_width(dev_info_deveui, 380);
     lv_label_set_long_mode(dev_info_deveui, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_font(dev_info_deveui, &roboto_28, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_deveui, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_font(dev_info_deveui, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(dev_info_deveui, lv_color_hex(0x555555),
+                                LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_deveui, LV_TEXT_ALIGN_CENTER,
                                 LV_PART_MAIN);
 
-    /* Button counters next */
     dev_info_counters = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_counters, "0x0:0 0x1:0 0x2:0 0x3:0 0x4:0 0x5:0");
+    lv_label_set_text(dev_info_counters, "b0:0  b1:0  b2:0  b3:0  b4:0  b5:0");
     lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
+    lv_obj_set_style_text_color(dev_info_counters, lv_color_hex(0x555555),
                                 LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_counters, LV_TEXT_ALIGN_CENTER,
                                 LV_PART_MAIN);
 
-    /* FW version last */
     dev_info_fw = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_fw, "Version: " FW_VERSION_STRING);
-    lv_obj_set_style_text_font(dev_info_fw, &roboto_28, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
+    lv_label_set_text(dev_info_fw, EPD_TEXT_FW_PREFIX FW_VERSION_STRING);
+    lv_obj_set_style_text_font(dev_info_fw, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(dev_info_fw, lv_color_hex(0x555555),
+                                LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_fw, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 
-    /* Footer: QuireTech LLC 2026, centered, roboto20 font */
     lv_obj_t *dev_info_footer = lv_label_create(cont_devinfo);
-    lv_label_set_text(dev_info_footer, "QuireTech LLC 2026");
+    lv_label_set_text(dev_info_footer, EPD_TEXT_MANUFACTURER);
     lv_obj_set_style_text_font(dev_info_footer, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(dev_info_footer, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(dev_info_footer, lv_color_hex(0x555555),
+                                LV_PART_MAIN);
     lv_obj_set_style_text_align(dev_info_footer, LV_TEXT_ALIGN_CENTER,
                                 LV_PART_MAIN);
 
@@ -414,10 +397,10 @@
 
 #if EPD_INSTALL_INFO_SCREEN
     /* Screen: INSTALL_INFO (MVP) — 400x300.
-    *   y=  6..26   header      : "flexbox" (left)  |  DEVICE_UNIT_ID (right)    [roboto_20]
-    *   y= 44..86   link banner : "LINK: EXCELLENT/GOOD/FAIR/WEAK"               [roboto_bold_42]
-    *   y= 96       divider     : 1-px horizontal line, 360 wide
-    *   y=104..132  metrics row : "Gateways: N" (left)  "Margin: X dB" (right)   [roboto_28]
+    *   y=  6..26   header : EPD_TEXT_BRAND_TITLE (left) | unit id (right) [roboto_20]
+    *   y= 44..86   link banner : PREFIX + tier (EPD_INSTALL_LINK_*)           [roboto_bold_42]
+    *   y= 96       divider line
+    *   y=104..132  metrics : EPD_INSTALL_GATEWAYS_FMT / margin fmt/strings   [roboto_28]
     *   y=150..280  QR          : 130-px canvas, horizontally centered
     * The QR payload carries full device identity (unit, DevEUI, FW, margin,
     * gateways), so we don't reprint it alongside the QR — the header already
@@ -441,7 +424,7 @@
     lv_obj_set_style_pad_bottom(header, 0, LV_PART_MAIN);
 
     lv_obj_t *install_title = lv_label_create(header);
-    lv_label_set_text(install_title, "flexbox");
+    lv_label_set_text(install_title, EPD_TEXT_BRAND_TITLE);
     lv_obj_set_style_text_font(install_title, &roboto_20, LV_PART_MAIN);
     lv_obj_set_style_text_color(install_title, lv_color_black(), LV_PART_MAIN);
     lv_obj_align(install_title, LV_ALIGN_LEFT_MID, 0, 0);
@@ -455,7 +438,13 @@
 
     /* --- Link quality banner (dominant glyph) --- */
     install_link_label = lv_label_create(screen_install_info);
-    lv_label_set_text(install_link_label, "LINK: --");
+    {
+      char pending_link[80];
+      (void)snprintf(pending_link, sizeof(pending_link), "%s%s",
+                    EPD_INSTALL_LINK_LABEL_PREFIX,
+                    EPD_INSTALL_LINK_PENDING_PLACEHOLDER);
+      lv_label_set_text(install_link_label, pending_link);
+    }
     lv_obj_set_style_text_font(install_link_label, &roboto_bold_42, LV_PART_MAIN);
     lv_obj_set_style_text_color(install_link_label, lv_color_black(),
                                 LV_PART_MAIN);
@@ -482,14 +471,18 @@
     lv_obj_clear_flag(metrics_row, LV_OBJ_FLAG_SCROLLABLE);
 
     install_gateways_label = lv_label_create(metrics_row);
-    lv_label_set_text(install_gateways_label, "Gateways: 0");
+    {
+      char gw0[48];
+      (void)snprintf(gw0, sizeof(gw0), EPD_INSTALL_GATEWAYS_FMT, 0U);
+      lv_label_set_text(install_gateways_label, gw0);
+    }
     lv_obj_set_style_text_font(install_gateways_label, &roboto_28, LV_PART_MAIN);
     lv_obj_set_style_text_color(install_gateways_label, lv_color_black(),
                                 LV_PART_MAIN);
     lv_obj_align(install_gateways_label, LV_ALIGN_LEFT_MID, 0, 0);
 
     install_margin_label = lv_label_create(metrics_row);
-    lv_label_set_text(install_margin_label, "Margin: -- dB");
+    lv_label_set_text(install_margin_label, EPD_INSTALL_MARGIN_TEXT_EMPTY);
     lv_obj_set_style_text_font(install_margin_label, &roboto_28, LV_PART_MAIN);
     lv_obj_set_style_text_color(install_margin_label, lv_color_black(),
                                 LV_PART_MAIN);
@@ -520,22 +513,29 @@
   * installer knows the gateway didn't answer — which is the conservative
   * reading of the situation.
   */
-  static const char *install_link_label_for_stats(
+  static const char *install_link_label_build(
       const lora_link_stats_snapshot_t *ls) {
+    static char link_buf[96];
+    /* No LinkCheckAns: same label shape as weakest tier so installer sees one
+    * predictable string across locales (words from sys_config.h). */
     if (ls->samples == 0 || ls->best_demod_margin == LORA_LINK_STATS_MARGIN_NONE) {
-      return "LINK: WEAK";
+      (void)snprintf(link_buf, sizeof(link_buf), "%s%s",
+                    EPD_INSTALL_LINK_LABEL_PREFIX,
+                    EPD_INSTALL_LINK_QUALITY_WEAK);
+      return link_buf;
     }
     int16_t m = ls->best_demod_margin;
+    const char *tier = EPD_INSTALL_LINK_QUALITY_WEAK;
     if (m >= INSTALL_LINK_MARGIN_EXCELLENT_DB) {
-      return "LINK: EXCELLENT";
+      tier = EPD_INSTALL_LINK_QUALITY_EXCELLENT;
+    } else if (m >= INSTALL_LINK_MARGIN_GOOD_DB) {
+      tier = EPD_INSTALL_LINK_QUALITY_GOOD;
+    } else if (m >= INSTALL_LINK_MARGIN_FAIR_DB) {
+      tier = EPD_INSTALL_LINK_QUALITY_FAIR;
     }
-    if (m >= INSTALL_LINK_MARGIN_GOOD_DB) {
-      return "LINK: GOOD";
-    }
-    if (m >= INSTALL_LINK_MARGIN_FAIR_DB) {
-      return "LINK: FAIR";
-    }
-    return "LINK: WEAK";
+    (void)snprintf(link_buf, sizeof(link_buf), "%s%s",
+                  EPD_INSTALL_LINK_LABEL_PREFIX, tier);
+    return link_buf;
   }
 
   /**
@@ -561,25 +561,25 @@
 
     /* Link quality headline */
     if (install_link_label) {
-      lv_label_set_text(install_link_label, install_link_label_for_stats(&ls));
+      lv_label_set_text(install_link_label, install_link_label_build(&ls));
     }
 
     /* Metrics — show best margin / best gateway count (installers care about
     * peak capability of this location, not a single noisy sample). */
     if (install_margin_label) {
-      char buf[32];
+      char buf[48];
       if (ls.samples > 0 &&
           ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE) {
-        (void)snprintf(buf, sizeof(buf), "margin   %d dB",
+        (void)snprintf(buf, sizeof(buf), EPD_INSTALL_MARGIN_FMT_WITH_VALUE,
                       (int)ls.best_demod_margin);
       } else {
-        (void)snprintf(buf, sizeof(buf), "margin   -- dB");
+        (void)snprintf(buf, sizeof(buf), "%s", EPD_INSTALL_MARGIN_TEXT_EMPTY);
       }
       lv_label_set_text(install_margin_label, buf);
     }
     if (install_gateways_label) {
-      char buf[32];
-      (void)snprintf(buf, sizeof(buf), "gateways  %u",
+      char buf[48];
+      (void)snprintf(buf, sizeof(buf), EPD_INSTALL_GATEWAYS_FMT,
                     (unsigned)ls.best_nb_gateways);
       lv_label_set_text(install_gateways_label, buf);
     }
@@ -630,15 +630,23 @@
     }
 
     LOG_INF("[EPD] install_info: %s margin=%d gw=%u samples=%u",
-            install_link_label_for_stats(&ls), (int)ls.best_demod_margin,
+            install_link_label_build(&ls), (int)ls.best_demod_margin,
             (unsigned)ls.best_nb_gateways, (unsigned)ls.samples);
   }
 #endif
 
-  /* Refresh unit id, DevEUI, and button counters on the device-info screen. */
+  /* Refresh unit id, DevEUI, button counters, and fw line on device-info. */
   static void refresh_device_info_dynamic(void) {
     if (dev_info_unit_value) {
-      lv_label_set_text(dev_info_unit_value, DEVICE_UNIT_ID_STRING);
+      char uid_lower[64];
+      const char *uid = DEVICE_UNIT_ID_STRING;
+      size_t i = 0;
+      while (uid[i] != '\0' && i + 1U < sizeof(uid_lower)) {
+        uid_lower[i] = (char)tolower((unsigned char)uid[i]);
+        ++i;
+      }
+      uid_lower[i] = '\0';
+      lv_label_set_text(dev_info_unit_value, uid_lower);
     }
     if (dev_info_deveui) {
       static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
@@ -656,14 +664,25 @@
       for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
         (void)button_counter_store_get(i, &cnt[i]);
       }
-      pos = snprintf(counters_str, sizeof(counters_str), "B0:%lx",
+      pos = snprintf(counters_str, sizeof(counters_str), "b0:%lx",
                     (unsigned long)cnt[0]);
       for (uint8_t i = 1;
-          i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 8); i++) {
+          i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 10); i++) {
         pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
-                        " B%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
+                        "  b%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
       }
       lv_label_set_text(dev_info_counters, counters_str);
+    }
+    if (dev_info_fw) {
+      char fwbuf[48];
+      int n = snprintf(fwbuf, sizeof(fwbuf), "%s%s", EPD_TEXT_FW_PREFIX,
+                        FW_VERSION_STRING);
+      if (n > 0 && n < (int)sizeof(fwbuf)) {
+        for (int j = 0; fwbuf[j] != '\0'; j++) {
+          fwbuf[j] = (char)tolower((unsigned char)fwbuf[j]);
+        }
+      }
+      lv_label_set_text(dev_info_fw, fwbuf);
     }
   }
 

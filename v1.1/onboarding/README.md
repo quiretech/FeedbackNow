@@ -41,8 +41,15 @@ python onboarding/chirpstack_delete_devices_grpc.py [--dry-run]
 python onboarding/chirpstack_downlink_all.py --payload 0102
 python onboarding/chirpstack_downlink_all.py --payload "01 02 03" --f-port 11 --dry-run
 
-# Generate new EUI/keys and append to registry; update app/include/eui_keys.h
+# Provision new unit: EUIs/keys, eui_keys.h, sys_config.h unit id, registry CSV,
+# plus app/prj.conf LoRaWAN region and board overlay (US915+LR62E vs EU868+Seeed WIO)
 python onboarding/gen_euis.py
+python onboarding/gen_euis.py --region eu868   # same registry family as --EU
+python onboarding/gen_euis.py --EU
+
+# Switch build only (no new keys, no CSV): prj.conf + nrf52840dk_nrf52840.overlay
+python onboarding/gen_euis.py --sync-build-only --region us915
+python onboarding/gen_euis.py --sync-build-only --region eu868
 ```
 
 ## Files
@@ -50,8 +57,9 @@ python onboarding/gen_euis.py
 | File | Purpose |
 |------|--------|
 | `api_key` | ChirpStack API token (paste and save; not in VCS if you add to .gitignore) |
-| `eui_registry.csv` | Device registry (asset_id, dev_eui, join_eui, app_key) |
+| `eui_registry.csv` | US915 registry (asset_id, dev_eui, join_eui, app_key); default for `gen_euis.py` |
+| `eui_registry_EU868.csv` | EU868 registry; used with `gen_euis.py --EU` or `--region eu868` |
 | `chirpstack_onboard.py` | Create/update devices and keys from CSV |
 | `chirpstack_delete_devices_grpc.py` | Delete all devices in the app |
 | `chirpstack_downlink_all.py` | Enqueue one downlink to every device in the app |
-| `gen_euis.py` | Generate new credentials and write app/include/eui_keys.h + append to CSV |
+| `gen_euis.py` | Provision credentials (`eui_keys.h`, `sys_config.h`), append CSV, sync region in `prj.conf` + board overlay |

@@ -25,6 +25,14 @@
 #define DEVICE_UNIT_ID_STRING "UNIT-0306"
 /* END UNIT_ID (gen_euis.py) */
 
+/* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
+ * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
+ * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
+/* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
+#define DEVICE_PROVISION_UNIX_UTC 1778014709ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-05T20:58:29Z"
+/* END PROVISION_UTC (gen_euis.py) */
+
 /* =============================================================================
  * LoRa (FRD 4.5)
  * =============================================================================
@@ -262,9 +270,10 @@
  * RTC / time sync
  * =============================================================================
  */
-#define RTC_SET_TIME_ON_BOOT 1
+#define RTC_SET_TIME_ON_BOOT 0
 #define RTC_FORCE_SET_TIME_ON_BOOT                                             \
   0 /* prod: 0 (do not overwrite RTC from build-time) */
+/* Fallback calendar time when DEVICE_PROVISION_UNIX_UTC is 0 (see rtc.c). */
 #define RTC_SET_YEAR 2026
 #define RTC_SET_MONTH 1
 #define RTC_SET_DAY 1
@@ -396,6 +405,37 @@
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 
+/*
+ * -----------------------------------------------------------------------------
+ * EPD on-screen copy (locale / market)
+ * -----------------------------------------------------------------------------
+ * Built into the firmware at compile time. Change these for the region you are
+ * provisioning, then rebuild + flash.
+ *
+ * Full-screen bitmaps (boot / thanks / cleaning): set EPD_LOCALE_FR_BITMAPS.
+ * 0 = English (bootLogo.c, thanks_en.c, cleaning_en.c).
+ * 1 = French (boot_screen.c, thanks_fr.c, cleaning_fr.c).
+ * LAST_CLEANED headline and other strings below still apply.
+ * -----------------------------------------------------------------------------
+ */
+#if EPD_ENABLED
+/** Full-screen EPD bitmaps: 0 = EN assets, 1 = FR assets (compile-time). */
+#ifndef EPD_LOCALE_FR_BITMAPS
+#define EPD_LOCALE_FR_BITMAPS 0
+#endif
+
+/** Main customer screen title above the last-cleaned timestamp. */
+#define EPD_TEXT_LAST_CLEANED_HEADLINE "LAST CLEANED"
+/** LoRa join in progress (shown before CONNECTED). */
+#define EPD_TEXT_CONNECTING "Connecting..."
+/** Product name on Device Info + Install header row (same string by default). */
+#define EPD_TEXT_BRAND_TITLE "flexbox"
+/** Footer line under Device Info. */
+#define EPD_TEXT_MANUFACTURER "quire.tech"
+/** Prefix before FW_VERSION_STRING on Device Info (refresh appends version). */
+#define EPD_TEXT_FW_PREFIX "fw  "
+#endif /* EPD_ENABLED */
+
 /* =============================================================================
  * Install / commissioning screen (Stage 3+) — demod margin + gateway count
  * =============================================================================
@@ -423,6 +463,17 @@
 #define INSTALL_LINK_MARGIN_FAIR_DB 3
 /* Below 3 dB => WEAK */
 /* <= 0 dB or no answer => VERY WEAK / FAIL */
+
+/* Install screen strings (same section as thresholds; gated on this flag). */
+#define EPD_INSTALL_LINK_LABEL_PREFIX "LINK: "
+#define EPD_INSTALL_LINK_PENDING_PLACEHOLDER "--"
+#define EPD_INSTALL_LINK_QUALITY_EXCELLENT "EXCELLENT"
+#define EPD_INSTALL_LINK_QUALITY_GOOD "GOOD"
+#define EPD_INSTALL_LINK_QUALITY_FAIR "FAIR"
+#define EPD_INSTALL_LINK_QUALITY_WEAK "WEAK"
+#define EPD_INSTALL_MARGIN_FMT_WITH_VALUE "margin   %d dB"
+#define EPD_INSTALL_MARGIN_TEXT_EMPTY "margin   -- dB"
+#define EPD_INSTALL_GATEWAYS_FMT "gateways  %u"
 #endif
 /**
  * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first

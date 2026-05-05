@@ -28,9 +28,15 @@ python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devic
   --last-only
 
 
+# gen_euis.py: default = US915 + eui_registry.csv + LR62E overlay + prj US915
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1\onboarding> clear; python3 .\gen_euis.py; clear
 
+# EU868 + eui_registry_EU868.csv + Seeed WIO overlay + prj EU868
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1\onboarding> clear; python3 .\gen_euis.py --EU; clear
+
+# Build profile only (swap region/hardware in tree without generating EUIs)
+python3 onboarding/gen_euis.py --sync-build-only --region us915
+python3 onboarding/gen_euis.py --sync-build-only --region eu868
 
 
 

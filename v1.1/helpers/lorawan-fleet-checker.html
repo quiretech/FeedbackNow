@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoRaWAN Fleet Health</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a22;
+    --surface2: #1e2330;
+    --border: #2a3042;
+    --border2: #3a4256;
+    --text: #e8ecf4;
+    --text2: #8a94aa;
+    --text3: #4a5268;
+    --green: #22c55e;
+    --green-dim: #14532d;
+    --blue: #3b82f6;
+    --blue-dim: #1e3a5f;
+    --amber: #f59e0b;
+    --amber-dim: #451a03;
+    --orange: #f97316;
+    --orange-dim: #431407;
+    --red: #ef4444;
+    --red-dim: #450a0a;
+    --purple: #a78bfa;
+    --purple-dim: #2e1065;
+    --accent: #22c55e;
+  }
+
+  body {
+    font-family: 'IBM Plex Sans', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+    font-size: 14px;
+  }
+
+  /* ── PASTE SCREEN ── */
+  #pasteScreen {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-top: 4rem;
+  }
+
+  .logo {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 300;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+
+  h1 span { color: var(--accent); font-weight: 500; }
+
+  .subtitle {
+    color: var(--text2);
+    font-size: 13px;
+    margin-bottom: 2.5rem;
+    line-height: 1.6;
+  }
+
+  .paste-box-wrap {
+    position: relative;
+  }
+
+  .paste-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  #pasteInput {
+    width: 100%;
+    height: 260px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.6;
+    transition: border-color 0.2s;
+  }
+
+  #pasteInput:focus { border-color: var(--accent); }
+  #pasteInput::placeholder { color: var(--text3); }
+
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 1rem;
+    align-items: center;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text2);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
+
+  .hint {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 0.75rem;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .hint strong { color: var(--text2); }
+
+  /* ── ERROR ── */
+  #errorBanner {
+    display: none;
+    background: var(--red-dim);
+    border: 1px solid var(--red);
+    color: var(--red);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 1rem;
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── DASHBOARD ── */
+  #dashboard { display: none; max-width: 1100px; margin: 0 auto; }
+
+  .dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .dash-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .dash-count { font-size: 1.6rem; font-weight: 300; }
+
+  .back-btn {
+    background: transparent;
+    color: var(--text2);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.15s;
+  }
+  .back-btn:hover { color: var(--text); border-color: var(--border2); }
+
+  /* metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .metric::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--m-color, var(--border));
+  }
+  .m-label { font-size: 10px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+  .m-value { font-size: 28px; font-weight: 500; color: var(--m-color, var(--text)); line-height: 1; }
+  .m-sub { font-size: 10px; color: var(--text3); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+
+  /* tabs */
+  .tab-bar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .tab {
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: transparent;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+    transition: all 0.15s;
+  }
+  .tab:hover { border-color: var(--border2); color: var(--text); }
+  .tab.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+  /* controls */
+  .controls { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .search-input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 12px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text3); }
+
+  select.ctrl-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .count-info { font-size: 11px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; margin-bottom: 8px; }
+
+  /* table */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { background: var(--surface2); }
+  th {
+    text-align: left;
+    padding: 9px 12px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 400;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+  th:hover { color: var(--text2); }
+  td { padding: 8px 12px; border-top: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:hover td { background: var(--surface); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .b-today { background: var(--green-dim); color: var(--green); border: 1px solid #166534; }
+  .b-week  { background: var(--blue-dim); color: var(--blue); border: 1px solid #1d4ed8; }
+  .b-month { background: #1e3a5f; color: #93c5fd; border: 1px solid #1e40af; }
+  .b-stale60 { background: var(--amber-dim); color: var(--amber); border: 1px solid #92400e; }
+  .b-stale70 { background: var(--orange-dim); color: var(--orange); border: 1px solid #9a3412; }
+  .b-never { background: var(--red-dim); color: var(--red); border: 1px solid #991b1b; }
+  .b-noname { background: var(--purple-dim); color: var(--purple); border: 1px solid #4c1d95; }
+
+  .deveui { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text3); }
+  .device-name { font-weight: 500; }
+  .special-tag { font-size: 9px; color: var(--text3); font-family: 'IBM Plex Mono', monospace; display: block; margin-top: 2px; }
+
+  /* summary bar */
+  .summary-bar {
+    margin-top: 1.5rem;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1.7;
+  }
+  .summary-bar strong { color: var(--text); }
+
+  /* multi-paste notice */
+  .multi-note {
+    font-size: 11px;
+    color: var(--amber);
+    font-family: 'IBM Plex Mono', monospace;
+    margin-top: 0.5rem;
+    display: none;
+  }
+
+  /* progress bar visual */
+  .health-bar { height: 6px; background: var(--surface2); border-radius: 3px; margin: 1.5rem 0; overflow: hidden; display: flex; gap: 2px; }
+  .hb-seg { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ PASTE SCREEN ══════════════ -->
+<div id="pasteScreen">
+  <div class="logo">LoRaWAN // Fleet Health</div>
+  <h1>Device <span>Status</span> Dashboard</h1>
+  <p class="subtitle">
+    Paste your AWS IoT Wireless device table below — copy from the console, export, or paste multiple pages.<br>
+    The parser handles tabs, spaces, and mixed formatting automatically.
+  </p>
+
+  <div class="paste-label">Device data — paste here</div>
+  <textarea id="pasteInput" placeholder="Paste your LoRaWAN device table here...
+
+Device ID    Name    Destination    Last Uplink Received At    Arn    DevEUI
+c83a3996-d587...    UNIT-0255    destination    February 17, 2026...    arn:aws:...    464c58...
+
+Supports multiple pages pasted together."></textarea>
+
+  <div class="btn-row">
+    <button class="btn-primary" onclick="parseAndRender()">ANALYZE FLEET →</button>
+    <button class="btn-ghost" onclick="loadDemo()">LOAD DEMO DATA</button>
+  </div>
+  <p class="hint">Tip: paste <strong>multiple pages</strong> together — duplicates are handled automatically.</p>
+  <div id="errorBanner"></div>
+</div>
+
+<!-- ══════════════ DASHBOARD ══════════════ -->
+<div id="dashboard">
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">Fleet Health Report</div>
+      <div class="dash-count" id="dashCount">— devices analyzed</div>
+    </div>
+    <button class="back-btn" onclick="goBack()">← PASTE NEW DATA</button>
+  </div>
+
+  <div class="metrics" id="metricsGrid"></div>
+
+  <div class="health-bar" id="healthBar"></div>
+
+  <div class="tab-bar" id="tabBar"></div>
+
+  <div class="controls">
+    <input type="text" class="search-input" id="searchInput" placeholder="search name, DevEUI, device ID..." oninput="render()">
+    <select class="ctrl-select" id="sortSel" onchange="render()">
+      <option value="status">sort: by status</option>
+      <option value="name">sort: by name A–Z</option>
+      <option value="last_new">sort: newest first</option>
+      <option value="last_old">sort: oldest first</option>
+    </select>
+  </div>
+
+  <div class="count-info" id="countInfo"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Last uplink</th>
+          <th>DevEUI</th>
+          <th>Device ID (short)</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="summary-bar" id="summaryBar"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  PARSER
+// ─────────────────────────────────────────────
+function parseDevices(raw) {
+  const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const devices = [];
+  const seen = new Set();
+
+  // Patterns
+  const uuidRe = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const deveuiRe = /464c58[0-9a-f]{10}/i;
+  const dateRe = /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4},?\s+[\d:]+\s*(UTC[+-]\d+:\d+|AM|PM)?/i;
+  const arnRe = /arn:aws:iotwireless:[^\s]+/i;
+
+  // Collect all tokens
+  let i = 0;
+  while (i < lines.length) {
+    const uuidMatch = lines[i].match(uuidRe);
+    if (!uuidMatch) { i++; continue; }
+
+    const id = uuidMatch[0];
+    if (seen.has(id)) { i++; continue; }
+
+    // Look ahead up to 6 lines for the fields we need
+    const chunk = lines.slice(i, i + 8).join(' ');
+
+    // DevEUI
+    const deveuiMatch = chunk.match(deveuiRe);
+    if (!deveuiMatch) { i++; continue; }
+    const deveui = deveuiMatch[0].toLowerCase();
+
+    // Name: the non-uuid, non-arn, non-deveui, non-date string nearby
+    // It usually appears right after or before the UUID
+    let name = '';
+    for (let j = i; j < Math.min(i + 6, lines.length); j++) {
+      const l = lines[j];
+      if (uuidRe.test(l) || arnRe.test(l) || deveuiRe.test(l) || /destination/i.test(l)) continue;
+      if (dateRe.test(l)) continue;
+      if (l.length > 2 && l.length < 80) { name = l; break; }
+    }
+    if (!name) name = id.slice(0, 8);
+
+    // Last uplink date
+    const dateMatch = chunk.match(dateRe);
+    let lastStr = null;
+    if (dateMatch) {
+      try {
+        const cleaned = dateMatch[0].replace(/\(UTC[+-]\d+:\d+\)/,'').trim();
+        const d = new Date(cleaned);
+        if (!isNaN(d)) lastStr = d.toISOString();
+      } catch(e) {}
+    }
+
+    seen.add(id);
+    devices.push({ id, name: name.trim(), deveui, last: lastStr });
+    i++;
+  }
+
+  return devices;
+}
+
+// ─────────────────────────────────────────────
+//  CLASSIFICATION
+// ─────────────────────────────────────────────
+const TODAY = new Date();
+TODAY.setHours(23,59,59,999);
+
+function daysSince(iso) {
+  if (!iso) return null;
+  return Math.round((TODAY - new Date(iso)) / 86400000);
+}
+
+function classify(d) {
+  const days = d.days;
+  if (days === null) return 'never';
+  if (days <= 1)  return 'today';
+  if (days <= 7)  return 'week';
+  if (days <= 30) return 'month';
+  if (days <= 70) return 'stale60';
+  return 'stale70';
+}
+
+function isNoName(name) {
+  return /^[0-9a-f]{12}$/i.test(name.replace(/\s/g,''));
+}
+function isSpecial(name) {
+  return /northstar|kraft|flexbox|test device|tmobile/i.test(name);
+}
+
+// ─────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────
+let devices = [];
+let activeFilter = 'all';
+
+// ─────────────────────────────────────────────
+//  PARSE & RENDER
+// ─────────────────────────────────────────────
+function parseAndRender() {
+  const raw = document.getElementById('pasteInput').value;
+  if (!raw.trim()) {
+    showError('Please paste some device data first.');
+    return;
+  }
+
+  const parsed = parseDevices(raw);
+  if (parsed.length === 0) {
+    showError('Could not find any devices. Make sure to paste the full table including Device ID and DevEUI columns.');
+    return;
+  }
+
+  devices = parsed.map(d => ({
+    ...d,
+    days: daysSince(d.last),
+    noname: isNoName(d.name),
+    special: isSpecial(d.name),
+  })).map(d => ({ ...d, cat: classify(d) }));
+
+  hideError();
+  document.getElementById('pasteScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  buildDashboard();
+}
+
+function goBack() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('pasteScreen').style.display = 'block';
+  activeFilter = 'all';
+}
+
+function showError(msg) {
+  const b = document.getElementById('errorBanner');
+  b.textContent = '⚠ ' + msg;
+  b.style.display = 'block';
+}
+function hideError() {
+  document.getElementById('errorBanner').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────
+//  DASHBOARD BUILD
+// ─────────────────────────────────────────────
+function buildDashboard() {
+  const total = devices.length;
+  const c = {
+    today:   devices.filter(d => d.cat === 'today').length,
+    week:    devices.filter(d => d.cat === 'week').length,
+    month:   devices.filter(d => d.cat === 'month').length,
+    stale60: devices.filter(d => d.cat === 'stale60').length,
+    stale70: devices.filter(d => d.cat === 'stale70').length,
+    never:   devices.filter(d => d.cat === 'never').length,
+    noname:  devices.filter(d => d.noname).length,
+    special: devices.filter(d => d.special).length,
+  };
+  const active = c.today + c.week + c.month;
+  const pctActive = Math.round(active / total * 100);
+
+  document.getElementById('dashCount').textContent = `${total} devices analyzed`;
+
+  // Metrics
+  const metrics = [
+    { label: 'Total', value: total, color: '#8a94aa', sub: '100% of fleet' },
+    { label: 'Active today', value: c.today, color: '#22c55e', sub: 'last 24h' },
+    { label: 'This week', value: c.week, color: '#3b82f6', sub: '2–7 days ago' },
+    { label: 'This month', value: c.month, color: '#93c5fd', sub: '8–30 days ago' },
+    { label: '30–70 days', value: c.stale60, color: '#f59e0b', sub: 'going quiet' },
+    { label: '70+ days', value: c.stale70, color: '#f97316', sub: 'likely replaced' },
+    { label: 'Never heard', value: c.never, color: '#ef4444', sub: `${Math.round(c.never/total*100)}% of fleet` },
+    { label: 'No name', value: c.noname, color: '#a78bfa', sub: 'raw DevEUI' },
+  ];
+  document.getElementById('metricsGrid').innerHTML = metrics.map(m => `
+    <div class="metric" style="--m-color:${m.color}">
+      <div class="m-label">${m.label}</div>
+      <div class="m-value">${m.value}</div>
+      <div class="m-sub">${m.sub}</div>
+    </div>
+  `).join('');
+
+  // Health bar
+  const segs = [
+    { w: c.today, color: '#22c55e' },
+    { w: c.week, color: '#3b82f6' },
+    { w: c.month, color: '#93c5fd' },
+    { w: c.stale60, color: '#f59e0b' },
+    { w: c.stale70, color: '#f97316' },
+    { w: c.never, color: '#ef4444' },
+  ];
+  document.getElementById('healthBar').innerHTML = segs.map(s =>
+    s.w ? `<div class="hb-seg" style="width:${(s.w/total*100).toFixed(1)}%;background:${s.color}"></div>` : ''
+  ).join('');
+
+  // Tabs
+  const tabs = [
+    { key: 'all', label: `all (${total})` },
+    { key: 'today', label: `today (${c.today})` },
+    { key: 'week', label: `week (${c.week})` },
+    { key: 'month', label: `month (${c.month})` },
+    { key: 'stale60', label: `30–70d (${c.stale60})` },
+    { key: 'stale70', label: `70d+ (${c.stale70})` },
+    { key: 'never', label: `never (${c.never})` },
+    { key: 'noname', label: `no name (${c.noname})` },
+    { key: 'special', label: `notable (${c.special})` },
+  ];
+  document.getElementById('tabBar').innerHTML = tabs.map(t => `
+    <button class="tab ${t.key === 'all' ? 'active' : ''}" onclick="setFilter('${t.key}', this)">${t.label}</button>
+  `).join('');
+
+  // Summary
+  const dupes = findDupes();
+  let summaryParts = [
+    `<strong>${pctActive}%</strong> active in last 30 days (${active}/${total})`,
+    `<strong>${c.never}</strong> never heard — prime delete candidates`,
+  ];
+  if (dupes.length) summaryParts.push(`<strong>${dupes.length}</strong> duplicate name(s): ${dupes.map(d=>`"${d}"`).join(', ')}`);
+  if (c.special) summaryParts.push(`<strong>${c.special}</strong> notable/external device(s)`);
+  document.getElementById('summaryBar').innerHTML = summaryParts.join(' &nbsp;·&nbsp; ');
+
+  render();
+}
+
+function findDupes() {
+  const nameCount = {};
+  devices.forEach(d => { nameCount[d.name] = (nameCount[d.name] || 0) + 1; });
+  return Object.entries(nameCount).filter(([,v]) => v > 1).map(([k]) => k);
+}
+
+function setFilter(key, btn) {
+  activeFilter = key;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function render() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const sort   = document.getElementById('sortSel').value;
+
+  let list = devices.filter(d => {
+    if (activeFilter === 'noname' && !d.noname) return false;
+    if (activeFilter === 'special' && !d.special) return false;
+    if (!['all','noname','special'].includes(activeFilter) && d.cat !== activeFilter) return false;
+    if (search && !d.name.toLowerCase().includes(search) && !d.deveui.includes(search) && !d.id.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const ORDER = { never: 0, stale70: 1, stale60: 2, month: 3, week: 4, today: 5 };
+  if (sort === 'status')   list.sort((a,b) => ORDER[a.cat] - ORDER[b.cat]);
+  if (sort === 'name')     list.sort((a,b) => a.name.localeCompare(b.name));
+  if (sort === 'last_new') list.sort((a,b) => (a.days??9999) - (b.days??9999));
+  if (sort === 'last_old') list.sort((a,b) => (b.days??9999) - (a.days??9999));
+
+  document.getElementById('countInfo').textContent = `showing ${list.length} of ${devices.length} devices`;
+
+  const badgeClass = { today:'b-today', week:'b-week', month:'b-month', stale60:'b-stale60', stale70:'b-stale70', never:'b-never' };
+  const badgeLabel = d => {
+    if (d.cat === 'never') return 'never heard';
+    if (d.days !== null) return `${d.days}d ago`;
+    return '—';
+  };
+  const lastLabel = d => {
+    if (!d.last) return '—';
+    return new Date(d.last).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  document.getElementById('tbody').innerHTML = list.map(d => `
+    <tr>
+      <td>
+        <span class="device-name">${d.name}</span>
+        ${d.special ? `<span class="special-tag">⚑ notable</span>` : ''}
+      </td>
+      <td>
+        <span class="badge ${badgeClass[d.cat]}">${badgeLabel(d)}</span>
+        ${d.noname ? `<span class="badge b-noname" style="margin-left:4px">no name</span>` : ''}
+      </td>
+      <td style="color:#8a94aa;white-space:nowrap">${lastLabel(d)}</td>
+      <td class="deveui">${d.deveui}</td>
+      <td class="deveui" style="color:#4a5268">${d.id.slice(0,8)}…</td>
+    </tr>
+  `).join('');
+}
+
+// ─────────────────────────────────────────────
+//  DEMO
+// ─────────────────────────────────────────────
+function loadDemo() {
+  document.getElementById('pasteInput').value = `Device ID	Name	Destination	Last Uplink Received At	Arn	DevEUI
+c83a3996-d587-4cee-93b3-160f3aee9ef9	0412A56B0E15	destination	-	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/c83a3996-d587-4cee-93b3-160f3aee9ef9	464c58a2a56b0e15
+427e9444-e1a9-41af-9015-52ad7eac9d66	UNIT-0255	destination	-	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/427e9444-e1a9-41af-9015-52ad7eac9d66	464c5855e18ac3b4
+5e7d5a1a-a403-4a7e-8c57-aa804cc46a9b	SFO UNIT-0185	destination	-	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/5e7d5a1a-a403-4a7e-8c57-aa804cc46a9b	464c581ff9a88ed4
+3cb00cf3-c29d-4c23-bbaa-60e21fa90024	Unit-52	destination	February 16, 2026, 20:55:49 (UTC-05:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/3cb00cf3-c29d-4c23-bbaa-60e21fa90024	464c587fb75dd3db
+d04d93ae-9d24-4761-ad9b-592342966773	Unit-44	destination	February 17, 2026, 06:19:23 (UTC-05:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/d04d93ae-9d24-4761-ad9b-592342966773	464c583f03d38740
+823f19b8-6d0f-4ece-8d00-c4bc3824eed5	Unit-47	destination	February 17, 2026, 13:51:51 (UTC-05:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/823f19b8-6d0f-4ece-8d00-c4bc3824eed5	464c5891e6c32b26
+464242f3-04f2-4605-ba82-e426b4a213da	tmobile test device	destination	April 20, 2026, 15:25:09 (UTC-04:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/464242f3-04f2-4605-ba82-e426b4a213da	464c58e1f9210d13
+cc2e384d-982c-447f-92b0-556fc0c8d25d	Northstar-0250	destination	April 09, 2026, 18:53:41 (UTC-04:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/cc2e384d-982c-447f-92b0-556fc0c8d25d	464c586cc4f35928
+95aa7ce7-303c-46c0-9c33-7bd2fd9cc212	SFO UNIT-0218	destination	April 26, 2026, 12:08:37 (UTC-04:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/95aa7ce7-303c-46c0-9c33-7bd2fd9cc212	464c580fccab900c
+3978efc4-b55b-4a42-9e65-4b98553d11e4	SFO UNIT-0194	destination	April 28, 2026, 19:00:14 (UTC-04:00)	arn:aws:iotwireless:us-east-1:339683755525:WirelessDevice/3978efc4-b55b-4a42-9e65-4b98553d11e4	464c583be88d3eb7`;
+}
+</script>
+</body>
+</html>

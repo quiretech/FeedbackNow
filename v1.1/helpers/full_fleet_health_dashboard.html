@@ -1,0 +1,512 @@
+
+<style>
+  body-wrap { padding: 1rem 0; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.85rem 1rem; }
+  .metric-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-value { font-size: 26px; font-weight: 500; }
+  .metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .tab-bar { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .tab { padding: 5px 11px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: transparent; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); }
+  .tab.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-primary); font-weight: 500; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 1rem; align-items: center; }
+  .filter-bar input { flex: 1; font-size: 13px; padding: 5px 10px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 6px 8px; color: var(--color-text-secondary); font-weight: 500; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 11px; cursor: pointer; user-select: none; }
+  th:hover { color: var(--color-text-primary); }
+  td { padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--color-background-secondary); }
+  .badge { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 500; white-space: nowrap; }
+  .b-never { background: #FCEBEB; color: #A32D2D; }
+  .b-stale70 { background: #FAEEDA; color: #854F0B; }
+  .b-stale60 { background: #FAEEDA; color: #854F0B; }
+  .b-month { background: #E6F1FB; color: #185FA5; }
+  .b-week { background: #EAF3DE; color: #3B6D11; }
+  .b-today { background: #EAF3DE; color: #27500A; }
+  .b-noname { background: #EEEDFE; color: #534AB7; }
+  .deveui { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); }
+  .note { font-size: 11px; color: var(--color-text-tertiary); margin-top: 1rem; padding: 8px 10px; border-left: 2px solid var(--color-border-secondary); line-height: 1.5; }
+  .count-label { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 0.5rem; }
+  .sort-arrow { font-size: 9px; margin-left: 2px; }
+  .special-label { font-size: 10px; color: var(--color-text-tertiary); display: block; }
+</style>
+
+<div style="padding: 1rem 0;">
+  <h2 class="sr-only">Complete LoRaWAN fleet health dashboard — 300+ devices across all pages</h2>
+
+  <div class="metric-grid" id="metrics"></div>
+
+  <div class="tab-bar" id="tabBar"></div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search name, DevEUI, Device ID..." oninput="render()">
+    <select id="sortSel" onchange="render()" style="font-size:12px; padding:5px 8px; border-radius:var(--border-radius-md); border:0.5px solid var(--color-border-secondary); background:var(--color-background-primary); color:var(--color-text-primary);">
+      <option value="status">Sort: by status</option>
+      <option value="name">Sort: by name</option>
+      <option value="last_asc">Sort: oldest first</option>
+      <option value="last_desc">Sort: newest first</option>
+    </select>
+  </div>
+
+  <div class="count-label" id="countLabel"></div>
+
+  <div style="overflow-x:auto;">
+  <table>
+    <thead><tr>
+      <th>Name</th>
+      <th>Status</th>
+      <th>Last uplink</th>
+      <th>DevEUI</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  </div>
+
+  <div class="note" id="summaryNote"></div>
+</div>
+
+<script>
+const TODAY = new Date('2026-04-28T23:59:00');
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return Math.round((TODAY - d) / 86400000);
+}
+
+const RAW = [
+  // === NEVER HEARD (from page 1) ===
+  {name:'0412A56B0E15',deveui:'464c58a2a56b0e15',id:'c83a3996',last:null,noname:true},
+  {name:'UNIT-0255',deveui:'464c5855e18ac3b4',id:'427e9444',last:null},
+  {name:'SFO UNIT-0185',deveui:'464c581ff9a88ed4',id:'5e7d5a1a',last:null},
+  {name:'041156F9B1CB',deveui:'464c58c156f9b1cb',id:'367206fe',last:null,noname:true},
+  {name:'SFO UNIT-0161',deveui:'464c58d32911141f',id:'c2362bcc',last:null},
+  {name:'Flexbox_Seaworld',deveui:'464c587d1d869d3e',id:'bb7ca4f3',last:null,special:'named location'},
+  {name:'UNIT-0280',deveui:'464c58a030003f85',id:'f058b90c',last:null},
+  {name:'UNIT-0276',deveui:'464c58ce4a262b4f',id:'8cf453c4',last:null},
+  {name:'Unit-48',deveui:'464c58e7d6c30d2e',id:'9a77d984',last:null},
+  {name:'SFO UNIT-0079',deveui:'464c58034805910a',id:'0c043af5',last:null},
+  {name:'SFO UNIT-0129',deveui:'464c58f2ac67d9f2',id:'917ffb63',last:null},
+  {name:'SFO UNIT-0211',deveui:'464c58f23627239b',id:'fe9052f3',last:null},
+  {name:'SFO UNIT-0083',deveui:'464c58d66174ed79',id:'daa74056',last:null},
+  {name:'SFO UNIT-0190',deveui:'464c58790f45e57a',id:'2ce2ea13',last:null},
+  {name:'SFO UNIT-0219',deveui:'464c58b6b5599d4f',id:'0fe4ab5f',last:null},
+  {name:'UNIT-0253',deveui:'464c585e2cad7f8c',id:'9f85d90b',last:null},
+  {name:'SFO UNIT-0168',deveui:'464c58f3e7c2a35b',id:'d6020a79',last:null},
+  {name:'UNIT-0262',deveui:'464c58ea9094eb99',id:'e866aaf4',last:null},
+  {name:'SFO UNIT-236',deveui:'464c58ab0a824a5e',id:'edb44c76',last:null},
+  {name:'SFO UNIT-237',deveui:'464c58cf76d5362b',id:'30c3f8db',last:null},
+  {name:'SFO UNIT-0206',deveui:'464c5894a522b062',id:'8f4532f5',last:null},
+  {name:'SFO UNIT-0115',deveui:'464c585d18467f7d',id:'b6b92e1c',last:null},
+  {name:'SFO UNIT-0191',deveui:'464c58bfc1a3ad67',id:'8da0d70b',last:null},
+  {name:'Unit-40',deveui:'464c582de672d6bf',id:'5ec76817',last:null},
+  {name:'UNIT-0260',deveui:'464c58bfef96340e',id:'be48da85',last:null},
+  {name:'SFO UNIT-0153',deveui:'464c58d05cd8dba5',id:'b1d544c0',last:null},
+  {name:'SFO UNIT-0216',deveui:'464c585408381931',id:'696cf15e',last:null},
+  {name:'SFO UNIT-0071',deveui:'464c58e2bc843022',id:'5dba44b3',last:null},
+  {name:'SFO UNIT-238',deveui:'464c58da7993eeb0',id:'48a45289',last:null},
+  {name:'SFO UNIT-249',deveui:'464c5890265ac5c2',id:'7b1bc1a2',last:null},
+  {name:'SFO UNIT-0201',deveui:'464c5816211fa843',id:'bb5aa629',last:null},
+  {name:'SFO UNIT-0066',deveui:'464c5821048c21f2',id:'3a64d391',last:null},
+  {name:'SFO UNIT-0197',deveui:'464c589ff34af002',id:'061765c0',last:null},
+  {name:'SFO UNIT-0207',deveui:'464c585525d9e9b4',id:'b9dcbf8a',last:null},
+  {name:'UNIT-0272',deveui:'464c58c48ec6be16',id:'1dff8b64',last:null},
+  {name:'SFO UNIT-0072',deveui:'464c584ace5de9fa',id:'6e51fe57',last:null},
+  {name:'SFO UNIT-0200',deveui:'464c589bc9e331b3',id:'d80d06e2',last:null},
+  {name:'SFO UNIT-0095',deveui:'464c58600ead1d82',id:'9d2c194a',last:null},
+  {name:'SFO UNIT-0124',deveui:'464c5889d47830a4',id:'8a2897c8',last:null},
+  // stale feb page1
+  {name:'Unit-52',deveui:'464c587fb75dd3db',id:'3cb00cf3',last:'2026-02-16T20:55:49'},
+  {name:'Unit-44',deveui:'464c583f03d38740',id:'d04d93ae',last:'2026-02-17T06:19:23'},
+  {name:'Unit-53',deveui:'464c582c6d1e165d',id:'7686253c',last:'2026-02-17T08:10:25'},
+  {name:'Unit-46',deveui:'464c5847eb2abf2e',id:'fd0c04d3',last:'2026-02-17T08:28:14'},
+  {name:'Unit-50',deveui:'464c58dd8f9555ea',id:'3d624246',last:'2026-02-17T10:49:26'},
+  {name:'Unit-42',deveui:'464c581d0dd6c946',id:'c3c7fa27',last:'2026-02-17T13:24:17'},
+  {name:'Unit-43',deveui:'464c58a0a2232231',id:'0b88a40e',last:'2026-02-17T13:35:20'},
+  {name:'Unit-56',deveui:'464c588c45251dda',id:'dfc5864b',last:'2026-02-17T13:37:22'},
+  {name:'Unit-54',deveui:'464c58f524dbe692',id:'82c996f9',last:'2026-02-17T13:37:47'},
+  {name:'SFO Unit-37 (old)',deveui:'464c5875c18be1fe',id:'5911531e',last:'2026-02-17T13:38:08',special:'dupe name'},
+  {name:'Unit-55',deveui:'464c589f148e8e65',id:'2d3b4285',last:'2026-02-17T13:38:20'},
+  // page 2
+  {name:'Unit-47',deveui:'464c5891e6c32b26',id:'823f19b8',last:'2026-02-17T13:51:51'},
+  {name:'0414F33CD94B',deveui:'464c5864f33cd94b',id:'5bb7f08e',last:'2026-02-17T14:37:20',noname:true},
+  {name:'Unit-57',deveui:'464c5888625e07f6',id:'f1b472c9',last:'2026-02-17T15:07:43'},
+  {name:'Unit-51',deveui:'464c58980b650854',id:'ed967876',last:'2026-02-17T17:32:25'},
+  {name:'Unit-49',deveui:'464c580c5da3ae97',id:'b82b6b33',last:'2026-02-17T18:10:13'},
+  {name:'Unit-45',deveui:'464c58b39349c6c9',id:'64b1d8f9',last:'2026-02-17T18:17:16'},
+  {name:'Unit-41',deveui:'464c5861f3ab3166',id:'409ab625',last:'2026-02-17T18:21:20'},
+  {name:'Unit-58',deveui:'464c58e8442d7dae',id:'f423956c',last:'2026-02-17T19:29:30'},
+  {name:'SFO UNIT-0137',deveui:'464c58390d887720',id:'123d4c20',last:'2026-02-23T14:32:04'},
+  {name:'SFO UNIT-0044',deveui:'464c5865b0c05d00',id:'751b094b',last:'2026-02-24T18:24:52'},
+  {name:'SFO UNIT-0119',deveui:'464c582059044b3b',id:'e01970cc',last:'2026-02-25T18:43:01'},
+  {name:'SFO UNIT-0183',deveui:'464c5826c3f5cc7d',id:'02ddda9f',last:'2026-02-27T11:27:26'},
+  {name:'041EB4014058',deveui:'464c581eb4014058',id:'c3b5a6bb',last:'2026-02-27T14:53:36',noname:true},
+  {name:'SFO UNIT-0205',deveui:'464c581bedeb0e62',id:'68ad5775',last:'2026-02-28T09:14:59'},
+  {name:'04193AD1D3DC',deveui:'464c58593ad1d3dc',id:'cddef691',last:'2026-03-01T07:16:50',noname:true},
+  {name:'SFO UNIT-0167',deveui:'464c58d506e8800c',id:'e66dc079',last:'2026-03-02T12:18:54'},
+  {name:'SFO UNIT-0204',deveui:'464c58857db000dc',id:'4a50356c',last:'2026-03-03T16:35:16'},
+  {name:'SFO UNIT-0080',deveui:'464c5814d677adec',id:'5afc6bc2',last:'2026-03-04T12:41:57'},
+  {name:'SFO UNIT-0062',deveui:'464c58729543b85a',id:'aca6e24b',last:'2026-03-06T22:02:22'},
+  {name:'SFO UNIT-0118',deveui:'464c5807a501c5b7',id:'3f1ef0a7',last:'2026-03-08T10:40:03'},
+  {name:'SFO UNIT-0164',deveui:'464c589edf3894cf',id:'1593629f',last:'2026-03-13T22:43:16'},
+  {name:'SFO UNIT-0053',deveui:'464c582943760764',id:'8568e952',last:'2026-03-16T09:38:32'},
+  {name:'SFO UNIT-0184',deveui:'464c586b7f2ef727',id:'a77f7970',last:'2026-03-20T11:11:42'},
+  {name:'SFO UNIT-0125',deveui:'464c58e66f8826e0',id:'85f5ff79',last:'2026-03-21T16:22:20'},
+  {name:'SFO Unit-0040',deveui:'464c58a7c803d925',id:'ce081f2e',last:'2026-03-24T13:29:23'},
+  {name:'04179235A6AC',deveui:'464c58c79235a6ac',id:'33d22e89',last:'2026-03-25T17:44:47',noname:true},
+  {name:'SFO UNIT-0056',deveui:'464c5828f06c2771',id:'5085b9ac',last:'2026-03-26T14:21:32'},
+  {name:'Unit5',deveui:'464c589660daa28b',id:'9b93807e',last:'2026-03-30T20:29:37'},
+  {name:'SFO UNIT-0049',deveui:'464c58f47ced2955',id:'5bf4f938',last:'2026-04-01T05:21:24'},
+  {name:'SFO UNIT-0052',deveui:'464c58a0f1f0844c',id:'42f018dd',last:'2026-04-01T18:36:08'},
+  {name:'041013FBA8C6',deveui:'464c582013fba8c6',id:'8eff7daf',last:'2026-04-05T18:47:01',noname:true},
+  {name:'Northstar-0250',deveui:'464c586cc4f35928',id:'cc2e384d',last:'2026-04-09T18:53:41',special:'Northstar'},
+  {name:'SFO UNIT-0179',deveui:'464c588ddf9564d8',id:'169bae5e',last:'2026-04-09T20:47:45'},
+  {name:'SFO UNIT-0109',deveui:'464c585f65c70117',id:'5d200c4d',last:'2026-04-11T15:19:09'},
+  {name:'04161F4BC52D',deveui:'464c58f61f4bc52d',id:'c59e2a31',last:'2026-04-12T13:02:21',noname:true},
+  {name:'SFO UNIT-0155',deveui:'464c58b1e35cccc8',id:'67ffdf0c',last:'2026-04-14T01:19:05'},
+  {name:'SFO UNIT-241',deveui:'464c589d0975193c',id:'1c7979bc',last:'2026-04-14T18:25:33'},
+  {name:'SFO UNIT-242',deveui:'464c58aecb703207',id:'2c518e6f',last:'2026-04-15T08:43:01'},
+  {name:'SFO UNIT-235',deveui:'464c58d6dc7e198b',id:'1befe610',last:'2026-04-15T11:04:22'},
+  {name:'SFO UNIT-0178',deveui:'464c5814f1b29af9',id:'79c96e0b',last:'2026-04-15T12:11:38'},
+  {name:'SFO UNIT-0138',deveui:'464c583b199dd5c0',id:'9f2ced48',last:'2026-04-17T02:45:04'},
+  {name:'SFO UNIT-0058',deveui:'464c58b93a1bfc9f',id:'b968bd6c',last:'2026-04-17T06:36:32'},
+  {name:'SFO UNIT-246',deveui:'464c5885a53e2daf',id:'3a3505c1',last:'2026-04-17T18:05:21'},
+  {name:'04103FBE6AAE',deveui:'464c58603fbe6aae',id:'ff94f803',last:'2026-04-17T19:38:04',noname:true},
+  {name:'SFO UNIT-0091',deveui:'464c589bf27c7692',id:'bcc5abb3',last:'2026-04-18T20:22:37'},
+  {name:'tmobile test device',deveui:'464c58e1f9210d13',id:'464242f3',last:'2026-04-20T15:25:09',special:'test device'},
+  {name:'SFO UNIT-0065',deveui:'464c58b0ba497970',id:'2221fe1f',last:'2026-04-21T03:03:49'},
+  {name:'SFO UNIT-0057',deveui:'464c58b86bed35ef',id:'f06fd9f9',last:'2026-04-25T08:37:48'},
+  {name:'SFO UNIT-0215',deveui:'464c589ad2ea6025',id:'7256e33c',last:'2026-04-25T11:27:24'},
+  {name:'SFO UNIT-0218',deveui:'464c580fccab900c',id:'95aa7ce7',last:'2026-04-26T12:08:37'},
+  // page 3
+  {name:'0411868A1B36',deveui:'464c5831868a1b36',id:'1b9ac32f',last:'2026-04-26T14:49:07',noname:true},
+  {name:'041B07DEA123',deveui:'464c580b07dea123',id:'337e59b3',last:'2026-04-26T17:30:32',noname:true},
+  {name:'SFO UNIT-0145',deveui:'464c5857d72f4756',id:'a7b399af',last:'2026-04-27T04:07:03'},
+  {name:'SFO UNIT-0154',deveui:'464c587540ce0a46',id:'365a9681',last:'2026-04-27T06:50:21'},
+  {name:'SFO UNIT-0162',deveui:'464c584776b73aea',id:'9d0840c3',last:'2026-04-27T11:22:13'},
+  {name:'SFO UNIT-247',deveui:'464c58a117ae0496',id:'24f2a19e',last:'2026-04-27T12:56:20'},
+  {name:'SFO UNIT-0193',deveui:'464c58f9ad07f1c8',id:'3e5fafe5',last:'2026-04-27T13:20:58'},
+  {name:'SFO UNIT-243',deveui:'464c589787e6407e',id:'7c0b56a8',last:'2026-04-27T16:19:07'},
+  {name:'SFO UNIT-0208',deveui:'464c58da8dcb3f7b',id:'76cf9ccc',last:'2026-04-27T16:45:25'},
+  {name:'SFO UNIT-0220',deveui:'464c58413189254c',id:'35d13be3',last:'2026-04-27T16:45:55'},
+  {name:'SFO UNIT-245',deveui:'464c58155c26ffd6',id:'1c087c0b',last:'2026-04-27T18:48:02'},
+  {name:'SFO UNIT-0082',deveui:'464c58449851cd5f',id:'6a3b1fe8',last:'2026-04-27T20:45:31'},
+  {name:'SFO UNIT-0093',deveui:'464c58d80864f311',id:'149ee1cd',last:'2026-04-28T00:33:03'},
+  {name:'UNIT-0263',deveui:'464c58612402cf06',id:'4286e4cb',last:'2026-04-28T01:04:04'},
+  {name:'SFO UNIT-0231',deveui:'464c583eb8a31d6c',id:'9b5f4074',last:'2026-04-28T01:17:41'},
+  {name:'SFO UNIT-0180',deveui:'464c588fa10d8939',id:'00ee7ae3',last:'2026-04-28T01:29:08'},
+  {name:'SFO UNIT-0070',deveui:'464c58582a2a0607',id:'e7a21634',last:'2026-04-28T01:58:44'},
+  {name:'UNIT-0274',deveui:'464c5853646435ff',id:'0fd05b55',last:'2026-04-28T04:53:55'},
+  {name:'SFO UNIT-0076',deveui:'464c586f001db229',id:'52a5a92d',last:'2026-04-28T05:54:25'},
+  {name:'UNIT-0256',deveui:'464c586ef226647e',id:'29486bde',last:'2026-04-28T07:17:02'},
+  {name:'SFO Unit-37',deveui:'464c5858e1916788',id:'3f0397ed',last:'2026-04-28T07:59:49',special:'dupe name'},
+  {name:'SFO UNIT-0110',deveui:'464c5878fa51e15c',id:'17059553',last:'2026-04-28T08:17:40'},
+  {name:'SFO UNIT-0060',deveui:'464c58d01a7e8635',id:'67f885ce',last:'2026-04-28T08:22:36'},
+  {name:'SFO UNIT-0189',deveui:'464c581f234e4cb2',id:'fc875cb8',last:'2026-04-28T09:02:06'},
+  {name:'SFO UNIT-0186',deveui:'464c58115759d4d1',id:'b92c55a6',last:'2026-04-28T09:17:27'},
+  {name:'SFO UNIT-0092',deveui:'464c5858933fcf08',id:'fddb2b55',last:'2026-04-28T09:35:02'},
+  {name:'UNIT-0254',deveui:'464c58b7c891db21',id:'b0b5ed3c',last:'2026-04-28T09:45:22'},
+  {name:'UNIT-0258',deveui:'464c580ed25d1122',id:'0cb2f282',last:'2026-04-28T10:35:39'},
+  {name:'UNIT-0257',deveui:'464c58e4268c529b',id:'cf1bbeb2',last:'2026-04-28T10:43:06'},
+  {name:'UNIT-0252',deveui:'464c583a5354b0d3',id:'1a6a917b',last:'2026-04-28T11:11:17'},
+  {name:'Northstar-0251',deveui:'464c58ea2846bccc',id:'0667167f',last:'2026-04-28T11:27:25',special:'Northstar'},
+  {name:'SFO UNIT-0094',deveui:'464c5849c30b7e52',id:'f64add30',last:'2026-04-28T11:58:07'},
+  {name:'UNIT-0279',deveui:'464c582e47027667',id:'62812fbe',last:'2026-04-28T12:04:34'},
+  {name:'SFO UNIT-0232',deveui:'464c58f4076fd08a',id:'5d387ddf',last:'2026-04-28T12:04:53'},
+  {name:'SFO UNIT-0149',deveui:'464c5896653b7ea1',id:'973a2e0b',last:'2026-04-28T13:02:43'},
+  {name:'SFO UNIT-0103',deveui:'464c58be56b6d76d',id:'7bbbbe47',last:'2026-04-28T13:06:41'},
+  {name:'SFO UNIT-0101',deveui:'464c5889a43b9d0c',id:'70b43e76',last:'2026-04-28T13:27:20'},
+  {name:'SFO UNIT-0210',deveui:'464c58e29d84cfea',id:'489e776c',last:'2026-04-28T13:51:40'},
+  {name:'SFO UNIT-0047',deveui:'464c58f3ac3e9558',id:'3fa31ba8',last:'2026-04-28T13:57:03'},
+  {name:'SFO UNIT-0157',deveui:'464c5833b24d01ad',id:'6c7e0849',last:'2026-04-28T14:09:02'},
+  {name:'SFO UNIT-0090',deveui:'464c58c20ffe971d',id:'6d4a1a18',last:'2026-04-28T14:16:48'},
+  {name:'UNIT-0270',deveui:'464c580680fdc8a1',id:'e2e870d3',last:'2026-04-28T14:17:01'},
+  {name:'SFO UNIT-0214',deveui:'464c584ec3bd0906',id:'26fb2076',last:'2026-04-28T14:26:50'},
+  {name:'SFO UNIT-0096',deveui:'464c58054b2977b4',id:'c842588b',last:'2026-04-28T14:40:49'},
+  {name:'UNIT-0268',deveui:'464c58b76bcc834d',id:'9b30a80d',last:'2026-04-28T14:44:00'},
+  {name:'SFO UNIT-0046',deveui:'464c587d2c64a621',id:'68cd28ea',last:'2026-04-28T15:12:00'},
+  {name:'SFO UNIT-0087',deveui:'464c584ecfee70c9',id:'55bb21f7',last:'2026-04-28T15:28:52'},
+  {name:'SFO UNIT-0209',deveui:'464c583788b1c60c',id:'d421e6a6',last:'2026-04-28T15:42:33'},
+  {name:'SFO UNIT-0088',deveui:'464c583df6eff5ce',id:'2ef7e4f4',last:'2026-04-28T15:47:48'},
+  {name:'041521498B5E',deveui:'464c584521498b5e',id:'b9a9a7bc',last:'2026-04-28T15:59:01',noname:true},
+  // page 4
+  {name:'SFO UNIT-0150',deveui:'464c58fb527f4b8a',id:'8b2ac896',last:'2026-04-28T16:03:04'},
+  {name:'UNIT-0265',deveui:'464c582ef1851459',id:'75273c53',last:'2026-04-28T16:05:01'},
+  {name:'UNIT-0261',deveui:'464c58fec8a7976f',id:'9d760401',last:'2026-04-28T16:08:00'},
+  {name:'SFO UNIT-0068',deveui:'464c58212beca0c9',id:'39886500',last:'2026-04-28T16:16:38'},
+  {name:'UNIT-0269',deveui:'464c585e97f1a5c9',id:'0d0d0db7',last:'2026-04-28T16:23:15'},
+  {name:'041B5FDFC65B',deveui:'464c58bb5fdfc65b',id:'55ccb17f',last:'2026-04-28T16:24:26',noname:true},
+  {name:'UNIT-0271',deveui:'464c585a6b2e95ab',id:'c4317c43',last:'2026-04-28T16:28:00'},
+  {name:'UNIT-0264',deveui:'464c58724511d5c1',id:'490fb2bd',last:'2026-04-28T16:31:29'},
+  {name:'UNIT-0277',deveui:'464c586e1d69cad8',id:'b0c25b69',last:'2026-04-28T16:34:43'},
+  {name:'SFO UNIT-0086',deveui:'464c58780b591563',id:'79a7fe53',last:'2026-04-28T16:45:31'},
+  {name:'SFO UNIT-0173',deveui:'464c586d25c63768',id:'9a049441',last:'2026-04-28T16:52:25'},
+  {name:'SFO UNIT-0182',deveui:'464c58481e80e504',id:'b09d30f3',last:'2026-04-28T16:52:42'},
+  {name:'UNIT-0267',deveui:'464c58674f982610',id:'7f69c1cc',last:'2026-04-28T16:54:59'},
+  {name:'SFO UNIT-0160',deveui:'464c588d1e6b4183',id:'20eae3b7',last:'2026-04-28T16:57:53'},
+  {name:'SFO UNIT-248',deveui:'464c58b1b998cb6f',id:'086a21d8',last:'2026-04-28T16:59:59'},
+  {name:'SFO UNIT-0221',deveui:'464c588437afee5e',id:'ece230f3',last:'2026-04-28T17:02:05'},
+  {name:'04163A947303',deveui:'464c58c63a947303',id:'ba887d21',last:'2026-04-28T17:06:54',noname:true},
+  {name:'SFO UNIT-0112',deveui:'464c58bb802d7273',id:'e7c6b3c8',last:'2026-04-28T17:11:17'},
+  {name:'04180C669EA9',deveui:'464c58780c669ea9',id:'b28d314e',last:'2026-04-28T17:11:18',noname:true},
+  {name:'UNIT-0273',deveui:'464c58366e81771b',id:'8122ced6',last:'2026-04-28T17:12:02'},
+  {name:'SFO UNIT-0132',deveui:'464c586f151c1921',id:'89c0547b',last:'2026-04-28T17:13:37'},
+  {name:'UNIT-0281',deveui:'464c586a5bb9fb31',id:'9d4097d2',last:'2026-04-28T17:16:00'},
+  {name:'SFO UNIT-0151',deveui:'464c587970adad7c',id:'090d0d02',last:'2026-04-28T17:21:30'},
+  {name:'UNIT-0266',deveui:'464c588bc730f2db',id:'f6a5b05e',last:'2026-04-28T17:22:05'},
+  {name:'SFO UNIT-0098',deveui:'464c583bcf3d1205',id:'95997a9a',last:'2026-04-28T17:38:04'},
+  {name:'SFO UNIT-0139',deveui:'464c589a5dafedad',id:'bfaea106',last:'2026-04-28T18:05:02'},
+  {name:'SFO UNIT-0106',deveui:'464c58d5bd6d1472',id:'dd744ead',last:'2026-04-28T18:10:50'},
+  {name:'SFO UNIT-0140',deveui:'464c5845485bf2da',id:'007dbda4',last:'2026-04-28T18:11:56'},
+  {name:'04135E62D156',deveui:'464c58035e62d156',id:'52aa4d9a',last:'2026-04-28T18:15:48',noname:true},
+  {name:'SFO UNIT-0188',deveui:'464c58a6705d5ad2',id:'41215b10',last:'2026-04-28T18:15:55'},
+  {name:'SFO UNIT-0064',deveui:'464c58a708804689',id:'8fa6867c',last:'2026-04-28T18:18:46'},
+  {name:'SFO UNIT-0223',deveui:'464c5851e93b86f1',id:'3d1a5967',last:'2026-04-28T18:30:10'},
+  {name:'SFO UNIT-0156',deveui:'464c589b723b7520',id:'b34c2432',last:'2026-04-28T18:30:57'},
+  {name:'SFO UNIT-0230',deveui:'464c58ddf06e1a40',id:'2ee93936',last:'2026-04-28T18:34:28'},
+  {name:'0419AB7333A1',deveui:'464c58b9ab7333a1',id:'0f8a1aef',last:'2026-04-28T18:38:28',noname:true},
+  {name:'SFO UNIT-0067',deveui:'464c5864677811ae',id:'dfd6a673',last:'2026-04-28T18:41:37'},
+  {name:'041A04BF5771',deveui:'464c588a04bf5771',id:'6806934e',last:'2026-04-28T18:44:37',noname:true},
+  {name:'SFO UNIT-0078',deveui:'464c58990a9d6c13',id:'ce349a06',last:'2026-04-28T18:48:11'},
+  {name:'SFO UNIT-0234',deveui:'464c588f035f787f',id:'d5963bf2',last:'2026-04-28T18:50:43'},
+  {name:'UNIT-0275',deveui:'464c58f75ca2b55a',id:'89b46d3f',last:'2026-04-28T18:50:58'},
+  {name:'SFO UNIT-0055',deveui:'464c58b024427cdb',id:'e0971b0b',last:'2026-04-28T18:52:28'},
+  {name:'SFO UNIT-0135',deveui:'464c583c69519d10',id:'a216517e',last:'2026-04-28T18:53:45'},
+  {name:'SFO UNIT-0142',deveui:'464c5822e1c21fa4',id:'1996c1fb',last:'2026-04-28T18:54:54'},
+  {name:'04111630AFA2',deveui:'464c58611630afa2',id:'1885ec76',last:'2026-04-28T18:55:14',noname:true},
+  {name:'SFO UNIT-0141',deveui:'464c58425ec4c359',id:'47386fd3',last:'2026-04-28T18:58:40'},
+  {name:'SFO UNIT-0147',deveui:'464c58761d91c252',id:'ab559ca1',last:'2026-04-28T18:59:56'},
+  {name:'SFO UNIT-0194',deveui:'464c583be88d3eb7',id:'3978efc4',last:'2026-04-28T19:00:14'},
+  {name:'SFO UNIT-0041',deveui:'464c583b0c98e2a8',id:'5c3c262f',last:'2026-04-28T19:01:44'},
+  {name:'SFO UNIT-0084',deveui:'464c58e4d668be7f',id:'5325c052',last:'2026-04-28T19:02:57'},
+  {name:'UNIT-0259',deveui:'464c58717a734643',id:'8a26416a',last:'2026-04-28T19:03:05'},
+  // page 5
+  {name:'SFO UNIT-0228',deveui:'464c58261686f3ee',id:'418d4b0e',last:'2026-04-28T19:04:43'},
+  {name:'UNIT-0278',deveui:'464c5841ee8c0c62',id:'cd1e5e31',last:'2026-04-28T19:07:29'},
+  {name:'SFO UNIT-0229',deveui:'464c582462a2aca4',id:'6bd63dcd',last:'2026-04-28T19:09:38'},
+  {name:'SFO UNIT-0051',deveui:'464c58da4390ee1b',id:'a68f6ec4',last:'2026-04-28T19:10:16'},
+  {name:'SFO UNIT-0133',deveui:'464c587f5b1e173d',id:'6d9de24d',last:'2026-04-28T19:10:45'},
+  {name:'SFO UNIT-0097',deveui:'464c580855e09724',id:'e3168943',last:'2026-04-28T19:11:07'},
+  {name:'SFO UNIT-0131',deveui:'464c58aede42d954',id:'04a2729a',last:'2026-04-28T19:13:31'},
+  {name:'SFO UNIT-0158',deveui:'464c5897bb6b1729',id:'d000b0d6',last:'2026-04-28T19:13:31'},
+  {name:'SFO UNIT-0077',deveui:'464c584c7966d14a',id:'6e63ff6b',last:'2026-04-28T19:14:08'},
+  {name:'SFO UNIT-0114',deveui:'464c58874239bdff',id:'2e689830',last:'2026-04-28T19:16:23'},
+  {name:'SFO UNIT-0227',deveui:'464c58bdd0017d25',id:'2cde51ee',last:'2026-04-28T19:17:13'},
+  {name:'SFO UNIT-0172',deveui:'464c584e310c4aaf',id:'3ccc6ae1',last:'2026-04-28T19:17:19'},
+  {name:'SFO UNIT-0111',deveui:'464c582548de2b08',id:'d75a8611',last:'2026-04-28T19:19:54'},
+  {name:'SFO UNIT-0116',deveui:'464c586b57f802e5',id:'ca0d746a',last:'2026-04-28T19:19:59'},
+  {name:'SFO UNIT-0213',deveui:'464c58a1006a10bb',id:'f3dc249d',last:'2026-04-28T19:21:16'},
+  {name:'SFO UNIT-0134',deveui:'464c58c12c6503f5',id:'b11f2425',last:'2026-04-28T19:22:12'},
+  {name:'SFO UNIT-0100',deveui:'464c58eb295227b8',id:'1edcfad5',last:'2026-04-28T19:22:54'},
+  {name:'SFO UNIT-0203',deveui:'464c58d510f26eee',id:'2105de8a',last:'2026-04-28T19:24:04'},
+  {name:'Kraft UNIT-240',deveui:'464c58e6860c21a4',id:'bf6f21f0',last:'2026-04-28T19:24:27',special:'Kraft'},
+  {name:'041FA9856CAC',deveui:'464c581fa9856cac',id:'29c0a188',last:'2026-04-28T19:24:32',noname:true},
+  {name:'SFO UNIT-0099',deveui:'464c587564e716e7',id:'5224f23d',last:'2026-04-28T19:25:12'},
+  {name:'SFO UNIT-0202',deveui:'464c58ef61789977',id:'3ca98110',last:'2026-04-28T19:26:38'},
+  {name:'SFO UNIT-0136',deveui:'464c588e3bd57c76',id:'e9ca9b02',last:'2026-04-28T19:27:56'},
+  {name:'SFO UNIT-0175',deveui:'464c58f032931a2f',id:'88edebca',last:'2026-04-28T19:28:14'},
+  {name:'SFO UNIT-0181',deveui:'464c585889662cf0',id:'91ecc69e',last:'2026-04-28T19:28:20'},
+  {name:'SFO UNIT-0081',deveui:'464c58d30f7f8c0b',id:'f4ad1661',last:'2026-04-28T19:28:46'},
+  {name:'SFO UNIT-0073',deveui:'464c581eb35f8700',id:'5ebf63c7',last:'2026-04-28T19:30:33'},
+  {name:'SFO UNIT-0043',deveui:'464c583bd7fc5ebb',id:'8581f7c9',last:'2026-04-28T19:30:50'},
+  {name:'SFO UNIT-0063',deveui:'464c588230bf2695',id:'9fe91a34',last:'2026-04-28T19:32:51'},
+  {name:'041120FF0B8E',deveui:'464c58c120ff0b8e',id:'b560ede5',last:'2026-04-28T19:33:11',noname:true},
+  {name:'SFO UNIT-0089',deveui:'464c58f76d858e66',id:'68da3b0b',last:'2026-04-28T19:33:53'},
+  {name:'0412A348C01A',deveui:'464c58f2a348c01a',id:'8c35e540',last:'2026-04-28T19:34:18',noname:true},
+  {name:'SFO UNIT-0148',deveui:'464c58fd141a45ed',id:'631cabc0',last:'2026-04-28T19:34:50'},
+  {name:'SFO UNIT-0123',deveui:'464c584427cb702b',id:'a7dacefe',last:'2026-04-28T19:35:52'},
+  {name:'04181357590C',deveui:'464c58581357590c',id:'7ffab72c',last:'2026-04-28T19:36:04',noname:true},
+  {name:'041AF9C6298C',deveui:'464c588af9c6298c',id:'2a7d871a',last:'2026-04-28T19:36:47',noname:true},
+  {name:'SFO UNIT-0061',deveui:'464c58e56afd27f0',id:'981f83c6',last:'2026-04-28T19:38:16'},
+  {name:'SFO UNIT-0107',deveui:'464c5861126e2bfe',id:'fafad829',last:'2026-04-28T19:40:25'},
+  {name:'SFO UNIT-0198',deveui:'464c58551ad1ba2e',id:'7cf7ea79',last:'2026-04-28T19:41:02'},
+  {name:'SFO UNIT-0122',deveui:'464c5896a8ac874b',id:'cb584e31',last:'2026-04-28T19:42:52'},
+  {name:'SFO UNIT-0152',deveui:'464c58c77d65ce26',id:'53b251ab',last:'2026-04-28T19:44:25'},
+  {name:'SFO UNIT-0128',deveui:'464c580497ab6dff',id:'06ccdf46',last:'2026-04-28T19:45:02'},
+  {name:'SFO UNIT-0105',deveui:'464c58182d8c9af8',id:'07bcff0a',last:'2026-04-28T19:46:07'},
+  {name:'SFO UNIT-0113',deveui:'464c58e804e1864a',id:'c0b9ed3c',last:'2026-04-28T19:46:12'},
+  {name:'041E4CAA3F21',deveui:'464c582e4caa3f21',id:'5e4dd37c',last:'2026-04-28T19:46:24',noname:true},
+  {name:'SFO UNIT-0045',deveui:'464c583ad8228ea1',id:'7770ffab',last:'2026-04-28T19:46:53'},
+  {name:'SFO UNIT-0170',deveui:'464c582e7c6337b6',id:'c37b96a4',last:'2026-04-28T19:48:38'},
+  {name:'SFO UNIT-0196',deveui:'464c58f4dfa309a6',id:'a109776e',last:'2026-04-28T19:49:17'},
+  {name:'SFO UNIT-0195',deveui:'464c584b4334990a',id:'f8eae414',last:'2026-04-28T19:49:21'},
+  {name:'SFO UNIT-0075',deveui:'464c58473d56a421',id:'b2169877',last:'2026-04-28T19:51:03'},
+  // page 6
+  {name:'SFO UNIT-0127',deveui:'464c58c510c466f2',id:'e5929f89',last:'2026-04-28T19:55:20'},
+  {name:'SFO UNIT-0212',deveui:'464c5898cb5aace1',id:'958b330b',last:'2026-04-28T19:55:27'},
+  {name:'SFO UNIT-0177',deveui:'464c58af7d871f6b',id:'efdb17a8',last:'2026-04-28T19:55:29'},
+  {name:'SFO UNIT-0224',deveui:'464c58fd91c2a0b1',id:'2789c526',last:'2026-04-28T19:57:44'},
+  {name:'SFO UNIT-0171',deveui:'464c58a41816fd4f',id:'41ab365a',last:'2026-04-28T19:59:02'},
+  {name:'SFO UNIT-0226',deveui:'464c58727b8637e5',id:'2dc57438',last:'2026-04-28T19:59:22'},
+  {name:'SFO UNIT-0146',deveui:'464c58b0963acd50',id:'ad8ba7b6',last:'2026-04-28T19:59:49'},
+  {name:'04143075601D',deveui:'464c58c43075601d',id:'d680f7cf',last:'2026-04-28T20:00:32',noname:true},
+  {name:'SFO UNIT-0104',deveui:'464c58e959c50db9',id:'247adf23',last:'2026-04-28T20:00:51'},
+  {name:'UNIT-0282',deveui:'464c5831f4ecd5af',id:'3a656236',last:'2026-04-28T20:01:34'},
+  {name:'SFO UNIT-0192',deveui:'464c58eff5fa07e7',id:'2a4f3fb4',last:'2026-04-28T20:02:25'},
+  {name:'041CE986A8B9',deveui:'464c58ace986a8b9',id:'06892897',last:'2026-04-28T20:03:00',noname:true},
+  {name:'SFO UNIT-0130',deveui:'464c586f7ca6e310',id:'4c6110ba',last:'2026-04-28T20:04:12'},
+  {name:'SFO UNIT-0165',deveui:'464c5827a040dc36',id:'229fb174',last:'2026-04-28T20:04:35'},
+  {name:'SFO UNIT-0050',deveui:'464c584f701b7a40',id:'4976b76d',last:'2026-04-28T20:04:53'},
+  {name:'SFO UNIT-0120',deveui:'464c58ac36d21411',id:'c5c9b683',last:'2026-04-28T20:06:51'},
+  {name:'SFO UNIT-0199',deveui:'464c586d26119624',id:'d368b74a',last:'2026-04-28T20:07:18'},
+  {name:'SFO UNIT-0166',deveui:'464c587be454ae2b',id:'12d20cd9',last:'2026-04-28T20:08:14'},
+  {name:'SFO UNIT-0069',deveui:'464c588331e7ed53',id:'682c9ebd',last:'2026-04-28T20:08:55'},
+  {name:'SFO UNIT-0225',deveui:'464c58c0babf3597',id:'680b9a2b',last:'2026-04-28T20:09:31'},
+  {name:'SFO UNIT-0054',deveui:'464c58c9c119f50e',id:'9991d9db',last:'2026-04-28T20:11:52'},
+  {name:'SFO UNIT-0163',deveui:'464c58b43bcc3455',id:'8641d4fc',last:'2026-04-28T20:12:21'},
+  {name:'Northstar-0285',deveui:'464c58d8541e8f6d',id:'71953881',last:'2026-04-28T20:13:02',special:'Northstar'},
+  {name:'0419F0369A65',deveui:'464c58f9f0369a65',id:'65a2c3fd',last:'2026-04-28T20:15:31',noname:true},
+  {name:'SFO UNIT-0222',deveui:'464c58bb2c35c199',id:'c0d75fad',last:'2026-04-28T20:16:54'},
+  {name:'UNIT-0283',deveui:'464c5860d75490ca',id:'5b73e80d',last:'2026-04-28T20:16:59'},
+  {name:'SFO UNIT-0085',deveui:'464c587468d9a721',id:'c1e16c48',last:'2026-04-28T20:18:45'},
+  {name:'SFO UNIT-0187',deveui:'464c5819959fa0a3',id:'d478d9aa',last:'2026-04-28T20:19:26'},
+  {name:'SFO UNIT-0143',deveui:'464c583005e654bf',id:'15c74b56',last:'2026-04-28T20:19:31'},
+  {name:'SFO UNIT-0233',deveui:'464c58802dffe659',id:'9106dfec',last:'2026-04-28T20:20:34'},
+  {name:'SFO UNIT-0121',deveui:'464c587eb5c1e8b2',id:'c771477f',last:'2026-04-28T20:21:32'},
+  {name:'SFO UNIT-0169',deveui:'464c588c0a28b41f',id:'f6cb3846',last:'2026-04-28T20:21:58'},
+  {name:'SFO UNIT-0176',deveui:'464c5835f783cf46',id:'d7d5b1c1',last:'2026-04-28T20:21:58'},
+  {name:'SFO UNIT-0074',deveui:'464c58f3d6eefc65',id:'6d48a6c9',last:'2026-04-28T20:22:02'},
+  {name:'SFO UNIT-244',deveui:'464c589058882902',id:'9de27cbb',last:'2026-04-28T20:22:07'},
+  {name:'0418B5CB2CDE',deveui:'464c5808b5cb2cde',id:'a7c5f955',last:'2026-04-28T20:22:21',noname:true},
+  {name:'Northstar-0284',deveui:'464c581c4529362d',id:'4f76ef73',last:'2026-04-28T20:23:05',special:'Northstar'},
+  {name:'SFO UNIT-0217',deveui:'464c58083994daab',id:'91e89ca9',last:'2026-04-28T20:23:09'},
+  {name:'SFO UNIT-0144',deveui:'464c582ac06570bf',id:'de4c3be9',last:'2026-04-28T20:23:28'},
+  {name:'SFO UNIT-0102',deveui:'464c582bae0f9262',id:'78521f1f',last:'2026-04-28T20:23:50'},
+  {name:'04185825AF75',deveui:'464c58d85825af75',id:'bb73fa23',last:'2026-04-28T20:24:02',noname:true},
+  {name:'SFO UNIT-0117',deveui:'464c58e115657a59',id:'70f9f8da',last:'2026-04-28T20:24:02'},
+  {name:'SFO UNIT-0159',deveui:'464c5820796ab85f',id:'957c0386',last:'2026-04-28T20:24:05'},
+  {name:'SFO UNIT-0042',deveui:'464c588f47ca18e1',id:'78e2fcfe',last:'2026-04-28T20:24:09'},
+  {name:'SFO UNIT-0108',deveui:'464c58c7d0486dd6',id:'a44f0388',last:'2026-04-28T20:24:42'},
+  {name:'SFO UNIT-0174',deveui:'464c580c7ff97d8b',id:'5f5446a7',last:'2026-04-28T20:24:55'},
+  {name:'041C4688350C',deveui:'464c584c4688350c',id:'46370e1e',last:'2026-04-28T20:25:48',noname:true},
+  {name:'SFO UNIT-0126',deveui:'464c58212a778de5',id:'e1ba59d4',last:'2026-04-28T20:25:56'},
+];
+
+function classify(d) {
+  if (!d.last) return 'never';
+  const days = daysSince(d.last);
+  if (days <= 1) return 'today';
+  if (days <= 7) return 'week';
+  if (days <= 30) return 'month';
+  if (days <= 70) return 'stale60';
+  return 'stale70';
+}
+
+const devices = RAW.map(d => ({ ...d, cat: classify(d), days: daysSince(d.last) }));
+
+const CATS = {
+  all: { label: 'All', color: '' },
+  today: { label: 'Today', color: '#3B6D11' },
+  week: { label: 'This week', color: '#185FA5' },
+  month: { label: 'This month', color: '#185FA5' },
+  stale60: { label: '30-70 days', color: '#854F0B' },
+  stale70: { label: '70+ days', color: '#993C1D' },
+  never: { label: 'Never heard', color: '#A32D2D' },
+  noname: { label: 'No name', color: '#534AB7' },
+  special: { label: 'Notable', color: '#636' },
+};
+
+function counts() {
+  return {
+    all: devices.length,
+    today: devices.filter(d=>d.cat==='today').length,
+    week: devices.filter(d=>d.cat==='week').length,
+    month: devices.filter(d=>d.cat==='month').length,
+    stale60: devices.filter(d=>d.cat==='stale60').length,
+    stale70: devices.filter(d=>d.cat==='stale70').length,
+    never: devices.filter(d=>d.cat==='never').length,
+    noname: devices.filter(d=>d.noname).length,
+    special: devices.filter(d=>d.special).length,
+  };
+}
+
+const c = counts();
+const activeCount = c.today + c.week + c.month;
+const pctActive = Math.round(activeCount / c.all * 100);
+const pctNever = Math.round(c.never / c.all * 100);
+
+document.getElementById('metrics').innerHTML = `
+  <div class="metric"><div class="metric-label">Total devices</div><div class="metric-value">${c.all}</div></div>
+  <div class="metric"><div class="metric-label">Active today</div><div class="metric-value" style="color:#27500A">${c.today}</div><div class="metric-sub">Heard Apr 28</div></div>
+  <div class="metric"><div class="metric-label">This week</div><div class="metric-value" style="color:#3B6D11">${c.week}</div><div class="metric-sub">Apr 21–27</div></div>
+  <div class="metric"><div class="metric-label">This month</div><div class="metric-value" style="color:#185FA5">${c.month}</div><div class="metric-sub">Apr 1–20</div></div>
+  <div class="metric"><div class="metric-label">30–70 days ago</div><div class="metric-value" style="color:#854F0B">${c.stale60}</div><div class="metric-sub">Feb 27 – Mar</div></div>
+  <div class="metric"><div class="metric-label">70+ days stale</div><div class="metric-value" style="color:#993C1D">${c.stale70}</div><div class="metric-sub">Before Feb 27</div></div>
+  <div class="metric"><div class="metric-label">Never heard</div><div class="metric-value" style="color:#A32D2D">${c.never}</div><div class="metric-sub">${pctNever}% of fleet</div></div>
+  <div class="metric"><div class="metric-label">No proper name</div><div class="metric-value" style="color:#534AB7">${c.noname}</div><div class="metric-sub">Raw DevEUI</div></div>
+`;
+
+let currentFilter = 'all';
+const tabBar = document.getElementById('tabBar');
+tabBar.innerHTML = Object.entries(CATS).map(([k, v]) => {
+  const n = k === 'noname' ? c.noname : k === 'special' ? c.special : (c[k] ?? c.all);
+  return `<button class="tab ${k==='all'?'active':''}" onclick="setFilter('${k}', this)">${v.label} (${n})</button>`;
+}).join('');
+
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function badgeClass(d) {
+  if (d.cat==='never') return 'b-never';
+  if (d.cat==='stale70') return 'b-stale70';
+  if (d.cat==='stale60') return 'b-stale60';
+  if (d.cat==='month') return 'b-month';
+  if (d.cat==='week') return 'b-week';
+  return 'b-today';
+}
+function badgeLabel(d) {
+  if (d.cat==='never') return 'never heard';
+  if (d.cat==='stale70') return `${d.days}d ago`;
+  if (d.cat==='stale60') return `${d.days}d ago`;
+  if (d.cat==='month') return `${d.days}d ago`;
+  if (d.cat==='week') return `${d.days}d ago`;
+  return 'today';
+}
+function lastLabel(d) {
+  if (!d.last) return '—';
+  return new Date(d.last).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function render() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const sort = document.getElementById('sortSel').value;
+
+  let filtered = devices.filter(d => {
+    if (currentFilter === 'noname') return d.noname;
+    if (currentFilter === 'special') return d.special;
+    if (currentFilter !== 'all' && d.cat !== currentFilter) return false;
+    if (search && !d.name.toLowerCase().includes(search) && !d.deveui.includes(search) && !d.id.includes(search)) return false;
+    return true;
+  });
+
+  const ORDER = {never:0, stale70:1, stale60:2, month:3, week:4, today:5};
+  if (sort === 'status') filtered.sort((a,b) => ORDER[a.cat]-ORDER[b.cat]);
+  else if (sort === 'name') filtered.sort((a,b) => a.name.localeCompare(b.name));
+  else if (sort === 'last_asc') filtered.sort((a,b) => (a.days??9999)-(b.days??9999));
+  else if (sort === 'last_desc') filtered.sort((a,b) => (b.days??9999)-(a.days??9999));
+
+  document.getElementById('countLabel').textContent = `Showing ${filtered.length} of ${c.all} devices`;
+
+  document.getElementById('tbody').innerHTML = filtered.map(d => `
+    <tr>
+      <td style="font-weight:500">${d.name}${d.special?`<span class="special-label">${d.special}</span>`:''}</td>
+      <td><span class="badge ${badgeClass(d)}">${badgeLabel(d)}</span>${d.noname?` <span class="badge" style="background:#EEEDFE;color:#534AB7">no name</span>`:''}</td>
+      <td style="color:var(--color-text-secondary);white-space:nowrap">${lastLabel(d)}</td>
+      <td class="deveui">${d.deveui}</td>
+    </tr>
+  `).join('');
+
+  const totalActive = c.today + c.week + c.month;
+  document.getElementById('summaryNote').innerHTML =
+    `<strong>${pctActive}% active</strong> (heard in last 30 days: ${totalActive}/${c.all} devices) &nbsp;·&nbsp; ` +
+    `<strong>${pctNever}% never heard</strong> (${c.never} devices — prime delete candidates) &nbsp;·&nbsp; ` +
+    `Notable: 1 test device (<em>tmobile test device</em>), 3 Northstar units, 1 Kraft unit, 1 Flexbox_Seaworld. ` +
+    `"SFO Unit-37" appears twice with different DevEUIs — one active today, one stale since Feb 17.`;
+}
+
+render();
+</script>

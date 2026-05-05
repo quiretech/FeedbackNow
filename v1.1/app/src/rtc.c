@@ -64,6 +64,13 @@ static int rtc_should_set_time(const struct rtc_time *t) {
 }
 
 static int rtc_set_time_from_config(void) {
+#if DEVICE_PROVISION_UNIX_UTC != 0ULL
+  /* Single source of truth after onboarding/gen_euis.py (full or
+   * --stamp-provision-only). Stale until you re-run gen_euis; RTC_SET_* below
+   * is only used when provision stamp is 0. */
+  uint32_t epoch = (uint32_t)DEVICE_PROVISION_UNIX_UTC;
+  return rtc_set_epoch_seconds(epoch);
+#else
   struct rtc_time t = {0};
 
   t.tm_sec = RTC_SET_SECOND;
@@ -86,6 +93,7 @@ static int rtc_set_time_from_config(void) {
           RTC_SET_MONTH, RTC_SET_DAY, RTC_SET_HOUR, RTC_SET_MINUTE,
           RTC_SET_SECOND);
   return 0;
+#endif
 }
 
 int rtc_app_init(void) {

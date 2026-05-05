@@ -57,7 +57,9 @@ target_sources(app PRIVATE
   assets/fonts/roboto_36.c
   assets/fonts/roboto_bold_36.c
   assets/fonts/roboto_bold_42.c
-  assets/display_screens/bootLogo.c
-  assets/display_screens/AckEng.c
-  assets/display_screens/CleaningScreen.c
+  assets/display_screens/boot_screen.c
+  assets/display_screens/thanks_en.c
+  assets/display_screens/thanks_fr.c
+  assets/display_screens/cleaning_en.c
+  assets/display_screens/cleaning_fr.c
 )
