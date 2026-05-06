@@ -31,9 +31,10 @@ int leds_init(void) {
       LOG_ERR("Failed to configure LED %d pin", i);
       return ret;
     }
-    LOG_INF("Initialized LED %d on %s pin %d", i, leds[i].port->name,
-            leds[i].pin);
+    LOG_DBG("led%u %s pin%u", i, leds[i].port->name, leds[i].pin);
   }
+
+  LOG_INF("leds: init ok (%d)", NUM_LEDS);
   return 0;
 }
 

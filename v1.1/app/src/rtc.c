@@ -89,9 +89,9 @@ static int rtc_set_time_from_config(void) {
     return ret;
   }
 
-  LOG_INF("RTC programmed to %04d-%02d-%02d %02d:%02d:%02d (UTC)", RTC_SET_YEAR,
-          RTC_SET_MONTH, RTC_SET_DAY, RTC_SET_HOUR, RTC_SET_MINUTE,
-          RTC_SET_SECOND);
+  LOG_INF("RTC wall set UTC %04d-%02d-%02d %02d:%02d:%02d (config)",
+          RTC_SET_YEAR, RTC_SET_MONTH, RTC_SET_DAY, RTC_SET_HOUR,
+          RTC_SET_MINUTE, RTC_SET_SECOND);
   return 0;
 #endif
 }
@@ -204,7 +204,7 @@ int rtc_set_epoch_seconds(uint32_t epoch_s) {
     return -EINVAL;
   }
 
-  LOG_INF("Programming RTC from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
+  LOG_DBG("RTC epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
           epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
           tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
 
@@ -222,9 +222,12 @@ int rtc_set_epoch_seconds(uint32_t epoch_s) {
 
   int ret = rtc_set_time(rtc_dev, &t);
   if (ret == 0) {
-    LOG_INF("RTC updated from epoch=%u -> %04d-%02d-%02d %02d:%02d:%02d (UTC)",
-            epoch_s, tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
-            tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+    LOG_INF("RTC set UTC %04d-%02d-%02d %02d:%02d:%02d epoch=%u",
+            tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
+            tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec,
+            (unsigned)epoch_s);
+  } else {
+    LOG_ERR("RTC set failed epoch=%u: %d", epoch_s, ret);
   }
   return ret;
 }

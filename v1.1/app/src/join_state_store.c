@@ -57,11 +57,11 @@ int join_state_store_init(void) {
 #if EEPROM_JOIN_STATE_CLEAR_ON_BOOT
   ctx.has_joined_once = false;
   ctx.initialized = true;
-  LOG_INF("Join state: CLEAR_ON_BOOT=1, has_joined_once = 0 (test mode)");
+  LOG_INF("join_state boot_clear test once=0");
   return 0;
 #endif
   if (eeprom_dev == NULL || !device_is_ready(eeprom_dev)) {
-    LOG_WRN("Join state: EEPROM not available, has_joined_once = 0");
+    LOG_WRN("join_state no_eeprom once=0");
     ctx.has_joined_once = false;
     ctx.initialized = true;
     return 0;
@@ -70,7 +70,7 @@ int join_state_store_init(void) {
   struct join_state_record rec = {0};
   int ret = eeprom_read_join_state(&rec);
   if (ret != 0) {
-    LOG_WRN("Join state read failed: %d, has_joined_once = 0", ret);
+    LOG_WRN("join_state read_fail=%d once=0", ret);
     ctx.has_joined_once = false;
     ctx.initialized = true;
     return 0;
@@ -78,10 +78,10 @@ int join_state_store_init(void) {
 
   if (rec.magic != JOIN_STATE_MAGIC) {
     ctx.has_joined_once = false;
-    LOG_INF("Join state: first boot (no magic), has_joined_once = 0");
+    LOG_INF("join_state invalid_magic once=0");
   } else {
     ctx.has_joined_once = (rec.has_joined_once != 0);
-    LOG_INF("Join state: has_joined_once = %d", ctx.has_joined_once);
+    LOG_INF("join_state once=%d", ctx.has_joined_once ? 1 : 0);
   }
   ctx.initialized = true;
   return 0;
@@ -105,7 +105,7 @@ int join_state_store_set_has_joined_once(void) {
 #if EEPROM_JOIN_STATE_CLEAR_ON_BOOT
   /* Test mode: update in-RAM only so next boot still acts as first boot */
   ctx.has_joined_once = true;
-  LOG_INF("Join state: set has_joined_once = 1 (RAM only, CLEAR_ON_BOOT=1)");
+  LOG_INF("join_state once=1 (ram test)");
   return 0;
 #endif
   if (eeprom_dev == NULL || !device_is_ready(eeprom_dev)) {
@@ -118,11 +118,11 @@ int join_state_store_set_has_joined_once(void) {
 
   int ret = eeprom_write_join_state(&rec);
   if (ret != 0) {
-    LOG_ERR("Join state write failed: %d", ret);
+    LOG_ERR("join_state save failed: %d", ret);
     return ret;
   }
   ctx.has_joined_once = true;
-  LOG_INF("Join state: set has_joined_once = 1 (persisted)");
+  LOG_INF("join_state once=1 saved");
   return 0;
 }
 
@@ -132,7 +132,7 @@ int join_state_store_clear_has_joined_once(void) {
   }
 #if EEPROM_JOIN_STATE_CLEAR_ON_BOOT
   ctx.has_joined_once = false;
-  LOG_INF("Join state: clear has_joined_once (RAM only, CLEAR_ON_BOOT=1)");
+  LOG_INF("join_state once=0 (ram test)");
   return 0;
 #endif
   if (eeprom_dev == NULL || !device_is_ready(eeprom_dev)) {
@@ -145,10 +145,10 @@ int join_state_store_clear_has_joined_once(void) {
 
   int ret = eeprom_write_join_state(&rec);
   if (ret != 0) {
-    LOG_ERR("Join state clear write failed: %d", ret);
+    LOG_ERR("join_state clear failed: %d", ret);
     return ret;
   }
   ctx.has_joined_once = false;
-  LOG_INF("Join state: clear has_joined_once = 0 (persisted)");
+  LOG_INF("join_state once=0 saved");
   return 0;
 }

@@ -4,7 +4,6 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
 #include "battery_adc.h"
-#include "log_fmt.h"
 #include "lora_app.h"
 #include "lora_link_stats.h"
 #include "smf_system_mode.h"
@@ -35,7 +34,7 @@ int lora_cmd_put(uint8_t cmd) {
   }
   int ret = k_msgq_put(&lora_cmdq, &cmd, K_NO_WAIT);
   if (ret != 0) {
-    LOG_WRN("lora_cmd_put: queue full, cmd=%u", cmd);
+    LOG_WRN("cmd queue full (cmd=%u)", cmd);
   }
   return ret;
 }
@@ -51,7 +50,7 @@ K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w, lora_burst_tail_time_sync_f
 static void lora_burst_tail_time_sync_fn(struct k_work *work) {
   ARG_UNUSED(work);
 
-  LOG_INF("[LoRa] burst tail elapsed -> DeviceTimeReq");
+  LOG_DBG("counter-sync burst done; schedule DeviceTimeReq");
 
   (void)lora_cmd_put(LORA_CMD_TIME_SYNC);
 }
@@ -65,7 +64,7 @@ void lora_schedule_time_sync_after_counter_burst(
 
   (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
 
-  LOG_INF("[LoRa] DeviceTime deferred %u ms (profile=%d)", (unsigned)delay_ms,
+  LOG_DBG("DeviceTimeReq deferred %u ms (profile=%d)", (unsigned)delay_ms,
           (int)profile);
 
   (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
@@ -117,14 +116,14 @@ static uint8_t lora_battery_level_cb(void) {
 
 bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (msg == NULL) {
-    LOG_ERR("lora_get_event: NULL message pointer");
+    LOG_ERR("get_event: null msg pointer");
     return false;
   }
 
   int ret = k_msgq_get(&lora_msgq, msg, timeout);
   if (ret != 0) {
     if (ret != -EAGAIN && ret != -ENOMSG) {
-      LOG_ERR("lora_get_event failed: %d", ret);
+      LOG_ERR("get_event failed: %d", ret);
     }
     return false;
   }
@@ -133,25 +132,24 @@ bool lora_get_event(lora_uplink_msg_t *msg, k_timeout_t timeout) {
 
 int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (msg == NULL) {
-    LOG_ERR("lora_put_event: NULL message pointer");
+    LOG_ERR("put_event: null msg pointer");
     return -EINVAL;
   }
 
   /* Reject messages if not joined to network */
   if (!lora_is_joined()) {
-    LOG_WRN("lora_put_event: Cannot queue message - not joined to network");
+    LOG_WRN("put_event: not joined");
     return -ENOTCONN;
   }
 
   if (msg->len > LORA_MAX_PAYLOAD_SIZE) {
-    LOG_ERR("lora_put_event: message too long (%d > %d)", msg->len,
-            LORA_MAX_PAYLOAD_SIZE);
+    LOG_ERR("put_event: len %d > max %d", msg->len, LORA_MAX_PAYLOAD_SIZE);
     return -EINVAL;
   }
 
   int ret = k_msgq_put(&lora_msgq, msg, timeout);
   if (ret != 0) {
-    LOG_ERR("LoRa queue overflow, dropping packet: %d", ret);
+    LOG_ERR("uplink queue full (drop): %d", ret);
   }
   return ret;
 }
@@ -161,28 +159,37 @@ int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
  */
 void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
                           uint8_t len, const uint8_t *frmpayload) {
-  LOG_INF("DL port %u pending=%d RSSI=%d dBm SNR=%d dB time_updated=%d",
-          (unsigned)port, (int)(flags & LORAWAN_DATA_PENDING), (int)rssi,
-          (int)snr, !!(flags & LORAWAN_TIME_UPDATED));
+  const bool time_upd = !!(flags & LORAWAN_TIME_UPDATED);
+  const int pend = (int)(flags & LORAWAN_DATA_PENDING);
+  const int rssi_i = (int)rssi;
+  const int snr_i = (int)snr;
+  const int tu = time_upd ? 1 : 0;
 
-  if (flags & LORAWAN_TIME_UPDATED) {
-    LOG_SECTION_INF(
-        "LoRaWAN time updated by network (DeviceTimeAns / clock sync)");
+  if (time_upd) {
+    LOG_DBG("DeviceTimeAns (clock sync)");
     time_sync_on_lorawan_time_updated();
   }
 
-  if (!frmpayload || len == 0) {
+  if (!frmpayload || len == 0U) {
+    /* MAC-only Rx (dwell / join): very frequent unless pending or clock sync */
+    if (pend != 0 || time_upd) {
+      LOG_INF("DL MAC p=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port, pend,
+              rssi_i, snr_i, tu);
+    } else {
+      LOG_DBG("DL MAC p=%u rssi=%d snr=%d", (unsigned)port, rssi_i, snr_i);
+    }
     return;
   }
 
   if (len > LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE) {
-    LOG_WRN("DL FRMPayload len=%u > max %u, truncating", (unsigned)len,
+    LOG_WRN("DL FRMPayload len=%u > max %u (truncate)", (unsigned)len,
             (unsigned)LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE);
     len = (uint8_t)LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE;
   }
 
-  LOG_INF("DL FRMPayload port=%u len=%u", (unsigned)port, (unsigned)len);
-  LOG_HEXDUMP_INF(frmpayload, len, "DL hex");
+  LOG_INF("DL app p=%u len=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port,
+          (unsigned)len, pend, rssi_i, snr_i, tu);
+  LOG_HEXDUMP_DBG(frmpayload, len, "DL FRMPayload");
 
   /* Post to SMF for command dispatch */
   if (smf_post_downlink(port, len, frmpayload) != 0) {
@@ -197,7 +204,7 @@ void lora_app_dr_changed(enum lorawan_datarate dr) {
   uint8_t unused, max_size;
 
   lorawan_get_payload_sizes(&unused, &max_size);
-  LOG_INF("DR_%d: max uplink FRMPayload %u B", (int)dr, (unsigned)max_size);
+  LOG_DBG("DR%d max_UL_FRMPayload=%u B", (int)dr, (unsigned)max_size);
   atomic_set(&latest_dr_seen, (atomic_val_t)dr);
 }
 
@@ -208,10 +215,9 @@ int lora_app_init(void) {
   int ret;
   const struct device *lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
   if (!device_is_ready(lora_dev)) {
-    LOG_ERR("%s: device not ready.", lora_dev->name);
+    LOG_ERR("%s not ready", lora_dev->name);
     return -ENODEV;
   }
-  LOG_INF("%s: device ready.", lora_dev->name);
 
   ret = lorawan_start();
   if (ret < 0) {
@@ -255,15 +261,17 @@ int lora_app_init(void) {
    * steer DR during the post-join / HK uplink bursts before DeviceTimeReq. */
 
   lorawan_enable_adr(false);
-  LOG_INF("ADR disabled at boot; enabled immediately after OTAA succeeds");
 
-  LOG_INF("LoRaWAN stack initialized successfully.");
 #if defined(CONFIG_LORAMAC_REGION_EU868) && defined(CONFIG_LORAMAC_REGION_US915)
-  LOG_INF("LoRaWAN regions compiled: EU868 + US915");
+  const char *region = "EU868+US915";
 #elif defined(CONFIG_LORAMAC_REGION_EU868)
-  LOG_INF("LoRaWAN region compiled: EU868");
+  const char *region = "EU868";
 #elif defined(CONFIG_LORAMAC_REGION_US915)
-  LOG_INF("LoRaWAN region compiled: US915");
+  const char *region = "US915";
+#else
+  const char *region = "?";
 #endif
+  LOG_INF("LoRaWAN ok %s region=%s adr=off-until-join", lora_dev->name,
+          region);
   return 0;
 }

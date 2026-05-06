@@ -114,7 +114,7 @@ static void reboot_expiry(struct k_timer *timer) {
 
 static void reboot_work_handler(struct k_work *work) {
   ARG_UNUSED(work);
-  LOG_INF("[SMF] rebooting now");
+  LOG_INF("smf cold_reboot");
   sys_reboot(SYS_REBOOT_COLD);
 }
 
@@ -157,11 +157,11 @@ static void smf_show_install_info_with_dwell(void (*overlap_work)(void)) {
   int64_t elapsed = k_uptime_get() - t0;
   if (elapsed < (int64_t)EPD_INSTALL_INFO_DISPLAY_MS) {
     uint32_t remaining = (uint32_t)((int64_t)EPD_INSTALL_INFO_DISPLAY_MS - elapsed);
-    LOG_DBG("[SMF] install dwell: %u ms remaining after overlap (%lld ms used)",
+    LOG_DBG("install dwell: %u ms remaining after overlap (%lld ms used)",
             (unsigned)remaining, (long long)elapsed);
     k_msleep((int32_t)remaining);
   } else {
-    LOG_DBG("[SMF] install dwell: overlap %lld ms >= dwell %u ms; no extra sleep",
+    LOG_DBG("install dwell: overlap %lld ms >= dwell %u ms; no extra sleep",
             (long long)elapsed, (unsigned)EPD_INSTALL_INFO_DISPLAY_MS);
   }
 }
@@ -284,7 +284,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(b);
   ARG_UNUSED(c);
 
-  LOG_INF("[SMF] thread started, state=%s", smf_mode_str(mode));
+  LOG_DBG("SMF start state=%s", smf_mode_str(mode));
 
   while (1) {
     if (k_msgq_get(&smf_msgq, &msg, K_FOREVER) != 0) {
@@ -295,11 +295,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     if (msg.ev_type == SMF_EVT_SYSTEM_READY) {
       system_ready = true;
       k_sem_give(&smf_ready_sem);
-      LOG_INF("[SMF] system ready (all go)");
+      LOG_INF("smf system_ready");
       continue;
     }
 
-    LOG_DBG("[SMF] dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
+    LOG_DBG("dequeue ev=%s button_id=%u ts=%lld (mode=%s)",
             smf_ev_type_str(msg.ev_type), msg.button_id, msg.timestamp_ms,
             smf_mode_str(mode));
 
@@ -316,8 +316,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       mode = MODE_REBOOT;
       (void)led_manager_show(0, LED_PATTERN_POWER_ON);
       k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
-      LOG_INF("[SMF] DL reboot (0x07) -> Reboot (LED %u ms then cold boot)",
-              (unsigned)REBOOT_LED_MS);
+      LOG_INF("smf dl_reboot led_ms=%u", (unsigned)REBOOT_LED_MS);
       continue;
     }
 
@@ -326,14 +325,14 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
           msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
         if (!system_ready) {
-          LOG_DBG("[SMF] Normal: button %u ignored (system not ready yet)",
+          LOG_DBG("Normal: button %u ignored (system not ready yet)",
                   msg.button_id);
         } else {
           /* Must run on SMF thread, not sysworkq: display_show_thanks_sync()
            * schedules display_work on the system workqueue and blocks on a
            * sem — same thread would deadlock until thanks sync timeout.
            */
-          LOG_DBG("[SMF] state=Normal -> app_logic_public_vote(button_id=%u)",
+          LOG_DBG("state=Normal -> app_logic_public_vote(button_id=%u)",
                   msg.button_id);
           rail_manager_request_3v3a();
           app_logic_public_vote(msg.button_id);
@@ -344,7 +343,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
          * blocks on display_work; same-thread would deadlock if submitted from
          * k_work. button_id: 1 = installer join LED already queued — pause so
          * burst finishes before LAST_CLEANED; 0 = silent join, no pause. */
-        LOG_DBG("[SMF] state=Normal -> JOINED -> last_cleaned + counter_sync");
+        LOG_DBG("state=Normal -> JOINED -> last_cleaned + counter_sync");
         rail_manager_request_3v3a();
         if (msg.button_id != 0) {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
@@ -355,8 +354,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           /* Commissioning-class boot: show install screen first, run counter
            * sync etc. while it dwells, then transition to last cleaned. */
           install_info_shown_this_boot = true;
-          LOG_INF("[SMF] First-boot install screen (cause=%s)",
-                  boot_info_cause_str());
+          LOG_INF("smf install_scr cause=%s", boot_info_cause_str());
           smf_show_install_info_with_dwell(smf_joined_overlap_work);
           display_show_last_cleaned_sync();
         } else
@@ -374,7 +372,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
 
       } else if (msg.ev_type == SMF_EVT_JOIN_STARTED) {
         (void)k_work_submit(&smf_join_started_ui_work);
-        LOG_DBG("[SMF] LoRa join started (orchestration visibility)");
+        LOG_DBG("LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
 #if EPD_INSTALL_INFO_SCREEN
         if (!install_info_shown_this_boot && boot_info_is_commission_boot()) {
@@ -382,8 +380,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
            * link + the QR so the installer can still log the unit. Run on
            * SMF thread (display sync API blocks on system workqueue). */
           install_info_shown_this_boot = true;
-          LOG_INF("[SMF] First-boot install screen after JOIN_CYCLE_FAILED "
-                  "(cause=%s)",
+          LOG_INF("smf install_scr join_fail cause=%s",
                   boot_info_cause_str());
           rail_manager_request_3v3a();
           smf_show_install_info_with_dwell(NULL);
@@ -395,9 +392,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         {
           (void)k_work_submit(&smf_join_failed_ui_work);
         }
-        LOG_INF("[SMF] Join cycle failed -> Last Cleaned (customer-facing)");
+        LOG_INF("smf join_fail->last_cleaned");
       } else if (msg.ev_type == SMF_EVT_TIME_SYNC_DONE) {
-        LOG_DBG("[SMF] LoRa time sync done, ok=%d", (msg.button_id == 0));
+        LOG_DBG("LoRa time sync done, ok=%d", (msg.button_id == 0));
         housekeeping_on_time_sync_done();
       } else if (msg.ev_type == SMF_EVT_HOUSEKEEPING_TICK) {
         (void)k_work_submit(&smf_housekeeping_work);
@@ -406,7 +403,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                           msg.payload.downlink.data, &smf_dl_ops);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
         mode = MODE_STAFF;
-        LOG_INF("[SMF] Normal -> Staff (LED solid, 20s timeout)");
+        LOG_INF("smf Norm->Staff t_ms=%u", (unsigned)STAFF_TIMEOUT_MS);
         rail_manager_request_3v3a();
         (void)led_manager_show(0, LED_PATTERN_ON);
         atomic_set(&mode_timeout_ev, SMF_EVT_STAFF_TIMEOUT);
@@ -414,8 +411,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO ||
                  msg.ev_type == SMF_EVT_COMBO_JOIN ||
                  msg.ev_type == SMF_EVT_COMBO_REBOOT) {
-        LOG_INF("[SMF] state=Normal -> %s ignored (enter Staff first)",
-                smf_ev_type_str(msg.ev_type));
+        LOG_INF("smf ignore %s (staff_first)", smf_ev_type_str(msg.ev_type));
       }
       break;
 
@@ -425,20 +421,20 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* paired with request on enter Staff */
-        LOG_INF("[SMF] Staff -> Normal (timeout)");
+        LOG_INF("smf Staff->Norm timeout");
       } else if (msg.ev_type == SMF_EVT_COMBO_JOIN) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* paired with request on enter Staff */
-        LOG_INF("[SMF] Staff -> Normal (deliberate join; trigger LoRa join)");
+        LOG_INF("smf Staff->Norm join_req");
         (void)k_work_submit(&smf_join_started_ui_work);
         lora_request_join();
       } else if (msg.ev_type == SMF_EVT_COMBO_REBOOT) {
         mode = MODE_REBOOT;
         k_timer_stop(&mode_timeout_timer);
         rail_manager_release_3v3a(); /* Staff ref; reboot will reset system */
-        LOG_INF("[SMF] Staff -> Reboot (LED 3s then reboot)");
+        LOG_INF("smf Staff->Reboot led_ms=%u", (unsigned)REBOOT_LED_MS);
         (void)led_manager_show(0, LED_PATTERN_POWER_ON);
         k_timer_start(&reboot_timer, K_MSEC(REBOOT_LED_MS), K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO) {
@@ -448,13 +444,12 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
         /* EPD immediately after LED/rail (sync flush; async used 5s RX delay). */
         display_show_device_info_sync();
-        LOG_INF("[SMF] Staff -> DeviceInfo (%u ms timeout)",
-                DEVICE_INFO_TIMEOUT_MS);
+        LOG_INF("smf Staff->DevInfo t_ms=%u", DEVICE_INFO_TIMEOUT_MS);
         atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
                       K_NO_WAIT);
       } else if (msg.ev_type == SMF_EVT_COMBO_STAFF) {
-        LOG_DBG("[SMF] Staff mode: COMBO_STAFF re-entry ignored (already in "
+        LOG_DBG("Staff mode: COMBO_STAFF re-entry ignored (already in "
                 "Staff)");
       } else if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
                  msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
@@ -476,9 +471,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_start(&mode_timeout_timer, K_MSEC(NFC_SCAN_TIMEOUT_MS),
                       K_NO_WAIT);
         nfc_scan_start(intent, bid);
-        LOG_INF("[SMF] Staff -> NFCScan (button %u, intent %u)", bid, intent);
+        LOG_INF("smf Staff->NFC btn=%u intent=%u", bid, intent);
       } else {
-        LOG_DBG("[SMF] Staff mode: event %s ignored",
+        LOG_DBG("Staff mode: event %s ignored",
                 smf_ev_type_str(msg.ev_type));
       }
       break;
@@ -487,7 +482,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       if (msg.ev_type == SMF_EVT_DEVICE_INFO_TIMEOUT) {
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
-        LOG_INF("[SMF] DeviceInfo -> Normal (timeout)");
+        LOG_INF("smf DevInfo->Norm timeout");
         display_show_last_cleaned_sync();
         /* No rail to release: we released 3.3A when leaving Staff for
          * DeviceInfo */
@@ -506,7 +501,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_release_3v3a(); /* Staff ref (we entered NFC from Staff) */
         mode = MODE_NORMAL;
         (void)led_manager_show(0, LED_PATTERN_OFF);
-        LOG_INF("[SMF] NFCScan -> Normal (timeout)");
+        LOG_INF("NFCScan -> Normal (timeout)");
       } else if (msg.ev_type == SMF_EVT_NFC_RESULT) {
         k_timer_stop(&mode_timeout_timer);
 
@@ -568,25 +563,24 @@ static void smf_thread_fn(void *a, void *b, void *c) {
             memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
             if (lora_is_joined()) {
               if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
-                LOG_INF("[SMF] NFC uplink queued (intent=%u)", intent);
+                LOG_INF("smf nfc_ul ok intent=%u", intent);
               } else {
-                LOG_WRN("[SMF] NFC uplink queue failed (intent=%u)", intent);
+                LOG_WRN("smf nfc_ul fail intent=%u", intent);
               }
             } else {
-              LOG_INF("[SMF] NFC uplink skipped (not joined), intent=%u",
-                      intent);
+              LOG_INF("smf nfc_ul skip_no_join intent=%u", intent);
             }
           }
         } else {
           (void)led_manager_show(0, LED_PATTERN_NFC_FAIL);
         }
         mode = MODE_NORMAL;
-        LOG_INF("[SMF] NFCScan -> Normal (ok=%u)", ok);
+        LOG_INF("smf NFC->Norm ok=%u", ok);
       }
       break;
 
     case MODE_PROCESS_ACTION:
-      LOG_DBG("[SMF] state=%s (stub), ev=%s", smf_mode_str(mode),
+      LOG_DBG("state=%s (stub), ev=%s", smf_mode_str(mode),
               smf_ev_type_str(msg.ev_type));
       break;
 
@@ -611,7 +605,7 @@ int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms) {
   int ret = k_msgq_put(&smf_msgq, &msg, t);
   if (ret != 0) {
     (void)atomic_add(&smf_msgq_drop_count, 1);
-    LOG_WRN("[SMF] msgq full, dropping ev=%u (ret=%d)", ev_type, ret);
+    LOG_WRN("msgq full, dropping ev=%u (ret=%d)", ev_type, ret);
     return -ENOMEM;
   }
   smf_msgq_peak_note();
@@ -635,7 +629,7 @@ int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
   int ret = k_msgq_put(&smf_msgq, &msg, K_MSEC(SMF_POST_EVENT_CRITICAL_TIMEOUT_MS));
   if (ret != 0) {
     (void)atomic_add(&smf_msgq_drop_count, 1);
-    LOG_WRN("[SMF] msgq full, dropping downlink (ret=%d)", ret);
+    LOG_WRN("msgq full, dropping downlink (ret=%d)", ret);
   } else {
     smf_msgq_peak_note();
   }
@@ -661,7 +655,7 @@ int smf_post_nfc_result(uint8_t ok, uint8_t intent, uint8_t button_id,
   int ret = k_msgq_put(&smf_msgq, &msg, K_MSEC(SMF_POST_EVENT_CRITICAL_TIMEOUT_MS));
   if (ret != 0) {
     (void)atomic_add(&smf_msgq_drop_count, 1);
-    LOG_WRN("[SMF] msgq full, dropping nfc result (ret=%d)", ret);
+    LOG_WRN("msgq full, dropping nfc result (ret=%d)", ret);
   } else {
     smf_msgq_peak_note();
   }

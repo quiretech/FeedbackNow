@@ -10,7 +10,6 @@
 
 #include "time_sync.h"
 
-#include "log_fmt.h"
 #include "lora_app.h"
 #include "rail_manager.h"
 #include "rtc.h"
@@ -72,8 +71,7 @@ static int time_sync_apply_from_stack(void) {
     return ret;
   }
 
-  LOG_SECTION_INF("TIME SYNC: DeviceTimeAns received");
-  LOG_INF("LoRaWAN device time (GPS seconds) = %u", gps_time);
+  LOG_DBG("DeviceTimeAns (gps_seconds=%u)", gps_time);
 
   uint32_t epoch_s = 0;
   ret = gps_to_unix_epoch(gps_time, &epoch_s);
@@ -87,7 +85,7 @@ static int time_sync_apply_from_stack(void) {
   if (ret != 0) {
     LOG_WRN("RTC update skipped/failed (epoch=%u): %d", epoch_s, ret);
   } else {
-    LOG_INF("RTC synced from LoRaWAN time (gps=%u -> epoch=%u)", gps_time, epoch_s);
+    LOG_INF("RTC synced gps=%u -> epoch=%u", gps_time, epoch_s);
   }
   rail_manager_release_3v3a();
 
@@ -152,7 +150,7 @@ void time_sync_request_and_update_rtc(void) {
   atomic_set(&time_sync_last_result, -EINPROGRESS);
   k_sem_reset(&time_sync_done_sem);
 
-  LOG_SECTION_INF("TIME SYNC: requesting network time");
+  LOG_DBG("DeviceTimeReq (network time)");
 
   /* Log current RTC time before attempting network sync */
   uint32_t rtc_epoch_before = 0;
@@ -160,19 +158,18 @@ void time_sync_request_and_update_rtc(void) {
   int rret = rtc_get_epoch_seconds(&rtc_epoch_before);
   rail_manager_release_3v3a();
   if (rret == 0) {
-    LOG_INF("RTC epoch before request: %u", rtc_epoch_before);
+    LOG_DBG("RTC epoch before=%u", rtc_epoch_before);
   } else {
-    LOG_WRN("RTC epoch before request unavailable: %d", rret);
+    LOG_WRN("RTC epoch unreadable: %d", rret);
   }
 
   /* Log current LoRaWAN time state (if already available) */
   uint32_t gps_time_now = 0;
   int tret = lorawan_device_time_get(&gps_time_now);
   if (tret == 0) {
-    LOG_INF("LoRaWAN device time already available (GPS seconds) = %u",
-            gps_time_now);
+    LOG_DBG("stack time cached gps_seconds=%u", gps_time_now);
   } else {
-    LOG_INF("LoRaWAN device time not yet available (ret=%d)", tret);
+    LOG_DBG("stack time unavailable (ret=%d)", tret);
   }
 
   int ret = lorawan_request_device_time(true);
@@ -187,7 +184,7 @@ void time_sync_request_and_update_rtc(void) {
     return;
   }
 
-  LOG_INF("DeviceTimeReq sent; waiting for DeviceTimeAns callback");
+  LOG_DBG("DeviceTimeReq queued (wait Ans)");
   (void)k_work_schedule(&time_sync_timeout_work, K_MSEC(TIME_SYNC_ANS_TIMEOUT_MS));
 }
 
@@ -223,7 +220,7 @@ void time_sync_retry_request(void) {
     return;
   }
   int attempt = (int)atomic_get(&time_sync_retries_done);
-  LOG_INF("DeviceTimeReq retry %d/%d sent", attempt, TIME_SYNC_MAX_RETRIES);
+  LOG_DBG("DeviceTimeReq retry %d/%d queued", attempt, TIME_SYNC_MAX_RETRIES);
   (void)k_work_schedule(&time_sync_timeout_work, K_MSEC(TIME_SYNC_ANS_TIMEOUT_MS));
 }
 

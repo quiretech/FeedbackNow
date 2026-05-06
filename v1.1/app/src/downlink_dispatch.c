@@ -135,14 +135,14 @@ void downlink_queue_housekeeping_state_snapshot(void) {
   memcpy(m.data, snap, PAYLOAD_LEN_BYTES);
 
   if (lora_put_event(&m, K_MSEC(500)) != 0) {
-    LOG_WRN("[downlink] HK state snapshot: queue failed (0x13 fport %u)",
+    LOG_WRN("HK state snapshot queue failed (0x13 fport %u)",
             (unsigned)FPORT_HOUSEKEEPING);
   }
 }
 
 static void downlink_queue_fw_hw_version_uplink(void) {
   if (!lora_is_joined()) {
-    LOG_WRN("[downlink] fw/hw version query (0x08): not joined, skip uplink");
+    LOG_WRN("fw/hw query (0x08): not joined, skip uplink");
     return;
   }
 
@@ -163,9 +163,9 @@ static void downlink_queue_fw_hw_version_uplink(void) {
   memcpy(m.data, ver, PAYLOAD_LEN_BYTES);
 
   if (lora_put_event(&m, K_MSEC(500)) != 0) {
-    LOG_WRN("[downlink] fw/hw version query (0x08): queue EVT 0x14 failed");
+    LOG_WRN("fw/hw query (0x08): queue EVT 0x14 failed");
   } else {
-    LOG_INF("[downlink] fw/hw version query (0x08): queued EVT 0x14 fport %u",
+    LOG_INF("fw/hw query (0x08): queued EVT 0x14 fport %u",
             (unsigned)FPORT_DEVICE_INFO);
   }
 }
@@ -178,7 +178,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
   uint8_t cmd = frmpayload[0];
 
-  LOG_INF("[downlink] dispatch port=%u len=%u cmd=0x%02X", (unsigned)port,
+  LOG_INF("dispatch port=%u len=%u cmd=0x%02X", (unsigned)port,
           (unsigned)len, cmd);
 
   switch (cmd) {
@@ -188,51 +188,51 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
           ((uint32_t)frmpayload[1] << 24) | ((uint32_t)frmpayload[2] << 16) |
           ((uint32_t)frmpayload[3] << 8) | (uint32_t)frmpayload[4];
       display_set_pending_last_cleaned_and_apply(epoch);
-      LOG_INF("[downlink] cmd 0x%02X EPD update epoch=%u", (unsigned)cmd,
+      LOG_INF("cmd 0x%02X EPD update epoch=%u", (unsigned)cmd,
               (unsigned)epoch);
     } else {
-      LOG_WRN("[downlink] cmd 0x%02X EPD update: len %u < 5", (unsigned)cmd,
+      LOG_WRN("cmd 0x%02X EPD update: len %u < 5", (unsigned)cmd,
               (unsigned)len);
     }
     break;
   case DL_CMD_EPD_REFRESH:
     display_request_full_refresh();
-    LOG_INF("[downlink] cmd 0x%02X EPD refresh", (unsigned)cmd);
+    LOG_INF("cmd 0x%02X EPD refresh", (unsigned)cmd);
     break;
   case DL_CMD_STATUS_REQ:
-    LOG_INF("[downlink] cmd 0x%02X status request (heartbeat / telemetry)",
+    LOG_INF("cmd 0x%02X status request (heartbeat / telemetry)",
             (unsigned)cmd);
     housekeeping_run();
     break;
   case DL_CMD_RESET_COUNTERS:
-    LOG_INF("[downlink] cmd 0x%02X reset counters", (unsigned)cmd);
+    LOG_INF("cmd 0x%02X reset counters", (unsigned)cmd);
     rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
-      LOG_INF("[downlink] counters reset done");
+      LOG_INF("counters reset done");
     } else {
-      LOG_ERR("[downlink] counters reset failed");
+      LOG_ERR("counters reset failed");
     }
     rail_manager_release_3v3a();
     break;
   case DL_CMD_FACTORY_RESET:
-    LOG_INF("[downlink] cmd 0x%02X factory reset (counters + devnonce + "
+    LOG_INF("cmd 0x%02X factory reset (counters + devnonce + "
             "has_joined_once)",
             (unsigned)cmd);
     rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
-      LOG_INF("[downlink] factory reset: counters done");
+      LOG_INF("factory reset: counters done");
     } else {
-      LOG_ERR("[downlink] factory reset: counters failed");
+      LOG_ERR("factory reset: counters failed");
     }
     if (devnonce_store_factory_reset() == 0) {
-      LOG_INF("[downlink] factory reset: devnonce reset to 0");
+      LOG_INF("factory reset: devnonce reset to 0");
     } else {
-      LOG_WRN("[downlink] factory reset: devnonce reset failed");
+      LOG_WRN("factory reset: devnonce reset failed");
     }
     if (join_state_store_clear_has_joined_once() == 0) {
-      LOG_INF("[downlink] factory reset: has_joined_once cleared");
+      LOG_INF("factory reset: has_joined_once cleared");
     } else {
-      LOG_WRN("[downlink] factory reset: clear has_joined_once failed");
+      LOG_WRN("factory reset: clear has_joined_once failed");
     }
     if (ops->schedule_reboot_led_ms != NULL) {
       ops->schedule_reboot_led_ms(REBOOT_LED_MS);
@@ -253,27 +253,27 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
       int ret = tz_offset_store_set(offset_min);
       rail_manager_release_3v3a();
       if (ret == 0) {
-        LOG_INF("[downlink] cmd 0x%02X timezone offset %d min", (unsigned)cmd,
+        LOG_INF("cmd 0x%02X timezone offset %d min", (unsigned)cmd,
                 (int)offset_min);
         display_show_last_cleaned();
         downlink_queue_housekeeping_state_snapshot();
       } else {
-        LOG_WRN("[downlink] cmd 0x%02X timezone store failed: %d",
+        LOG_WRN("cmd 0x%02X timezone store failed: %d",
                 (unsigned)cmd, ret);
       }
     } else {
-      LOG_WRN("[downlink] cmd 0x%02X timezone: len %u < 3", (unsigned)cmd,
+      LOG_WRN("cmd 0x%02X timezone: len %u < 3", (unsigned)cmd,
               (unsigned)len);
     }
     break;
   case DL_CMD_REBOOT:
-    LOG_INF("[downlink] cmd 0x%02X reboot (post SMF)", (unsigned)cmd);
+    LOG_INF("cmd 0x%02X reboot (post SMF)", (unsigned)cmd);
     if (smf_post_event(SMF_EVT_DL_REBOOT, 0, k_uptime_get()) != 0) {
-      LOG_WRN("[downlink] DL reboot: SMF queue post failed");
+      LOG_WRN("DL reboot: SMF queue post failed");
     }
     break;
   case DL_CMD_QUERY_FW_HW_VERSION:
-    LOG_INF("[downlink] cmd 0x%02X fw/hw version query → EVT 0x14 fport %u",
+    LOG_INF("cmd 0x%02X fw/hw version query -> EVT 0x14 fport %u",
             (unsigned)cmd, (unsigned)FPORT_DEVICE_INFO);
     downlink_queue_fw_hw_version_uplink();
     break;
@@ -288,13 +288,13 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
       char decoded[DISPLAY_DL_CUSTOM_TEXT_MAX + 1];
 
-      LOG_INF("[downlink] cmd 0x99 custom EPD text dur=%umin hex_len=%zu",
+      LOG_INF("cmd 0x99 custom EPD text dur=%umin hex_len=%zu",
 
               (unsigned)dur_min, hexlen);
 
       if (dl_decode_hex_ascii_body(hex, hexlen, decoded, sizeof(decoded)) != 0) {
 
-        LOG_WRN("[downlink] 0x99: invalid hex (pairs, printable ASCII)");
+        LOG_WRN("0x99: invalid hex (pairs, printable ASCII)");
 
       } else {
 
@@ -304,7 +304,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
 #else
 
-        LOG_DBG("[downlink] 0x99: EPD disabled, skip");
+        LOG_DBG("0x99: EPD disabled, skip");
 
 #endif
 
@@ -312,13 +312,13 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
     } else {
 
-      LOG_WRN("[downlink] cmd 0x99: len %u < 2", (unsigned)len);
+      LOG_WRN("cmd 0x99: len %u < 2", (unsigned)len);
 
     }
 
     break;
   default:
-    LOG_WRN("[downlink] unknown cmd 0x%02X", cmd);
+    LOG_WRN("unknown cmd 0x%02X", cmd);
     break;
   }
 }

@@ -71,7 +71,7 @@ int rail_manager_init(void) {
   ref_3v6 = 0;
   keepalive_pending = false;
   keepalive_pending_3v6 = false;
-  LOG_INF("Rail manager init (ref-counts 0)");
+  LOG_INF("rails manager init refs=0");
   return 0;
 }
 

@@ -25,7 +25,7 @@ void app_logic_public_vote(uint8_t button_id) {
   uint32_t now_ms = (uint32_t)k_uptime_get_32();
 
   if (button_id >= NUM_BUTTONS) {
-    LOG_WRN("[app_logic] Invalid button_id=%u (>= NUM_BUTTONS=%u)", button_id,
+    LOG_WRN("Invalid button_id=%u (>= NUM_BUTTONS=%u)", button_id,
             NUM_BUTTONS);
     return;
   }
@@ -33,19 +33,18 @@ void app_logic_public_vote(uint8_t button_id) {
 #if EPD_ENABLED
   /* No new votes while THANKS is showing until LAST_CLEANED render completes. */
   if (display_is_public_vote_ui_busy()) {
-    LOG_DBG("[app_logic] public_vote ignored (vote UI busy)");
+    LOG_DBG("public_vote ignored (vote UI busy)");
     return;
   }
 #endif
 
-  LOG_INF("[app_logic] public_vote called: button_id=%u, now=%u", button_id,
-          now_ms);
+  LOG_DBG("vote btn=%u t=%ums", button_id, now_ms);
 
   /* Public lockout: 5s after any accepted press (per FRD) */
   if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
-    LOG_INF(
-        "[app_logic] Vote BLOCKED by cooldown (%u ms left)",
-        (uint32_t)(BUTTON_COOLDOWN_MS - (now_ms - last_accepted_any_press_ms)));
+      LOG_INF("vote blocked cooldown %ums",
+              (uint32_t)(BUTTON_COOLDOWN_MS -
+                         (now_ms - last_accepted_any_press_ms)));
     return;
   }
 
@@ -84,13 +83,13 @@ void app_logic_public_vote(uint8_t button_id) {
       LOG_ERR("Queue button uplink failed: %d", ret);
     } else {
       last_accepted_any_press_ms = now_ms;
-      LOG_INF("Queued button uplink: btn=%u ctr=%u ts=%u", payload_button_id,
-              new_counter, epoch_s);
+      LOG_INF("vote UL btn=%u ctr=%u ts=%u", payload_button_id, new_counter,
+              epoch_s);
     }
   } else {
     last_accepted_any_press_ms =
         now_ms; /* Cooldown same as when joined (no EPD flood). */
-    LOG_INF("[app_logic] Not joined; uplink skipped (btn=%u ctr=%u)",
-            payload_button_id, new_counter);
+    LOG_INF("vote skip (not joined) btn=%u ctr=%u", payload_button_id,
+            new_counter);
   }
 }

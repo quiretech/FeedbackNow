@@ -40,7 +40,7 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
   /* Try-lock only: never block the MAC thread. If the reader holds the lock,
    * we drop this sample; next Ans will catch up. */
   if (k_mutex_lock(&stats_mutex, K_NO_WAIT) != 0) {
-    LOG_DBG("[LINK] Ans dropped (stats locked by reader)");
+    LOG_DBG("LinkCheckAns dropped (stats locked by reader)");
     return;
   }
 
@@ -61,7 +61,7 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
 
   k_mutex_unlock(&stats_mutex);
 
-  LOG_INF("[LINK] Ans margin=%u dB gateways=%u (samples=%u)",
+  LOG_DBG("LinkCheckAns margin=%u dB gateways=%u (samples=%u)",
           (unsigned)demod_margin, (unsigned)nb_gateways,
           (unsigned)stats.samples);
 }
@@ -74,7 +74,7 @@ void lora_link_stats_init(void) {
 
 void lora_link_stats_register(void) {
   lorawan_register_link_check_ans_callback(on_link_check_ans);
-  LOG_INF("[LINK] LinkCheckAns callback registered");
+  LOG_DBG("LinkCheckAns CB registered");
 }
 
 bool lora_link_stats_get(lora_link_stats_snapshot_t *out) {

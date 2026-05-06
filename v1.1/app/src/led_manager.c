@@ -189,7 +189,7 @@ static void led_ui_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(c);
 
   k_thread_name_set(k_current_get(), "led_ui");
-  LOG_INF("LED UI thread started");
+  LOG_DBG("LED UI thread");
   k_sem_give(&led_ready_sem);
 
   for (int i = 0; i < NUM_LEDS; i++) {
@@ -245,7 +245,7 @@ int led_manager_init(void) {
     LOG_ERR("LED init failed: %d", ret);
     return ret;
   }
-  LOG_INF("LED manager initialized");
+  LOG_INF("LED mgr init ok");
   return 0;
 }
 

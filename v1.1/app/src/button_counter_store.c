@@ -154,11 +154,9 @@ static int load_from_eeprom(void) {
     if (ret != 0) {
       return ret;
     }
-    LOG_INF("Counter store initialized in EEPROM (slot=%u seq=%u)",
-            ctx.active_slot, ctx.seq);
-    LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u",
-            ctx.counters[0], ctx.counters[1], ctx.counters[2], ctx.counters[3],
-            ctx.counters[4], ctx.counters[5]);
+    LOG_INF("counters init slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
+            ctx.seq, ctx.counters[0], ctx.counters[1], ctx.counters[2],
+            ctx.counters[3], ctx.counters[4], ctx.counters[5]);
     return 0;
   }
 
@@ -186,10 +184,9 @@ static int load_from_eeprom(void) {
     ctx.counters[i] = best->counters[i];
   }
 
-  LOG_INF("Counter store loaded: slot=%u seq=%u", ctx.active_slot, ctx.seq);
-  LOG_INF("Button counters (boot): b0=%u b1=%u b2=%u b3=%u b4=%u b5=%u",
-          ctx.counters[0], ctx.counters[1], ctx.counters[2], ctx.counters[3],
-          ctx.counters[4], ctx.counters[5]);
+  LOG_INF("counters load slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
+          ctx.seq, ctx.counters[0], ctx.counters[1], ctx.counters[2],
+          ctx.counters[3], ctx.counters[4], ctx.counters[5]);
   return 0;
 }
 
@@ -227,7 +224,7 @@ static void flush_work_handler(struct k_work *work) {
   ctx.active_slot = next_slot;
   ctx.seq = next_seq;
   ctx.dirty = false;
-  LOG_INF("EEPROM counter flush OK (slot=%u seq=%u)", ctx.active_slot, ctx.seq);
+  LOG_INF("counters flush ok slot=%u seq=%u", ctx.active_slot, ctx.seq);
   k_mutex_unlock(&ctx.lock);
 }
 
@@ -293,7 +290,7 @@ int button_counter_store_factory_reset(void) {
   ctx.dirty = false;
   k_mutex_unlock(&ctx.lock);
 
-  LOG_SECTION_WRN("FACTORY RESET: EEPROM button counters");
+  LOG_SECTION_WRN("factory reset: button-counter EEPROM");
 
   int ret = erase_counter_slots();
   if (ret != 0) {

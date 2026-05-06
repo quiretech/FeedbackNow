@@ -52,24 +52,24 @@ int boot_info_init(void) {
   if (ret == -ENOSYS) {
     /* Driver exists but feature unsupported for this SoC (shouldn't happen on
      * nRF52 — but be graceful if we ever port). */
-    LOG_WRN("[BOOT] hwinfo_get_reset_cause unsupported (-ENOSYS)");
+    LOG_WRN("hwinfo_get_reset_cause unsupported (-ENOSYS)");
     raw = 0U;
   } else if (ret < 0) {
-    LOG_WRN("[BOOT] hwinfo_get_reset_cause failed: %d", ret);
+    LOG_WRN("hwinfo_get_reset_cause failed: %d", ret);
     raw = 0U;
   } else {
     /* Best-effort clear so the next boot doesn't see stale bits from this
      * cycle. Failure is non-fatal; cached value is still reported. */
     int clr = hwinfo_clear_reset_cause();
     if (clr < 0 && clr != -ENOSYS) {
-      LOG_DBG("[BOOT] hwinfo_clear_reset_cause ret=%d (non-fatal)", clr);
+      LOG_DBG("hwinfo_clear_reset_cause ret=%d (non-fatal)", clr);
     }
   }
 
   cause_raw = raw;
   cause_kind = classify(raw);
   cached = true;
-  LOG_INF("[BOOT] cause raw=0x%08x kind=%s commission=%d", (unsigned)cause_raw,
+  LOG_INF("cause raw=0x%08x kind=%s commission=%d", (unsigned)cause_raw,
           boot_info_cause_str(), (int)boot_info_is_commission_boot());
   return ret == -ENOSYS ? 0 : ret;
 }

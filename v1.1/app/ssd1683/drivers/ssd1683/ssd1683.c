@@ -10,7 +10,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/byteorder.h>
 
-LOG_MODULE_REGISTER(ssd1683, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(ssd1683, CONFIG_SSD1683_LOG_LEVEL);
 
 // ============================================================================
 // Section 1: Low-level SPI Communication Helpers

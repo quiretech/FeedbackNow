@@ -37,7 +37,7 @@ void counter_sync_run(bool confirmed) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
   }
 
-  LOG_DBG("[counter_sync] evt 0x%02X per button (confirmed=%d)",
+  LOG_DBG("evt 0x%02X per button (confirmed=%d)",
           (unsigned)EVT_COUNTER_SYNC, (int)confirmed);
 
   for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
@@ -48,7 +48,7 @@ void counter_sync_run(bool confirmed) {
     uint8_t payload[PAYLOAD_LEN_BYTES];
     int ret = payload_gen_build_counter_sync(btn, epoch_s, payload);
     if (ret != 0) {
-      LOG_WRN("[counter_sync] btn=%u build failed: %d", btn, ret);
+      LOG_WRN("btn=%u build failed: %d", btn, ret);
       continue;
     }
     lora_uplink_msg_t msg = {0};
@@ -58,11 +58,11 @@ void counter_sync_run(bool confirmed) {
     memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
     ret = lora_put_event(&msg, K_MSEC(500));
     if (ret == 0) {
-      LOG_INF("[counter_sync] queued button %u", btn);
+      LOG_DBG("queued btn%u", btn);
     } else {
-      LOG_WRN("[counter_sync] lora_put_event btn=%u failed: %d", btn, ret);
+      LOG_WRN("lora_put_event btn=%u failed: %d", btn, ret);
     }
   }
 
-  LOG_DBG("[counter_sync] done");
+  LOG_DBG("done");
 }

@@ -34,7 +34,7 @@ static void write_be32(uint8_t *buf, uint32_t v) {
 
 void payload_gen_init(void) {
   k_mutex_init(&ctx.lock);
-  LOG_INF("payload_gen initialized");
+  LOG_INF("init ok");
 }
 
 int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,

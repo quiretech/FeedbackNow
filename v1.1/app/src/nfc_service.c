@@ -60,7 +60,7 @@ static int nfc_init_with_recovery(void) {
                                        : NFC_RECOVERY_OFF_MS_ESCALATED;
       uint32_t settle_ms = (attempt == 2) ? NFC_RECOVERY_SETTLE_MS
                                           : NFC_RECOVERY_SETTLE_MS_ESCALATED;
-      LOG_WRN("[nfc] cycling 3.6V for recovery (attempt %d/%d, off=%u ms settle=%u ms)",
+      LOG_WRN("cycling 3.6V for recovery (attempt %d/%d, off=%u ms settle=%u ms)",
               attempt, NFC_INIT_MAX_ATTEMPTS, off_ms, settle_ms);
       rail_manager_pulse_3v6_recovery(off_ms, settle_ms);
     }
@@ -68,22 +68,22 @@ static int nfc_init_with_recovery(void) {
     int64_t t0 = k_uptime_get();
     ret = pn5180_init(nfc_dev);
     if (ret != 0) {
-      LOG_ERR("[nfc] pn5180_init failed (attempt %d/%d): %d", attempt,
+      LOG_ERR("pn5180_init failed (attempt %d/%d): %d", attempt,
               NFC_INIT_MAX_ATTEMPTS, ret);
       continue;
     }
     ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
     if (ret != 0) {
-      LOG_ERR("[nfc] pn5180_configure failed (attempt %d/%d): %d", attempt,
+      LOG_ERR("pn5180_configure failed (attempt %d/%d): %d", attempt,
               NFC_INIT_MAX_ATTEMPTS, ret);
       continue;
     }
-    LOG_INF("[nfc] init+configure OK on attempt %d/%d in %lld ms", attempt,
+    LOG_INF("NFC probe ok attempt %d/%d %lld ms", attempt,
             NFC_INIT_MAX_ATTEMPTS, k_uptime_get() - t0);
     return 0;
   }
 
-  LOG_ERR("[nfc] persistent chip fault after %d attempts; NFC scan aborted",
+  LOG_ERR("persistent chip fault after %d attempts; NFC scan aborted",
           NFC_INIT_MAX_ATTEMPTS);
   return ret;
 }
@@ -115,7 +115,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
      * ISO15693 config itself, so we only need a healthy, powered chip. */
     bool warm = nfc_chip_alive && rail_manager_is_3v6_on();
     if (warm) {
-      LOG_INF("[nfc] chip still powered, skip re-init");
+      LOG_DBG("NFC powered, skip chip re-init");
     } else {
       /* Cold-path: allow rail to settle, then init with recovery. */
       k_msleep(NFC_POWER_SETTLE_MS);
@@ -126,7 +126,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       }
     }
 
-    LOG_INF("NFC scan started (intent=%u btn=%u, block=%d)", intent, button_id,
+    LOG_INF("NFC scan i=%u btn=%u blk=%d", intent, button_id,
             NFC_READ_BLOCK);
     deadline_ms = k_uptime_get_32() + NFC_SCAN_TIMEOUT_MS;
 
@@ -139,7 +139,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       }
       ret = pn5180_read_block(nfc_dev, uid, NFC_READ_BLOCK, block_data, 4);
       if (ret == 0) {
-        LOG_INF("NFC read OK block %d -> uplink", NFC_READ_BLOCK);
+        LOG_INF("NFC read ok blk=%d", NFC_READ_BLOCK);
         (void)smf_post_nfc_result(1, intent, button_id, block_data);
         (void)pn5180_prepare_poweroff(nfc_dev);
         /* Chip is idle with RF off; safe to keep alive for the next scan. */
@@ -154,7 +154,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
      * "no tag presented" (chip healthy) OR "chip wedged mid-scan" (chip bad).
      * We clear nfc_chip_alive so the next scan re-inits via the recovery
      * loop. Costs ~200 ms on the next timeout path; earns auto-healing. */
-    LOG_INF("NFC scan timeout/cancel");
+    LOG_INF("NFC scan end (timeout/cancel)");
     (void)smf_post_nfc_result(0, intent, button_id, NULL);
     (void)pn5180_prepare_poweroff(nfc_dev);
     nfc_chip_alive = false;
@@ -180,18 +180,18 @@ static int nfc_service_self_test(void) {
 
   ret = pn5180_init(nfc_dev);
   if (ret != 0) {
-    LOG_ERR("[nfc] SELF-TEST FAILED: pn5180_init=%d", ret);
+    LOG_ERR("SELF-TEST FAILED: pn5180_init=%d", ret);
     return ret;
   }
 
   ret = pn5180_get_version(nfc_dev, &info);
   if (ret != 0) {
-    LOG_ERR("[nfc] SELF-TEST FAILED: pn5180_get_version=%d", ret);
+    LOG_ERR("SELF-TEST FAILED: pn5180_get_version=%d", ret);
     (void)pn5180_prepare_poweroff(nfc_dev);
     return ret;
   }
 
-  LOG_INF("[nfc] SELF-TEST OK: product=%u.%u fw=%u.%u eeprom=%u.%u",
+  LOG_INF("NFC test ok p=%u.%u fw=%u.%u eeprom=%u.%u",
           (info.product_version >> 8) & 0xFFU, info.product_version & 0xFFU,
           (info.firmware_version >> 8) & 0xFFU, info.firmware_version & 0xFFU,
           (info.eeprom_version >> 8) & 0xFFU, info.eeprom_version & 0xFFU);
@@ -214,10 +214,10 @@ int nfc_service_init(void) {
    * no rail_manager request needed here. */
   int ret = nfc_service_self_test();
   if (ret != 0) {
-    LOG_WRN("[nfc] self-test failed; per-scan recovery will try to recover");
+    LOG_WRN("self-test failed; per-scan recovery will try to recover");
   }
 
-  LOG_INF("nfc_service initialized (start nfc_worker_id from main)");
+  LOG_DBG("nfc_service ready");
   return 0;
 }
 

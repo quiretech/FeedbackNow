@@ -71,7 +71,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(b);
   ARG_UNUSED(c);
 
-  LOG_INF("Input thread started (single + combo -> SMF)");
+  LOG_DBG("input thread (combo -> SMF)");
   k_sem_give(&button_thread_ready_sem);
 
   while (1) {
@@ -81,13 +81,13 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
     if (got && btn_evt.button_id < NUM_BUTTONS) {
       const char *evt_str =
           (btn_evt.type == BUTTON_EVENT_PRESS) ? "PRESS" : "RELEASE";
-      LOG_INF("[Input] btn=%d %s, held_before=0x%x", btn_evt.button_id, evt_str,
-              held);
+      LOG_DBG("btn=%u %s held_prev=0x%x", (unsigned)btn_evt.button_id,
+              evt_str, held);
 
       if (btn_evt.type == BUTTON_EVENT_PRESS) {
         held |= BUTTON_MASK(btn_evt.button_id);
         session_buttons |= BUTTON_MASK(btn_evt.button_id);
-        LOG_INF("[Input] session_buttons=0x%x after press", session_buttons);
+        LOG_DBG("session_buttons=0x%x on press", session_buttons);
       } else {
         held &= ~BUTTON_MASK(btn_evt.button_id);
       }
@@ -96,7 +96,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
       uint32_t held_before_sync = held;
       held = buttons_get_held_mask();
       if (held != held_before_sync) {
-        LOG_DBG("[Input] GPIO sync (timeout): held 0x%x -> 0x%x",
+        LOG_DBG("GPIO sync (timeout): held 0x%x -> 0x%x",
                 held_before_sync, held);
       }
     }
@@ -115,13 +115,13 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
       if (combo_being_timed != match) {
         combo_being_timed = match;
         combo_start_ms = k_uptime_get();
-        LOG_INF("[Input] Start timing combo: ev=%u, held=0x%x, last_fired=0x%x",
+        LOG_DBG("combo timing ev=%u held=0x%x last_fire=0x%x",
                 match->ev_type, held, last_fired_combo_mask);
       }
     } else {
       if (combo_being_timed != NULL) {
         LOG_DBG(
-            "[Input] Stop timing combo (held=0x%x, match=%p, last_fired=0x%x)",
+            "Stop timing combo (held=0x%x, match=%p, last_fired=0x%x)",
             held, match, last_fired_combo_mask);
       }
       combo_being_timed = NULL;
@@ -131,16 +131,14 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
     if (combo_being_timed != NULL && held == combo_being_timed->mask) {
       int64_t elapsed = k_uptime_get() - combo_start_ms;
       if (elapsed >= (int64_t)combo_being_timed->hold_ms) {
-        LOG_INF("[Input] COMBO FIRED: ev=%u, mask=0x%x",
-                combo_being_timed->ev_type, combo_being_timed->mask);
+        LOG_DBG("combo fire ev=%u mask=0x%x", combo_being_timed->ev_type,
+                combo_being_timed->mask);
         (void)smf_post_event(combo_being_timed->ev_type, 0, k_uptime_get());
         session_combo_fired = true;
         last_fired_combo_mask =
             combo_being_timed->mask; /* prevent re-fire while held */
         combo_being_timed = NULL;
-        LOG_INF(
-            "[Input] After combo: session_combo_fired=true, last_fired=0x%x",
-            last_fired_combo_mask);
+        LOG_DBG("combo done last_fire=0x%x", last_fired_combo_mask);
       }
     }
 
@@ -164,7 +162,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
           for (int i = 0; i < NUM_BUTTONS; i++) {
             if (session_buttons & BUTTON_MASK(i)) {
               uint8_t ev_type = SMF_EVT_BUTTON_SINGLE_0 + (uint8_t)i;
-              LOG_DBG("[Input] SINGLE BUTTON %d -> SMF (session=0x%x)", i,
+              LOG_DBG("SINGLE BUTTON %d -> SMF (session=0x%x)", i,
                       session_buttons);
               (void)smf_post_event(ev_type, (uint8_t)i, btn_evt.timestamp_ms);
               break;
@@ -176,16 +174,16 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
         /* Recovery path: held has been 0 for 300ms, but we still have session
          * state */
         should_reset_session = true;
-        LOG_INF("[Input] SESSION RESET (recovery): held was 0 for %lldms, "
-                "session=0x%x",
-                k_uptime_get() - held_zero_at_ms, session_buttons);
+        LOG_DBG("session recovery reset gap_ms=%lld session=0x%x",
+                (long long)(k_uptime_get() - held_zero_at_ms),
+                session_buttons);
       }
     }
 
     if (should_reset_session) {
       if (session_buttons != 0 || session_combo_fired ||
           last_fired_combo_mask != 0) {
-        LOG_DBG("[Input] SESSION END: will_post=%d, session=0x%x, "
+        LOG_DBG("SESSION END: will_post=%d, session=0x%x, "
                 "combo_fired=%d, last_fired=0x%x",
                 will_post_single, session_buttons, session_combo_fired,
                 last_fired_combo_mask);

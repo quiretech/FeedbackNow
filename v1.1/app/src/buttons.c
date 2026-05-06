@@ -106,8 +106,9 @@ int buttons_init(void) {
     gpio_init_callback(&button_cb_data[i], button_isr, BIT(buttons[i].pin));
     gpio_add_callback(buttons[i].port, &button_cb_data[i]);
 
-    LOG_INF("Button %d on %s pin %d", i, buttons[i].port->name, buttons[i].pin);
+    LOG_DBG("btn%u %s pin%u", i, buttons[i].port->name, buttons[i].pin);
   }
 
+  LOG_INF("buttons: init ok (%d)", NUM_BUTTONS);
   return 0;
 }

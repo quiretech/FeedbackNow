@@ -64,10 +64,11 @@ int power_ctrl_init(void) {
       return ret;
     }
 
-    LOG_INF("Initialized power GPIO %d on %s pin %d", i,
-            power_gpios[i].port->name, power_gpios[i].pin);
+    LOG_DBG("power gpio%u %s pin%u", i, power_gpios[i].port->name,
+            power_gpios[i].pin);
   }
 
+  LOG_INF("power rails: gpio ok (%d domains)", POWER_DOMAIN_COUNT);
   return 0;
 }
 

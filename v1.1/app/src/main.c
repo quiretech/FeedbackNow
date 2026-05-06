@@ -138,7 +138,7 @@ static int system_init(void) {
 int main(void) {
   int ret;
 
-  LOG_SECTION_INF("FeedbackNow FlexBox+ v" FW_VERSION_STRING " Starting");
+  LOG_SECTION_INF("FlexBox+ v" FW_VERSION_STRING " starting");
 
   /* Capture + clear reset cause before anything else so later code (Stage 3
    * install screen) can gate UI on commissioning-class boots only. Failure is
@@ -186,24 +186,20 @@ int main(void) {
 
   /* Enter idle before worker threads run to avoid refcount-reset races. */
   rail_manager_enter_idle();
-  LOG_INF("Rails released (idle); 3.3V/3.3A/3.6V off until requested");
+  LOG_INF("rails idle (3.3 / 3.3A / 3.6 off until use)");
 
   /* Centralized thread start (single block for ordering and priorities). */
   k_thread_start(led_ui_thread_id);
-  LOG_INF("LED thread started");
   (void)led_manager_wait_until_ready(K_SECONDS(1));
   k_thread_start(nfc_worker_id);
-  LOG_INF("NFC worker started");
   (void)nfc_service_wait_until_ready(K_SECONDS(1));
 #if EPD_ENABLED
   /* Logo uses long EPD SPI; finish before LoRa thread joins (same SPI bus). */
   display_show_logo_sync();
 #endif
   k_thread_start(lora_thread_id);
-  LOG_INF("LoRa thread started");
   (void)lora_wait_until_ready(K_SECONDS(1));
   k_thread_start(smf_thread_id);
-  LOG_INF("SMF thread started");
 
   ret = buttons_init();
   if (ret != 0) {
@@ -212,13 +208,13 @@ int main(void) {
   }
 
   k_thread_start(button_uplink_thread_id);
-  LOG_INF("Input thread started");
   (void)button_thread_wait_until_ready(K_SECONDS(1));
 
   (void)housekeeping_init();
   k_thread_start(housekeeping_thread_id);
-  LOG_INF("Housekeeping thread started");
   (void)housekeeping_wait_until_ready(K_SECONDS(1));
+
+  LOG_INF("workers running: LED NFC LoRa SMF input HK");
 
   /* Signal SMF: all inits and threads started ("system go"). */
   if (smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get()) != 0) {

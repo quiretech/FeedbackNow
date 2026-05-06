@@ -249,7 +249,7 @@
     /* 4. Write to driver using clamped coordinates */
     int ret = display_write(dev, x1, y1, &desc, px_map);
     if (ret < 0) {
-      LOG_ERR("[EPD] display_write error: %d", ret);
+      LOG_ERR("display_write error: %d", ret);
     }
 
     lv_display_flush_ready(display);
@@ -535,6 +535,15 @@
       lv_qrcode_set_light_color(dev_info_qr, lv_color_white());
       lv_obj_clear_flag(dev_info_qr, LV_OBJ_FLAG_SCROLLABLE);
 #else
+      // ADD THIS: spacer to push footer to bottom
+      lv_obj_t *dev_info_spacer = lv_obj_create(cont_devinfo);
+      lv_obj_set_width(dev_info_spacer, dev_body_w);
+      lv_obj_set_flex_grow(dev_info_spacer, 1);
+      lv_obj_set_style_bg_opa(dev_info_spacer, LV_OPA_TRANSP, LV_PART_MAIN);
+      lv_obj_set_style_border_width(dev_info_spacer, 0, LV_PART_MAIN);
+      lv_obj_set_style_pad_all(dev_info_spacer, 0, LV_PART_MAIN);
+      lv_obj_clear_flag(dev_info_spacer, LV_OBJ_FLAG_SCROLLABLE);
+
       dev_info_footer = lv_label_create(cont_devinfo);
       lv_label_set_text(dev_info_footer, EPD_TEXT_MANUFACTURER);
 
@@ -773,18 +782,18 @@
                       DEVICE_UNIT_ID_STRING, deveui_nocolon, FW_VERSION_STRING,
                       margin_for_qr, (unsigned)ls.best_nb_gateways);
       if (n < 0 || n >= (int)sizeof(payload)) {
-        LOG_WRN("[EPD] install QR payload truncated (len=%d)", n);
+        LOG_WRN("install QR payload truncated (len=%d)", n);
         n = (int)sizeof(payload) - 1;
       }
       lv_result_t qr_res = lv_qrcode_update(install_qr, payload, (uint32_t)n);
       if (qr_res != LV_RESULT_OK) {
-        LOG_WRN("[EPD] lv_qrcode_update failed (res=%d len=%d)", (int)qr_res, n);
+        LOG_WRN("lv_qrcode_update failed (res=%d len=%d)", (int)qr_res, n);
       } else {
-        LOG_DBG("[EPD] install QR: %s", payload);
+        LOG_DBG("install QR: %s", payload);
       }
     }
 
-    LOG_INF("[EPD] install_info: %s margin=%d gw=%u samples=%u",
+    LOG_INF("epd install_info %s m=%d gw=%u n=%u",
             install_link_label_build(&ls), (int)ls.best_demod_margin,
             (unsigned)ls.best_nb_gateways, (unsigned)ls.samples);
   }
@@ -969,16 +978,16 @@
                       deveui_nocolon, counters_qr, FW_VERSION_STRING,
                       mfg_qr);
       if (n < 0 || n >= (int)sizeof(payload)) {
-        LOG_WRN("[EPD] device_info QR payload truncated or error (len=%d)", n);
+        LOG_WRN("device_info QR payload truncated or error (len=%d)", n);
       }
       device_info_qr_fit_in_slot();
       uint32_t qr_len = (uint32_t)strlen(payload);
       lv_result_t qr_res = lv_qrcode_update(dev_info_qr, payload, qr_len);
       if (qr_res != LV_RESULT_OK) {
-        LOG_WRN("[EPD] device_info lv_qrcode_update failed (res=%u len=%u)",
+        LOG_WRN("device_info lv_qrcode_update failed (res=%u len=%u)",
                 (unsigned)qr_res, (unsigned)qr_len);
       } else {
-        LOG_DBG("[EPD] device_info QR: %s", payload);
+        LOG_DBG("device_info QR: %s", payload);
       }
     }
 #endif
@@ -1013,7 +1022,7 @@
     lv_obj_t *scr_to_show = NULL;
 
     if (display == NULL || !device_is_ready(display)) {
-      LOG_ERR("[EPD] display not ready");
+      LOG_ERR("display not ready");
       return;
     }
 
@@ -1022,7 +1031,7 @@
     * or lost rail) when the controller reports it is still powered — i.e. we
     * just came off a partial refresh and the rail keep-alive kept it warm. */
     if (ssd1683_is_powered_on(display)) {
-      LOG_DBG("[EPD] panel already powered, skip blanking_off");
+      LOG_DBG("panel already powered, skip blanking_off");
       ret = 0;
     } else {
       const int64_t t_blank = k_uptime_get();
@@ -1031,14 +1040,14 @@
         if (ret == 0) {
           break;
         }
-        LOG_WRN("[EPD] blanking_off failed: %d (attempt %d/3)", ret, attempt + 1);
+        LOG_WRN("blanking_off failed: %d (attempt %d/3)", ret, attempt + 1);
         k_msleep(2000);
       }
       if (ret < 0) {
-        LOG_ERR("[EPD] blanking_off failed after retries: %d", ret);
+        LOG_ERR("blanking_off failed after retries: %d", ret);
         return;
       }
-      LOG_INF("[EPD] blanking_off in %lld ms",
+      LOG_DBG("epd blanking_off %lld ms",
               (long long)(k_uptime_get() - t_blank));
     }
 
@@ -1073,7 +1082,7 @@
     /* Show the requested screen */
     switch (type) {
     case JOB_SHOW_LOGO:
-      LOG_INF("[EPD] show LOGO (FeedBackNow FlexBox)");
+      LOG_INF("epd show LOGO");
       scr_to_show = screen_logo;
       break;
     case JOB_SHOW_LAST_CLEANED: {
@@ -1088,7 +1097,7 @@
         display_epoch = (int64_t)UINT32_MAX;
       }
       format_epoch_yyyymmdd_hhmm((uint32_t)display_epoch, ts, sizeof(ts));
-      LOG_INF("[EPD] show LAST_CLEANED %s", ts);
+      LOG_INF("epd show LAST_CLEANED %s", ts);
       if (last_cleaned_label) {
         lv_label_set_text(last_cleaned_label, ts);
       }
@@ -1096,23 +1105,23 @@
       break;
     }
     case JOB_SHOW_THANKS:
-      LOG_INF("[EPD] show THANKS (5s then last cleaned)");
+      LOG_INF("epd show THANKS");
       scr_to_show = screen_thanks;
       break;
     case JOB_SHOW_CLEANING:
-      LOG_INF("[EPD] show CLEANING (45min auto-revert)");
+      LOG_INF("epd show CLEANING");
       scr_to_show = screen_cleaning;
       break;
     case JOB_SHOW_CONNECTING:
-      LOG_INF("[EPD] show CONNECTING");
+      LOG_INF("epd show CONNECTING");
       scr_to_show = screen_connecting;
       break;
     case JOB_SHOW_DEVICE_INFO:
-      LOG_INF("[EPD] show DEVICE_INFO");
+      LOG_INF("epd show DEVICE_INFO");
       scr_to_show = screen_device_info;
       break;
     case JOB_SHOW_DL_CUSTOM_MESSAGE:
-      LOG_INF("[EPD] show DL_CUSTOM_MESSAGE");
+      LOG_INF("epd show DL_CUSTOM");
       if (dl_custom_msg_label != NULL) {
         k_mutex_lock(&dl_custom_msg_mutex, K_FOREVER);
         lv_label_set_text(dl_custom_msg_label, dl_custom_msg_buf);
@@ -1125,12 +1134,12 @@
 
 #if EPD_INSTALL_INFO_SCREEN
     case JOB_SHOW_INSTALL_INFO:
-      LOG_INF("[EPD] show INSTALL_INFO");
+      LOG_INF("epd show INSTALL_INFO");
       scr_to_show = screen_install_info;
       break;
 #endif
     case JOB_FULL_REFRESH:
-      LOG_INF("[EPD] full refresh");
+      LOG_DBG("epd full_refresh");
       /* Show current screen again to force refresh */
       switch (current_screen) {
       case DISPLAY_SCREEN_LOGO:
@@ -1244,9 +1253,9 @@
 
     display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
     if (!device_is_ready(display)) {
-      LOG_ERR("[EPD] display device not ready");
+      LOG_ERR("display device not ready");
       display_signal_sync_aborted(job.type);
-      LOG_WRN("[EPD] released blocked sync waiter(s) for job type=%u",
+      LOG_WRN("released blocked sync waiter(s) for job type=%u",
               (unsigned)job.type);
       rail_manager_release_3v3a();
       return;
@@ -1281,10 +1290,10 @@
         atomic_set(&cleaning_timer_expired_atomic, 0);
         if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
           (void)last_cleaned_store_set(epoch);
-          LOG_INF("[EPD] Cleaning auto-revert, last cleaned = %u", epoch);
+          LOG_INF("epd cleaning_revert epoch=%u", epoch);
         } else {
           (void)last_cleaned_store_get(&epoch);
-          LOG_WRN("[EPD] Cleaning auto-revert, RTC unavailable");
+          LOG_WRN("epd cleaning_revert no_rtc");
         }
       } else {
         k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
@@ -1322,10 +1331,9 @@
       if (!timer_was_running) {
         k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
                       K_NO_WAIT);
-        LOG_INF("[EPD] Cleaning timer started (%u min)",
-                EPD_CLEANING_REVERT_MINUTES);
+        LOG_DBG("epd cleaning_tmr %umin", EPD_CLEANING_REVERT_MINUTES);
       } else {
-        LOG_DBG("[EPD] Cleaning screen reshown, timer kept running");
+        LOG_DBG("Cleaning screen reshown, timer kept running");
       }
       break;
     }
@@ -1362,7 +1370,7 @@
 
       k_timer_start(&dl_custom_revert_timer, K_MINUTES(hold), K_NO_WAIT);
 
-      LOG_INF("[EPD] DL custom message hold %u min", (unsigned)hold);
+      LOG_INF("epd dl_custom hold_min=%u", (unsigned)hold);
 
       break;
 
@@ -1400,7 +1408,7 @@
     /* Force LVGL to render and flush to the EPD. A single lv_task_handler() is
     * unreliable in DIRECT mode — it may defer the flush to the next tick. */
     force_lvgl_flush();
-    LOG_DBG("[EPD] flush done for job type=%u", job.type);
+    LOG_DBG("flush done for job type=%u", job.type);
 
     /* Restore fast update after a full (slow) refresh */
     if (job.type == JOB_FULL_REFRESH) {
@@ -1467,7 +1475,7 @@
   static void enqueue_job(enum display_job_type type, uint32_t epoch) {
     struct display_job job = {.type = type, .epoch = epoch};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] job queue full, drop type=%u", type);
+      LOG_WRN("job queue full, drop type=%u", type);
       return;
     }
     /* k_work_schedule preserves an existing deadline (returns 0 if already
@@ -1519,7 +1527,7 @@
     /* Get display device */
     lvgl_display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
     if (!device_is_ready(lvgl_display_dev)) {
-      LOG_ERR("[EPD] display device not ready");
+      LOG_ERR("display device not ready");
       return -ENODEV;
     }
 
@@ -1535,7 +1543,7 @@
       /* Create LVGL display if default doesn't exist */
       lvgl_display = lv_display_create(caps.x_resolution, caps.y_resolution);
       if (lvgl_display == NULL) {
-        LOG_ERR("[EPD] failed to create LVGL display");
+        LOG_ERR("failed to create LVGL display");
         return -ENOMEM;
       }
       lv_display_set_default(lvgl_display);
@@ -1565,13 +1573,13 @@
 
     /* Ensure buffer is large enough for DIRECT mode */
     if (sizeof(lvgl_buf1) < full_buf_size) {
-      LOG_ERR("[EPD] Buffer too small: have=%d need=%d", sizeof(lvgl_buf1),
+      LOG_ERR("Buffer too small: have=%d need=%d", sizeof(lvgl_buf1),
               full_buf_size);
       return -ENOMEM;
     }
 
-    LOG_INF("[EPD] Setting buffers: size=%d stride=%d mode=DIRECT",
-            sizeof(lvgl_buf1), stride_bytes);
+    LOG_INF("epd buf bytes=%zu stride=%u", sizeof(lvgl_buf1),
+            (unsigned)stride_bytes);
     lv_display_set_buffers_with_stride(lvgl_display, lvgl_buf1, lvgl_buf2,
                                       full_buf_size, stride_bytes,
                                       LV_DISPLAY_RENDER_MODE_DIRECT);
@@ -1582,9 +1590,9 @@
     /* Create all screens (they will be created on the default display) */
     create_lvgl_screens();
 
-    LOG_INF("display_manager init (EPD enabled, LVGL initialized)");
+    LOG_INF("epd init ok (+LVGL)");
   #else
-    LOG_INF("display_manager init (EPD disabled)");
+    LOG_INF("epd init ok (off)");
   #endif
     return 0;
   }
@@ -1599,13 +1607,13 @@
   #if EPD_ENABLED
     struct display_job job = {.type = JOB_SHOW_LOGO, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] logo sync: job queue full");
+      LOG_WRN("logo sync: job queue full");
       return;
     }
     atomic_set(&logo_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
     if (k_sem_take(&logo_done_sem, K_MSEC(30000)) != 0) {
-      LOG_WRN("[EPD] logo sync timeout");
+      LOG_WRN("logo sync timeout");
     }
     atomic_set(&logo_sync_waiting, 0);
   #endif
@@ -1622,7 +1630,7 @@
       }
       if (timeout_ms != UINT32_MAX &&
           (k_uptime_get_32() - start) >= timeout_ms) {
-        LOG_WRN("[EPD] SPI idle wait timeout (%u ms)", (unsigned)timeout_ms);
+        LOG_WRN("SPI idle wait timeout (%u ms)", (unsigned)timeout_ms);
         break;
       }
       k_msleep(20);
@@ -1640,13 +1648,13 @@
   #if EPD_ENABLED
     struct display_job job = {.type = JOB_SHOW_LAST_CLEANED, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] last_cleaned sync: job queue full");
+      LOG_WRN("last_cleaned sync: job queue full");
       return;
     }
     atomic_set(&last_cleaned_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
     if (k_sem_take(&last_cleaned_done_sem, K_MSEC(10000)) != 0) {
-      LOG_WRN("[EPD] last_cleaned sync timeout");
+      LOG_WRN("last_cleaned sync timeout");
     }
     atomic_set(&last_cleaned_sync_waiting, 0);
   #endif
@@ -1671,7 +1679,7 @@
     atomic_set(&thanks_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
     if (k_sem_take(&thanks_done_sem, K_MSEC(10000)) != 0) {
-      LOG_WRN("[EPD] thanks sync timeout; clearing vote UI busy");
+      LOG_WRN("thanks sync timeout; clearing vote UI busy");
       atomic_set(&vote_ui_busy, 0);
       atomic_set(&vote_ack_pending, 0);
     }
@@ -1689,13 +1697,13 @@
   #if EPD_ENABLED
     struct display_job job = {.type = JOB_SHOW_CLEANING, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] cleaning sync: job queue full");
+      LOG_WRN("cleaning sync: job queue full");
       return;
     }
     atomic_set(&cleaning_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
     if (k_sem_take(&cleaning_done_sem, K_MSEC(10000)) != 0) {
-      LOG_WRN("[EPD] cleaning sync timeout");
+      LOG_WRN("cleaning sync timeout");
     }
     atomic_set(&cleaning_sync_waiting, 0);
   #endif
@@ -1717,13 +1725,13 @@
   #if EPD_ENABLED
     struct display_job job = {.type = JOB_SHOW_DEVICE_INFO, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] device_info sync: job queue full");
+      LOG_WRN("device_info sync: job queue full");
       return;
     }
     atomic_set(&device_info_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
     if (k_sem_take(&device_info_done_sem, K_MSEC(10000)) != 0) {
-      LOG_WRN("[EPD] device_info sync timeout");
+      LOG_WRN("device_info sync timeout");
     }
     atomic_set(&device_info_sync_waiting, 0);
   #endif
@@ -1751,7 +1759,7 @@
   void display_show_install_info_sync(void) {
     struct display_job job = {.type = JOB_SHOW_INSTALL_INFO, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("[EPD] install_info sync: job queue full");
+      LOG_WRN("install_info sync: job queue full");
       return;
     }
     atomic_set(&install_info_sync_waiting, 1);
@@ -1759,7 +1767,7 @@
     /* Full refresh + QR encode can take several seconds on SSD1683; give a
     * generous timeout. Mirrors logo_sync's 30s cap for boot-class screens. */
     if (k_sem_take(&install_info_done_sem, K_MSEC(30000)) != 0) {
-      LOG_WRN("[EPD] install_info sync timeout");
+      LOG_WRN("install_info sync timeout");
     }
     atomic_set(&install_info_sync_waiting, 0);
   }

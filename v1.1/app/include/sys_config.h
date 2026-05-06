@@ -313,9 +313,9 @@
  * RTC / time sync
  * =============================================================================
  */
-#define RTC_SET_TIME_ON_BOOT 0
+#define RTC_SET_TIME_ON_BOOT 1
 #define RTC_FORCE_SET_TIME_ON_BOOT                                             \
-  0 /* prod: 0 (do not overwrite RTC from build-time) */
+  1 /* prod: 0 (do not overwrite RTC from build-time) */
 /* Fallback calendar time when DEVICE_PROVISION_UNIX_UTC is 0 (see rtc.c). */
 #define RTC_SET_YEAR 2026
 #define RTC_SET_MONTH 1
@@ -488,7 +488,7 @@
 /** Device Info screen: QR with FBN pipe payload. 0 omits QR and flex spacer
  * slot; headings, DevEUI, counters, FW line, and manufacturer footer unchanged. */
 #ifndef EPD_DEVICE_INFO_QR
-#define EPD_DEVICE_INFO_QR 1
+#define EPD_DEVICE_INFO_QR 0
 #endif
 #endif /* EPD_ENABLED */
 
@@ -576,8 +576,8 @@
  */
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 3
-#define FW_VERSION_PATCH 0
-#define FW_VERSION_STRING "1.3.0"
+#define FW_VERSION_PATCH 1
+#define FW_VERSION_STRING "1.3.1"
 
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4

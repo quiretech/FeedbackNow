@@ -126,9 +126,7 @@ static int load_or_init(void) {
       return ret;
     }
 
-    LOG_SECTION_INF("DEVNONCE STORE INITIALIZED");
-    LOG_INF("DevNonce store initialized (slot=%u seq=%u, first join will use 0)",
-            ctx.active_slot, ctx.seq);
+    LOG_INF("devnonce init slot=%u seq=%u next=0", ctx.active_slot, ctx.seq);
     return 0;
   }
 
@@ -154,8 +152,8 @@ static int load_or_init(void) {
   ctx.seq = best->seq;
   ctx.last_devnonce = best->last_devnonce;
 
-  LOG_INF("DevNonce store loaded (slot=%u seq=%u last=%u)", ctx.active_slot,
-          ctx.seq, ctx.last_devnonce);
+  LOG_INF("devnonce slot=%u seq=%u last=%u", ctx.active_slot, ctx.seq,
+          ctx.last_devnonce);
   return 0;
 }
 
@@ -257,7 +255,7 @@ int devnonce_store_factory_reset(void) {
   ctx.initialized = false;
   k_mutex_unlock(&ctx.lock);
 
-  LOG_SECTION_WRN("FACTORY RESET: EEPROM DevNonce store");
+  LOG_SECTION_WRN("factory reset: DevNonce EEPROM");
 
   int ret = erase_devnonce_slots();
   if (ret != 0) {

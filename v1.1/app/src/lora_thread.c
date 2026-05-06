@@ -84,7 +84,7 @@ static void join_after_backoff_timer_expiry(struct k_timer *timer) {
 
 static void join_after_backoff_work_handler(struct k_work *work) {
   (void)work;
-  LOG_INF("Link backoff elapsed; posting LORA_CMD_JOIN_SILENT");
+  LOG_INF("join backoff expired; rejoin (silent)");
   /* Customer-facing rejoin: no join LED (installer LED only for deliberate join
    * or first silent join right after power-on). */
   atomic_set(&silent_join_installer_led_armed, 0);
@@ -104,9 +104,9 @@ static void join_after_backoff_work_handler(struct k_work *work) {
 }
 
 static void lora_log_join_ids(void) {
-  LOG_INF("LoRaWAN OTAA identifiers in use:");
-  LOG_HEXDUMP_INF(dev_eui, sizeof(dev_eui), "DevEUI");
-  LOG_HEXDUMP_INF(join_eui, sizeof(join_eui), "JoinEUI");
+  LOG_DBG("OTAA EUIs:");
+  LOG_HEXDUMP_DBG(dev_eui, sizeof(dev_eui), "DevEUI");
+  LOG_HEXDUMP_DBG(join_eui, sizeof(join_eui), "JoinEUI");
 }
 
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
@@ -118,9 +118,9 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
     return -EINVAL;
   }
 
-  LOG_INF("UL port %u len %zu confirmed=%d", (unsigned)port, len,
+  LOG_DBG("UL port=%u len=%zu cfm=%d", (unsigned)port, len,
           confirmed ? 1 : 0);
-  LOG_HEXDUMP_INF(data, len, "UL FRMPayload");
+  LOG_HEXDUMP_DBG(data, len, "UL FRMPayload");
 
 #if EPD_ENABLED
   if (confirmed) {
@@ -141,7 +141,7 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
         LOG_DBG("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
         k_msleep(500);
       } else {
-        LOG_WRN("lorawan_send: busy after 5 retries");
+        LOG_WRN("lorawan_send busy after 5 retries");
       }
     } else {
       break;
@@ -149,9 +149,9 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   }
 
   if (ret == 0) {
-    LOG_INF("UL OK port %u len %zu", (unsigned)port, len);
+    LOG_INF("UL OK p=%u len=%zu", (unsigned)port, len);
   } else if (ret < 0) {
-    LOG_ERR("UL lorawan_send failed port=%u: %d", (unsigned)port, ret);
+    LOG_ERR("UL send failed port=%u: %d", (unsigned)port, ret);
   }
 
   return ret;
@@ -172,7 +172,7 @@ static bool lora_mac_probe_after_join(void) {
     int sret = lorawan_request_link_check(true);
     if (sret == 0) {
       last_uplink_ms = (uint32_t)k_uptime_get();
-      LOG_INF("Post-join MAC probe OK (attempt %d)", i + 1);
+      LOG_DBG("post-join probe OK (attempt %d)", i + 1);
 #if LORA_POST_JOIN_ANS_SETTLE_MS > 0
       /* Let RX1/RX2 deliver the LinkCheckAns so lora_link_stats updates before
        * callers read the snapshot (Stage 3 install screen). Safe no-op if the
@@ -181,24 +181,24 @@ static bool lora_mac_probe_after_join(void) {
 #endif
       lora_link_stats_snapshot_t ls;
       if (lora_link_stats_get(&ls) && ls.samples > 0) {
-        LOG_INF("[LINK] post-join stats: last margin=%d dB gw=%u "
-                "best margin=%d dB gw=%u samples=%u",
+        LOG_INF("post-join link: last_margin=%d dB gw=%u "
+                "best_margin=%d dB gw=%u samples=%u",
                 (int)ls.last_demod_margin, (unsigned)ls.last_nb_gateways,
                 (int)ls.best_demod_margin, (unsigned)ls.best_nb_gateways,
                 (unsigned)ls.samples);
       } else {
-        LOG_INF("[LINK] post-join: probe OK but no LinkCheckAns yet");
+        LOG_WRN("post-join link: no LinkCheckAns (probe sent)");
       }
       return true;
     }
     if (sret == -ENOTCONN) {
-      LOG_WRN("Post-join MAC probe: stack not joined (attempt %d)", i + 1);
+      LOG_WRN("post-join probe: stack not joined (attempt %d)", i + 1);
       return false;
     }
-    LOG_DBG("Post-join MAC probe: err %d (attempt %d)", sret, i + 1);
+    LOG_DBG("post-join probe: err %d (attempt %d)", sret, i + 1);
     k_msleep(LORA_POST_JOIN_MAC_PROBE_RETRY_MS);
   }
-  LOG_WRN("Post-join MAC probe: exhausted retries");
+  LOG_WRN("post-join probe: exhausted retries");
   return false;
 }
 #endif
@@ -220,8 +220,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
 
   /* JOIN_STARTED is posted by caller only for deliberate join (LORA_CMD_JOIN).
    */
-  LOG_SECTION_INF("STARTING LORA JOIN LOOP");
-  LOG_INF("Up to %d attempts this cycle", LORA_JOIN_ATTEMPTS_PER_CYCLE);
+  LOG_DBG("join loop start attempts=%d", LORA_JOIN_ATTEMPTS_PER_CYCLE);
   if (show_join_led) {
     (void)led_manager_show(
         0, LED_PATTERN_JOINING);
@@ -240,31 +239,32 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       sys_reboot(SYS_REBOOT_COLD);
     }
     join_cfg->otaa.dev_nonce = dev_nonce;
-    LOG_INF("");
-    LOG_INF("=== JOIN ATTEMPT %d / %d ===", attempt + 1,
-            LORA_JOIN_ATTEMPTS_PER_CYCLE);
+    LOG_INF("join %d/%d devNonce=%u", attempt + 1, LORA_JOIN_ATTEMPTS_PER_CYCLE,
+            (unsigned)dev_nonce);
     lora_log_join_ids();
-    LOG_INF("Joining network using OTAA, devNonce: %d", dev_nonce);
 #if EPD_ENABLED
     /* LoRa and EPD share SPI; wait until EPD is not transferring so JoinAccept
      * RX windows can use the radio without SPI mutex contention. */
     display_wait_until_spi_idle(15000);
 #endif
     ret = lorawan_join(join_cfg);
-    LOG_INF("lorawan_join() returned: %d", ret);
+    if (ret == 0) {
+      LOG_DBG("lorawan_join ok");
+    } else {
+      LOG_INF("lorawan_join ret=%d", ret);
+    }
 
     if (ret == 0) {
 
       lorawan_enable_adr(true);
 
-      LOG_INF("ADR enabled after join — expect LinkADRReq during counter-sync "
-              "burst; DeviceTimeReq follows deferred schedule.");
+      LOG_DBG("ADR on (post-join); DeviceTimeReq deferred");
 
 #if LORA_POST_JOIN_MAC_PROBE_RETRIES > 0
-      LOG_INF("Verifying MAC can transmit after join API success...");
+      LOG_DBG("post-join MAC probe");
       if (!lora_mac_probe_after_join()) {
         rail_manager_release_3v3a();
-        LOG_WRN("Join API OK but MAC TX not ready; retrying OTAA");
+        LOG_WRN("join OK but MAC TX not ready; retry OTAA");
         if (attempt + 1 < LORA_JOIN_ATTEMPTS_PER_CYCLE) {
           k_sleep(LORA_JOIN_RETRY_DELAY);
         }
@@ -273,7 +273,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
 #endif
       rail_manager_release_3v3a();
 
-      LOG_SECTION_INF("LORA JOIN SUCCESSFUL");
+      LOG_INF("LoRaWAN joined");
       consecutive_send_failures = 0;
       k_timer_stop(&join_after_backoff_timer);
       atomic_set(&lora_joined_flag, 1);
@@ -294,28 +294,27 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
                            k_uptime_get());
       (void)join_state_store_set_has_joined_once();
       rail_manager_release_3v3a();
-      LOG_SECTION_INF("LORA JOIN LOOP COMPLETED SUCCESSFULLY");
+      LOG_DBG("join loop done");
       return true;
     }
 
     rail_manager_release_3v3a();
 
     if (ret == -ETIMEDOUT) {
-      LOG_WRN("Join timed out - will retry in %d seconds",
+      LOG_WRN("join timed out; retry in %d s",
               LORA_JOIN_RETRY_DELAY_SECONDS);
     } else {
-      LOG_ERR("Join failed (%d) - will retry in %d seconds", ret,
+      LOG_ERR("join failed (%d); retry in %d s", ret,
               LORA_JOIN_RETRY_DELAY_SECONDS);
     }
 
     if (attempt + 1 < LORA_JOIN_ATTEMPTS_PER_CYCLE) {
-      LOG_INF("Sleeping for %d seconds before next attempt...",
-              LORA_JOIN_RETRY_DELAY_SECONDS);
+      LOG_DBG("sleep %d s until next attempt", LORA_JOIN_RETRY_DELAY_SECONDS);
       k_sleep(LORA_JOIN_RETRY_DELAY);
     }
   }
 
-  LOG_WRN("Join failed after %d attempts (assume no gateway / genuine failure)",
+  LOG_WRN("join failed after %d attempts (no gateway or RF issue)",
           LORA_JOIN_ATTEMPTS_PER_CYCLE);
   if (show_join_led) {
     (void)led_manager_show(0, LED_PATTERN_OFF); /* stop joining blink */
@@ -327,11 +326,10 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   int ret;
   uint8_t cmd;
 
-  LOG_SECTION_INF("LORA THREAD ENTRY");
+  LOG_DBG("LoRa thread start");
   k_sem_give(&lora_ready_sem);
-  LOG_INF("LoRa thread started - Thread ID: %p", k_current_get());
-  LOG_INF("LoRa thread priority: %d", k_thread_priority_get(k_current_get()));
-  LOG_INF("LoRa thread stack size: %d", LORA_THREAD_STACK_SIZE);
+  LOG_INF("tid=%p prio=%d stk=%u", k_current_get(),
+          k_thread_priority_get(k_current_get()), LORA_THREAD_STACK_SIZE);
 
   struct lorawan_join_config join_cfg = {.mode = LORAWAN_ACT_OTAA,
                                          .dev_eui = dev_eui,
@@ -346,8 +344,8 @@ static void lora_thread_fn(void *a, void *b, void *c) {
    * join_state_store is inited from main before this thread starts. */
   bool has_joined_once = false;
   (void)join_state_store_has_joined_once(&has_joined_once);
-  LOG_INF("has_joined_once=%d (EEPROM_JOIN_STATE_CLEAR_ON_BOOT=%d)",
-          has_joined_once, EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
+  LOG_INF("has_joined_once=%d clear_on_boot=%d", has_joined_once,
+          EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
   if (has_joined_once) {
     /* One join cycle with LED after power-on so installers see progress without
      * logs; backoff rejoin clears this flag before posting JOIN_SILENT. */
@@ -355,17 +353,17 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     (void)lora_cmd_put(
         LORA_CMD_JOIN_SILENT); /* Auto-join: no Connecting screen */
   } else {
-    LOG_SECTION_INF("FIRST BOOT: waiting for join command (Staff + 0+1+2)");
+    LOG_INF("first boot: wait staff combo join");
   }
   (void)lora_get_cmd(&cmd, K_FOREVER);
-  LOG_INF("Join command received (cmd=%u), starting join cycle...", cmd);
+  LOG_INF("join cmd=%u starting cycle", cmd);
   if (cmd == LORA_CMD_JOIN) {
     (void)smf_post_event(SMF_EVT_JOIN_STARTED, 0, k_uptime_get());
   }
 
   while (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd))) {
     (void)smf_post_event(SMF_EVT_JOIN_CYCLE_FAILED, 0, k_uptime_get());
-    LOG_WRN("Will retry join in %d hour(s)", (int)LORA_JOIN_BACKOFF_HOURS);
+    LOG_WRN("join retry in %d h", (int)LORA_JOIN_BACKOFF_HOURS);
     if (LORA_JOIN_BACKOFF_HOURS > 0) {
       k_sleep(K_HOURS(LORA_JOIN_BACKOFF_HOURS));
     } else {
@@ -376,7 +374,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
   /* Message loop: service command queue and uplink queue. SMF never calls
    * lorawan_*; it only posts commands (join, time_sync) or uplink via
    * lora_put_event. This thread owns all LoRaWAN and time_sync calls. */
-  LOG_SECTION_INF("LORA THREAD ENTERING MESSAGE LOOP");
+  LOG_DBG("message loop");
   struct k_poll_event events[2];
   struct k_poll_event *ev_msgq = &events[0];
   struct k_poll_event *ev_cmdq = &events[1];
@@ -416,8 +414,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                           ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
                                           : K_MINUTES(1);
                 k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
-                LOG_INF("Stack not joined (-ENOTCONN); cleared flag, re-join "
-                        "in backoff");
+                LOG_INF("ENOTCONN: cleared joined; rejoin after backoff");
               }
             } else if (ret != -EBUSY && ret != -EAGAIN) {
               /* Only count confirmed uplink failures (-116 Rx timeout) toward
@@ -466,8 +463,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                       ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
                                       : K_MINUTES(1);
             k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
-            LOG_INF("Join cycle failed; will retry in %s",
-                    LORA_JOIN_BACKOFF_HOURS > 0 ? "hours" : "1 min");
+            LOG_INF("join cycle failed; backoff retry scheduled");
           }
         } else if (cmd == LORA_CMD_TIME_SYNC) {
           /* DeviceTimeReq often rides the next MCPS uplink; spacing avoids
@@ -479,7 +475,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           time_sync_retry_request();
         } else if (cmd == LORA_CMD_ENABLE_ADR) {
           lorawan_enable_adr(true);
-          LOG_INF("ADR re-enabled (time sync done; network will manage DR)");
+          LOG_INF("ADR re-enabled (time sync done)");
         } else if (cmd == LORA_CMD_LINK_CHECK ||
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
           lora_pace_uplink_spacing();

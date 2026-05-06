@@ -54,7 +54,7 @@ static void housekeeping_run_tasks(void) {
   /* Post tick to SMF so it can run housekeeping with proper rail arbitration.
    * Only when joined so we don't flood SMF with no-op ticks. */
   if (lora_is_joined()) {
-    LOG_DBG("[housekeeping] posting HOUSEKEEPING_TICK to SMF");
+    LOG_DBG("posting HOUSEKEEPING_TICK to SMF");
     (void)smf_post_event(SMF_EVT_HOUSEKEEPING_TICK, 0, k_uptime_get());
   }
 }
@@ -68,8 +68,8 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
   uint32_t offset_minutes =
       (uint32_t)(dev_eui[7] * 256U + dev_eui[6]) % (uint32_t)MINUTES_PER_DAY;
 
-  LOG_INF("[housekeeping] thread started, jitter=%d offset_min=%u",
-          HEARTBEAT_USE_DEVEUI_JITTER, (unsigned)offset_minutes);
+  LOG_DBG("HK thread jitter=%d offset_min=%u", HEARTBEAT_USE_DEVEUI_JITTER,
+          (unsigned)offset_minutes);
   k_sem_give(&housekeeping_ready_sem);
 
   for (;;) {
@@ -91,7 +91,7 @@ static void housekeeping_thread_fn(void *a, void *b, void *c) {
     if (sleep_sec == 0) {
       sleep_sec = 1;
     }
-    LOG_DBG("[housekeeping] sleeping %u s until next heartbeat",
+    LOG_DBG("sleeping %u s until next heartbeat",
             (unsigned)sleep_sec);
     k_sleep(K_SECONDS(sleep_sec));
 #else
@@ -117,7 +117,7 @@ int housekeeping_wait_until_ready(k_timeout_t timeout) {
 
 void housekeeping_run(void) {
   if (k_mutex_lock(&housekeeping_run_mtx, K_SECONDS(2)) != 0) {
-    LOG_WRN("[housekeeping] run skipped (lock busy)");
+    LOG_WRN("run skipped (lock busy)");
     return;
   }
 
@@ -172,7 +172,7 @@ void housekeeping_run(void) {
 
 void housekeeping_on_time_sync_done(void) {
   if (hk_holding_3v3a) {
-    LOG_DBG("[housekeeping] time sync done; releasing rails held for HK run");
+    LOG_DBG("time sync done; releasing rails held for HK run");
     hk_holding_3v3a = false;
     rail_manager_release_3v3a();
     rail_manager_release_3v3();
