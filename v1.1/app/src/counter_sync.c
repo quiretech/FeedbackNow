@@ -1,4 +1,5 @@
 #include "counter_sync.h"
+#include "eui_keys.h"
 #include "lora_app.h"
 #include "payload_gen.h"
 #include "rtc.h"
@@ -9,6 +10,24 @@
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(counter_sync, CONFIG_LOG_DEFAULT_LEVEL);
+
+/** Milliseconds before each counter-sync enqueue: base delay + jitter. */
+static uint32_t counter_sync_spacing_ms(uint8_t btn_idx) {
+  uint32_t base = (uint32_t)COUNTER_SYNC_DELAY_MS;
+#if COUNTER_SYNC_JITTER_MAX_MS > 0
+  uint32_t mix = (uint32_t)btn_idx * 0x9e3779b9U;
+  /* Copy DevEUI from macro (compound literal shape from eui_keys.h). */
+  const uint8_t de[] = LORAWAN_DEV_EUI;
+  for (size_t i = 0; i < sizeof(de); i++) {
+    mix = (mix * 31U) + (uint32_t)de[i];
+  }
+  mix ^= (uint32_t)(k_uptime_get() >> 3);
+
+  base += mix % ((uint32_t)COUNTER_SYNC_JITTER_MAX_MS + 1U);
+
+#endif /* COUNTER_SYNC_JITTER_MAX_MS > 0 */
+  return base;
+}
 
 void counter_sync_run(bool confirmed) {
   uint32_t epoch_s = 0;
@@ -22,6 +41,10 @@ void counter_sync_run(bool confirmed) {
           (unsigned)EVT_COUNTER_SYNC, (int)confirmed);
 
   for (uint8_t btn = 0; btn < NUM_BUTTONS; btn++) {
+    uint32_t spacing = counter_sync_spacing_ms(btn);
+    if (spacing > 0U) {
+      k_msleep((int32_t)spacing);
+    }
     uint8_t payload[PAYLOAD_LEN_BYTES];
     int ret = payload_gen_build_counter_sync(btn, epoch_s, payload);
     if (ret != 0) {
@@ -39,9 +62,6 @@ void counter_sync_run(bool confirmed) {
     } else {
       LOG_WRN("[counter_sync] lora_put_event btn=%u failed: %d", btn, ret);
     }
-#if COUNTER_SYNC_DELAY_MS > 0
-    k_msleep(COUNTER_SYNC_DELAY_MS);
-#endif
   }
 
   LOG_DBG("[counter_sync] done");

@@ -44,6 +44,37 @@ void lora_request_join(void) { (void)lora_cmd_put(LORA_CMD_JOIN); }
 
 void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
 
+static void lora_burst_tail_time_sync_fn(struct k_work *work);
+
+K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w, lora_burst_tail_time_sync_fn);
+
+static void lora_burst_tail_time_sync_fn(struct k_work *work) {
+  ARG_UNUSED(work);
+
+  LOG_INF("[LoRa] burst tail elapsed -> DeviceTimeReq");
+
+  (void)lora_cmd_put(LORA_CMD_TIME_SYNC);
+}
+
+void lora_schedule_time_sync_after_counter_burst(
+    enum lora_burst_tail_profile profile) {
+
+  uint32_t delay_ms = (profile == LORA_BURST_TAIL_HOUSEKEEPING)
+                          ? LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS
+                          : LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS;
+
+  (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
+
+  LOG_INF("[LoRa] DeviceTime deferred %u ms (profile=%d)", (unsigned)delay_ms,
+          (int)profile);
+
+  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
+}
+
+void lora_cancel_scheduled_burst_time_sync(void) {
+  (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
+}
+
 void lora_request_enable_adr(void) {
   (void)lora_cmd_put(LORA_CMD_ENABLE_ADR);
 }
@@ -59,7 +90,6 @@ void lora_reset_dr_time_sync_retry(void) {
 
 void lora_on_join_success(void) {
   lora_reset_dr_time_sync_retry();
-  /* Time sync is requested by smf_joined_work after all counter-syncs are sent */
 }
 
 int lora_wait_until_ready(k_timeout_t timeout) {
@@ -145,6 +175,12 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
     return;
   }
 
+  if (len > LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE) {
+    LOG_WRN("DL FRMPayload len=%u > max %u, truncating", (unsigned)len,
+            (unsigned)LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE);
+    len = (uint8_t)LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE;
+  }
+
   LOG_INF("DL FRMPayload port=%u len=%u", (unsigned)port, (unsigned)len);
   LOG_HEXDUMP_INF(frmpayload, len, "DL hex");
 
@@ -215,10 +251,11 @@ int lora_app_init(void) {
   lora_link_stats_init();
   lora_link_stats_register();
 
-  /* ADR disabled at init; re-enabled after time sync so DR sticks for
-   * DeviceTimeAns (DR0 downlinks often fail). See lora_request_enable_adr(). */
+  /* ADR off until OTAA succeeds; enabled in run_join_cycle so LinkADRReq can
+   * steer DR during the post-join / HK uplink bursts before DeviceTimeReq. */
+
   lorawan_enable_adr(false);
-  LOG_INF("Adaptive Data Rate (ADR) disabled at init, enabled after time sync");
+  LOG_INF("ADR disabled at boot; enabled immediately after OTAA succeeds");
 
   LOG_INF("LoRaWAN stack initialized successfully.");
 #if defined(CONFIG_LORAMAC_REGION_EU868) && defined(CONFIG_LORAMAC_REGION_US915)

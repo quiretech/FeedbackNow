@@ -20,6 +20,7 @@ enum display_screen_id {
   DISPLAY_SCREEN_CLEANING,
   DISPLAY_SCREEN_CONNECTING,
   DISPLAY_SCREEN_DEVICE_INFO,
+  DISPLAY_SCREEN_DL_CUSTOM,
 #if EPD_INSTALL_INFO_SCREEN
   DISPLAY_SCREEN_INSTALL_INFO,
 #endif
@@ -82,6 +83,12 @@ void display_show_device_info(void);
  * Use from SMF after LED/rail changes so staff combo → LED → panel stay ordered.
  */
 void display_show_device_info_sync(void);
+
+/**
+ * Downlink 0x99: fullscreen message (Roboto 36, centered, ≤3 lines clipped).
+ * hold_minutes == 0 ⇒ DL_CUSTOM_TEXT_DEFAULT_MINUTES from sys_config.h.
+ */
+void display_show_dl_custom_message(const char *text, uint32_t hold_minutes);
 
 #if EPD_INSTALL_INFO_SCREEN
 /**

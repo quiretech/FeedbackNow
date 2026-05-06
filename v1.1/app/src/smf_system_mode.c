@@ -171,9 +171,12 @@ static void smf_show_install_info_with_dwell(void (*overlap_work)(void)) {
 /* Wrapper for smf_show_install_info_with_dwell overlap — runs the same
  * post-join sequence the non-install path does. */
 static void smf_joined_overlap_work(void) {
+
   counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
-  lora_request_time_sync();
   downlink_queue_housekeeping_state_snapshot();
+
+  lora_schedule_time_sync_after_counter_burst(LORA_BURST_TAIL_JOIN_POST);
+
 }
 #endif
 
@@ -361,8 +364,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         {
           display_show_last_cleaned_sync();
           counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
-          lora_request_time_sync();
+
           downlink_queue_housekeeping_state_snapshot();
+
+          lora_schedule_time_sync_after_counter_burst(LORA_BURST_TAIL_JOIN_POST);
+
         }
         rail_manager_release_3v3a();
 
@@ -613,7 +619,7 @@ int smf_post_event(uint8_t ev_type, uint8_t button_id, int64_t timestamp_ms) {
 }
 
 int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data) {
-  if (data == NULL || len > LORA_MAX_PAYLOAD_SIZE) {
+  if (data == NULL || len > LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE) {
     return -EINVAL;
   }
 

@@ -8,6 +8,9 @@
  * counts: smf_msgq_peak_used_get() / smf_msgq_drop_count_get(). Normal-mode
  * public votes run on the SMF thread (display_show_thanks_sync uses sysworkq;
  * deferring vote there would deadlock with display_work).
+ *
+ * DOWNLINK payloads use LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE (may exceed uplink
+ * LORA_MAX_PAYLOAD_SIZE).
  */
 #ifndef SMF_SYSTEM_MODE_H
 #define SMF_SYSTEM_MODE_H
@@ -67,7 +70,7 @@ typedef struct smf_msg {
     struct {
       uint8_t port;
       uint8_t len;
-      uint8_t data[LORA_MAX_PAYLOAD_SIZE];
+      uint8_t data[LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE];
     } downlink;
     struct {
       uint8_t ok;        /* 1 = read success, 0 = timeout/error */
@@ -99,7 +102,7 @@ uint32_t smf_msgq_drop_count_get(void);
 
 /**
  * Post downlink to SMF (from LoRa downlink callback). Copies payload into
- * SMF-owned buffer; len must be <= LORA_MAX_PAYLOAD_SIZE.
+ * SMF-owned buffer; len must be <= LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE.
  */
 int smf_post_downlink(uint8_t port, uint8_t len, const uint8_t *data);
 

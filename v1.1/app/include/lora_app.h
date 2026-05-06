@@ -41,7 +41,7 @@ enum lora_cmd_type {
   LORA_CMD_TIME_SYNC_RETRY, /* Retry DeviceTimeReq in active sync cycle */
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
   LORA_CMD_LINK_CHECK_FORCE, /* Send empty frame now for LinkCheckReq */
-  LORA_CMD_ENABLE_ADR,       /* Re-enable ADR after time sync (was off for LNS sync) */
+  LORA_CMD_ENABLE_ADR,       /* lorawan_enable_adr(true); idempotent */
   LORA_CMD_COUNT
 };
 
@@ -51,6 +51,16 @@ typedef struct {
   bool confirmed;
   uint8_t data[LORA_MAX_PAYLOAD_SIZE]; // Moved to end for better alignment
 } lora_uplink_msg_t;
+
+/** Which uplink burst just finished enqueueing — selects DeviceTime defer. */
+enum lora_burst_tail_profile {
+  /** Post-join: NUM_BUTTONS counter UL + housekeeping snapshot UL. */
+
+  LORA_BURST_TAIL_JOIN_POST,
+  /** Housekeeping: HK + counters + snapshot. */
+
+  LORA_BURST_TAIL_HOUSEKEEPING,
+};
 
 typedef struct {
   uint8_t button_id; // Unique button identifier
@@ -85,9 +95,19 @@ void lora_request_join(void);
 void lora_request_time_sync(void);
 
 /**
- * Request LoRa thread to re-enable ADR. Called after time sync (success or
- * timeout). ADR is disabled at join so DR sticks for DeviceTimeAns; re-enabled
- * afterward so network manages DR.
+ * After counter-sync (+ HK/snapshot burst) enqueue, wait for approximate drain
+ * then queue DeviceTimeReq. Cancels any prior deferral before scheduling.
+ */
+void lora_schedule_time_sync_after_counter_burst(
+    enum lora_burst_tail_profile profile);
+
+/** Cancel deferral queued by lora_schedule_time_sync_after_counter_burst. */
+
+void lora_cancel_scheduled_burst_time_sync(void);
+
+/**
+ * Request LoRa thread to re-enable ADR. Idempotent — ADR is already enabled
+ * after successful join; remains so after DeviceTime completes.
  */
 void lora_request_enable_adr(void);
 
@@ -106,8 +126,9 @@ void lora_reset_dr_time_sync_retry(void);
 
 /**
  * Notify LoRa app layer that a new join succeeded.
- * Time sync is requested by smf_joined_work after all counter-syncs are sent.
+ * Caller schedules DeviceTimeReq after the counter burst deferral elsewhere.
  */
+
 void lora_on_join_success(void);
 
 /** Post a command to the LoRa thread (SMF or LoRa thread for self-bootstrap

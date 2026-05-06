@@ -28,6 +28,79 @@ LOG_MODULE_REGISTER(downlink_dispatch, CONFIG_LOG_DEFAULT_LEVEL);
 #define DL_CMD_FACTORY_RESET      0x06
 #define DL_CMD_REBOOT             0x07
 #define DL_CMD_QUERY_FW_HW_VERSION 0x08
+/** Fullscreen EPD banner: [0x99][dur_min][ASCII hex pairs → message]. */
+#define DL_CMD_CUSTOM_TEXT 0x99
+
+static int dl_hex_nibble(uint8_t c) {
+  if (c >= '0' && c <= '9') {
+    return (int)(c - '0');
+  }
+
+  if (c >= 'A' && c <= 'F') {
+    return 10 + (int)(c - 'A');
+  }
+
+  if (c >= 'a' && c <= 'f') {
+    return 10 + (int)(c - 'a');
+  }
+
+  return -1;
+}
+
+/** ASCII hex digit pairs → bytes; printable ASCII 0x20–0x7E only (no NUL). */
+
+static int dl_decode_hex_ascii_body(const uint8_t *hex, size_t hexlen, char *out,
+                                    size_t outsz) {
+
+  if (outsz == 0) {
+
+    return -1;
+
+  }
+
+  if (hexlen % 2U != 0U) {
+
+    return -1;
+
+  }
+
+  size_t o = 0;
+
+  for (size_t i = 0; i < hexlen; i += 2U) {
+
+    int hi = dl_hex_nibble(hex[i]);
+
+    int lo = dl_hex_nibble(hex[i + 1]);
+
+    if (hi < 0 || lo < 0) {
+
+      return -1;
+
+    }
+
+    uint8_t b = (uint8_t)((hi << 4) | lo);
+
+    if (b == 0U || b < 0x20U || b > 0x7EU) {
+
+      return -1;
+
+    }
+
+    if (o + 1U >= outsz) {
+
+      return -1;
+
+    }
+
+    out[o++] = (char)b;
+
+  }
+
+  out[o] = '\0';
+
+  return 0;
+
+}
 
 void downlink_queue_housekeeping_state_snapshot(void) {
   if (!lora_is_joined()) {
@@ -104,6 +177,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
   }
 
   uint8_t cmd = frmpayload[0];
+
   LOG_INF("[downlink] dispatch port=%u len=%u cmd=0x%02X", (unsigned)port,
           (unsigned)len, cmd);
 
@@ -202,6 +276,46 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
     LOG_INF("[downlink] cmd 0x%02X fw/hw version query → EVT 0x14 fport %u",
             (unsigned)cmd, (unsigned)FPORT_DEVICE_INFO);
     downlink_queue_fw_hw_version_uplink();
+    break;
+  case DL_CMD_CUSTOM_TEXT:
+    if (len >= 2U) {
+
+      uint8_t dur_min = frmpayload[1];
+
+      const uint8_t *hex = frmpayload + 2;
+
+      size_t hexlen = (size_t)len - 2U;
+
+      char decoded[DISPLAY_DL_CUSTOM_TEXT_MAX + 1];
+
+      LOG_INF("[downlink] cmd 0x99 custom EPD text dur=%umin hex_len=%zu",
+
+              (unsigned)dur_min, hexlen);
+
+      if (dl_decode_hex_ascii_body(hex, hexlen, decoded, sizeof(decoded)) != 0) {
+
+        LOG_WRN("[downlink] 0x99: invalid hex (pairs, printable ASCII)");
+
+      } else {
+
+#if EPD_ENABLED
+
+        display_show_dl_custom_message(decoded, (uint32_t)dur_min);
+
+#else
+
+        LOG_DBG("[downlink] 0x99: EPD disabled, skip");
+
+#endif
+
+      }
+
+    } else {
+
+      LOG_WRN("[downlink] cmd 0x99: len %u < 2", (unsigned)len);
+
+    }
+
     break;
   default:
     LOG_WRN("[downlink] unknown cmd 0x%02X", cmd);

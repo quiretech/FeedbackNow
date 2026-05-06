@@ -1,11 +1,12 @@
 /**
  * LoRaWAN application downlink (FRMPayload) dispatch — port/payload only.
  * SMF passes ops for actions that must stay in the FSM (e.g. reboot timer).
- * Application cmd byte 0: 0x01–0x06 existing; 0x07 = reboot (SMF: LED then cold
- * reboot, same as Staff combo reboot); 0x08 = query firmware/hardware version
- * (EVT 0x14 on FPORT_DEVICE_INFO 21 only). EVT 0x13 (tz + last_cleaned) is sent on
- * FPORT_HOUSEKEEPING 20 from post-join, daily HK, and DL 0x04 — see
+ * Single-byte cmd (payload[0]): 0x01–0x08; 0x99 custom EPD text ([1]=dur min, [2…]=hex pairs).
+ * EVT 0x14 on FPORT_DEVICE_INFO 21 after 0x08. EVT 0x13 on FPORT 20 — see
  * downlink_queue_housekeeping_state_snapshot().
+ *
+ * 0x99: dur 0 uses DL_CUSTOM_TEXT_DEFAULT_MINUTES. Hex body = pairs of ASCII
+ * '0'–'9'/'A'–'F'/'a'–'f' → printable message on EPD; then revert to LAST_CLEANED/CLEANING.
  */
 #ifndef DOWNLINK_DISPATCH_H
 #define DOWNLINK_DISPATCH_H

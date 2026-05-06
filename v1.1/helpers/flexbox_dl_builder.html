@@ -101,14 +101,31 @@
 
   .epoch-helper { font-size: 0.7rem; color: var(--dim); margin-top: 6px; min-height: 18px; }
   .epoch-helper span { color: var(--accent); }
+
+  textarea { width: 100%; min-height: 88px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; padding: 12px 14px; outline: none; resize: vertical; }
+  textarea:focus { border-color: var(--accent); }
+  .hint-err { font-size: 0.72rem; color: var(--red); margin-top: 8px; min-height: 1.2em; }
+  .hint-ok { font-size: 0.72rem; color: var(--green); margin-top: 8px; }
+  .dim { color: var(--dim); }
 </style>
 </head>
 <body>
 
 <h1>FlexBox DL Builder</h1>
-<p class="sub">// downlink command builder · hex · base64 · AWS CLI — v1.3 · uplink: F20 HK incl. 0x13 (tz+last cleaned) · F21 = 0x14 after DL 0x08 only</p>
+<p class="sub">// downlink command builder · hex · base64 · AWS CLI — v1.5 · DL 0x99 custom EPD text · uplink FPort 20 EVT 0x13 · FPort 21 EVT 0x14 after 0x08</p>
 
 <div class="wrap">
+
+  <div class="card" style="padding:14px 18px">
+    <div class="card-title">FRMPayload schema — must match <code>downlink_dispatch.c</code></div>
+    <div class="card-desc" style="font-size:0.72rem;line-height:1.7;margin:0">
+      <strong>Byte 0</strong> = command. · <strong>0x01</strong> + uint32 <strong>BE</strong> epoch (5 B). ·
+      <strong>0x02</strong> (1 B). · <strong>0x03</strong> + int16 <strong>BE</strong> tz minutes (3 B). ·
+      <strong>0x04–0x08</strong> single-byte cmds (1 B each). ·
+      <strong>0x99</strong> + <code>dur</code> (u8 min; <code>0</code> = default <span id="schemaDefMin">5</span> min) + body: each message byte becomes two <strong>ASCII</strong> hex digits (<code>0-9A-Fa-f</code>); firmware decodes to printable <code>0x20–0x7E</code> (rejects decoded <code>NUL</code>).<br>
+      Downlink air cap in firmware: <code>LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE</code> = <strong id="schemaMaxDl">51</strong> B (raise in <code>sys_config.h</code> if your MAC allows longer). Device accepts any LoRaWAN downlink FPort the stack delivers (AWS CLI example uses <code>FPort=1</code> — align with your device profile).
+    </div>
+  </div>
 
 <div class="device-bar">
   <label>Device ID</label>
@@ -137,6 +154,7 @@
     <button class="tab"         onclick="switchTab(5)">0x06 · Factory Reset</button>
     <button class="tab"         onclick="switchTab(6)">0x07 · Reboot</button>
     <button class="tab"         onclick="switchTab(7)">0x08 · FW/HW query</button>
+    <button class="tab"         onclick="switchTab(8)">0x99 · Custom EPD text</button>
   </div>
 
   <!-- TAB 0 — Timezone -->
@@ -285,12 +303,56 @@
     <div class="aws-block" id="awsQueryVer"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsQueryVer',this)">copy</button></div>
   </div>
 
+  <!-- TAB 8 — DL 0x99 custom fullscreen text -->
+  <div class="tab-cmd" id="tab8">
+    <div class="card">
+      <div class="card-title">0x99 · Custom customer message <span class="badge blue">cmd + dur + hex body</span></div>
+      <div class="card-desc" style="margin-bottom:14px;line-height:1.55">
+        <strong><code>frmpayload[0]=0x99</code></strong>, <strong><code>[1]=dur</code></strong> (minutes; <code>0</code> → <strong id="lblDefMin">5</strong> min via <code>DL_CUSTOM_TEXT_DEFAULT_MINUTES</code>),
+        <strong><code>[2…]</code></strong> = hex-digit pairs per character (same rules as <code>dl_decode_hex_ascii_body()</code>).
+        After hold, UI returns to Last Cleaned or Cleaning if a cleaning session is active.<br><br>
+        Air length ≤ <strong id="lblMaxDl">51</strong> B ⇒ ≤ <strong id="lblMaxChars">—</strong> characters. Decode buffer: <code>DISPLAY_DL_CUSTOM_TEXT_MAX</code> = <span id="lblDecodeMax">96</span> (must match <code>sys_config.h</code>).
+      </div>
+      <label>Message (printable ASCII only)</label>
+      <textarea id="customTextMsg" placeholder="e.g. CLOSED TODAY" oninput="updateCustomText()"></textarea>
+      <div class="row" style="margin-top:14px">
+        <div>
+          <label>Duration (minutes)</label>
+          <input type="number" id="customTextDur" min="0" max="255" value="5" placeholder="0 = FW default"
+                 oninput="updateCustomText()">
+        </div>
+        <div style="flex:1;min-width:200px;font-size:0.7rem;color:var(--dim);padding-bottom:4px;line-height:1.5">
+          Use <strong>0</strong> if you want the device to use its compile-time default (shown above).
+        </div>
+      </div>
+      <div id="customTextHint" class="hint-err"></div>
+      <div id="customTextStat" class="hint-ok" style="display:none"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Output — DL 0x99</div>
+      <div class="out-row"><span class="out-label">Hex body only (decoded side)</span><span class="out-val yellow" id="outCustHexConcept">—</span><button class="copy-btn" onclick="copyEl('outCustHexConcept',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Full FRMPayload hex</span><span class="out-val" id="outCustPayloadHex">—</span><button class="copy-btn" onclick="copyEl('outCustPayloadHex',this)">copy</button></div>
+      <div class="out-row"><span class="out-label">Payload length</span><span class="out-val blue" id="outCustLen">—</span></div>
+      <div class="out-row"><span class="out-label">Payload base64</span><span class="out-val blue" id="outCustB64">—</span><button class="copy-btn" onclick="copyEl('outCustB64',this)">copy</button></div>
+    </div>
+    <div class="c-block">
+      <button class="copy-btn c-copy" id="cCopyBtn99" onclick="copyText(document.getElementById('cBlock99')._raw||'', this)">copy</button>
+      <div id="cBlock99" style="font-size:0.72rem;line-height:1.55"></div>
+    </div>
+    <div class="aws-block" id="awsCustom99"><button class="copy-btn aws-copy" onclick="copyBlockRaw('awsCustom99',this)">copy</button></div>
+  </div>
+
 
 </div>
 
 <script>
 let currentOffset = -300;
 let dstActive = false;
+
+/** Mirror app/include/sys_config.h (change here when you change the firmware). */
+const MAX_DL_FRMPAYLOAD = 51;
+const DEFAULT_DL_TEXT_MINUTES = 5;
+const DISPLAY_DL_CUSTOM_TEXT_MAX = 96;
 
 function switchTab(idx) {
   document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i===idx));
@@ -303,6 +365,18 @@ function hexToB64(hex) {
   const b=[];
   for(let i=0;i<hex.length;i+=2) b.push(parseInt(hex.slice(i,i+2),16));
   return btoa(String.fromCharCode(...b));
+}
+function hexToB64FromBytes(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let s = '';
+  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+  return btoa(s);
+}
+function bytesToHexUpper(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let h = '';
+  for (let i = 0; i < u8.length; i++) h += ('0' + u8[i].toString(16)).slice(-2).toUpperCase();
+  return h;
 }
 function getDeviceId() { return document.getElementById('deviceId').value.trim() || '<YOUR_DEVICE_ID>'; }
 
@@ -458,10 +532,112 @@ function getTxMode() {
 }
 
 
+/**
+ * DL 0x99: [0x99][dur] + ASCII hex pairs per character (firmware dl_decode_hex_ascii_body).
+ */
+function buildDl99Bytes(message, durMinuteByte) {
+  const bytes = [0x99, durMinuteByte & 0xff];
+  for (let i = 0; i < message.length; i++) {
+    const c = message.charCodeAt(i);
+    if (c < 0x20 || c > 0x7e || c === 0) {
+      throw new RangeError(`Invalid character at ${i}: U+${c.toString(16)}`);
+    }
+    const pair = ('0' + c.toString(16)).slice(-2).toUpperCase();
+    bytes.push(pair.charCodeAt(0));
+    bytes.push(pair.charCodeAt(1));
+  }
+  return new Uint8Array(bytes);
+}
+
+function updateCustomText() {
+  const hint = document.getElementById('customTextHint');
+  const stat = document.getElementById('customTextStat');
+  hint.textContent = '';
+  stat.style.display = 'none';
+
+  document.getElementById('lblDefMin').textContent = String(DEFAULT_DL_TEXT_MINUTES);
+  document.getElementById('lblMaxDl').textContent = String(MAX_DL_FRMPAYLOAD);
+  const sm = document.getElementById('schemaDefMin');
+  const sx = document.getElementById('schemaMaxDl');
+  if (sm) sm.textContent = String(DEFAULT_DL_TEXT_MINUTES);
+  if (sx) sx.textContent = String(MAX_DL_FRMPAYLOAD);
+  const maxChars = Math.floor((MAX_DL_FRMPAYLOAD - 2) / 2);
+  document.getElementById('lblMaxChars').textContent = String(maxChars);
+  const ld = document.getElementById('lblDecodeMax');
+  if (ld) ld.textContent = String(DISPLAY_DL_CUSTOM_TEXT_MAX);
+  document.getElementById('customTextMsg').maxLength = maxChars;
+
+  const msgEl = document.getElementById('customTextMsg');
+  const durEl = document.getElementById('customTextDur');
+  const msg = msgEl.value;
+  let durB = parseInt(durEl.value, 10);
+  if (!Number.isFinite(durB) || durB < 0) durB = 0;
+  if (durB > 255) durB = 255;
+
+  const conceptHex = [...msg].map(ch => ('0'+ch.charCodeAt(0).toString(16)).slice(-2).toUpperCase()).join('');
+  document.getElementById('outCustHexConcept').textContent = conceptHex || '—';
+
+  let payloadHex = '—';
+  let b64 = '';
+  try {
+    const u8 = buildDl99Bytes(msg, durB);
+    if (u8.length > MAX_DL_FRMPAYLOAD) {
+      hint.textContent = `Payload would be ${u8.length} bytes (max ${MAX_DL_FRMPAYLOAD}). Shorten message to ≤ ${maxChars} characters.`;
+    } else {
+      payloadHex = bytesToHexUpper(u8);
+      b64 = hexToB64FromBytes(u8);
+      stat.textContent =
+        `OK · ${u8.length} byte FRMPayload · duration byte 0x${('0'+durB.toString(16)).slice(-2)}` +
+        ` (${durB === 0 ? 'use FW default ' + DEFAULT_DL_TEXT_MINUTES + ' min' : durB + ' min'})`;
+      stat.style.display = 'block';
+    }
+  } catch (e) {
+    hint.textContent = e.message || String(e);
+  }
+
+  document.getElementById('outCustPayloadHex').textContent = payloadHex;
+  document.getElementById('outCustLen').textContent = payloadHex === '—' ? '—' : String(payloadHex.length / 2) + ' bytes';
+  document.getElementById('outCustB64').textContent = b64 || '—';
+
+  const cEl = document.getElementById('cBlock99');
+  let initList = '';
+  if (payloadHex !== '—') {
+    const parts = [];
+    for (let i = 0; i < payloadHex.length; i += 2) {
+      parts.push('0x' + payloadHex.slice(i, i + 2));
+    }
+    initList = parts.join(', ');
+  }
+
+  const cRaw =
+    `/* DL 0x99 · dur + hex-ASCII pairs · max ${MAX_DL_FRMPAYLOAD} B */\n` +
+    `/* FRMPayload (hex): */ ${payloadHex === '—' ? '—' : payloadHex}\n`;
+  cEl.innerHTML =
+    `<span class="cmt">/* DL 0x99 · 0x99, duration byte, then ASCII hex pairs */</span><br>` +
+    `<span class="kw">uint8_t</span> frmpayload[] = ${payloadHex === '—' ? '{ /* fix errors above */ };' :
+      `{ ${initList} };`}`;
+  cEl._raw = cRaw;
+
+  if (payloadHex !== '—' && b64) {
+    setBlock('awsCustom99', b64);
+  } else {
+    const el = document.getElementById('awsCustom99');
+    if (el) {
+      el._b64 = '';
+      el._raw = '# Resolve validation on DL 0x99 tab, then AWS snippet updates.';
+      Array.from(el.childNodes).forEach(n => {
+        if (n.nodeType === 3) n.remove();
+      });
+      el.insertBefore(document.createTextNode(el._raw), el.querySelector('button'));
+    }
+  }
+}
+
 // ── Update all AWS CLI blocks when device ID changes ───
 function updateAllAWS() {
   updateTZ();
   updateEPD();
+  updateCustomText();
   setBlock('awsRefresh','Ag==');
   setBlock('awsStatus', 'BA==');
   setBlock('awsReset',  'BQ==');

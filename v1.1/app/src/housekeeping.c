@@ -158,9 +158,11 @@ void housekeeping_run(void) {
   }
 
   lora_request_link_check(true);
-  lora_request_time_sync();
   counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
   downlink_queue_housekeeping_state_snapshot();
+
+  lora_schedule_time_sync_after_counter_burst(LORA_BURST_TAIL_HOUSEKEEPING);
+
   rail_manager_release_3v3();
   rail_manager_release_3v3a();
   hk_holding_3v3a = false;

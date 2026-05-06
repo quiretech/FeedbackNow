@@ -238,6 +238,7 @@ int time_sync_wait(k_timeout_t timeout) {
 void time_sync_abort_on_link_lost(void) {
   (void)k_work_cancel_delayable(&time_sync_timeout_work);
   (void)k_work_cancel(&time_sync_apply_work);
+  lora_cancel_scheduled_burst_time_sync();
 
   if (!atomic_cas(&time_sync_inflight, 1, 0)) {
     return;

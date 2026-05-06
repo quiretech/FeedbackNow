@@ -38,6 +38,19 @@
  * =============================================================================
  */
 #define LORA_MAX_PAYLOAD_SIZE 11
+/** Application downlink FRMPayload max length (SMF_EVT_DOWNLINK buffer). Can be
+ * larger than uplink LORA_MAX_PAYLOAD_SIZE; DR/region defines air limit (~51 B
+ * common for EU868 RX2). */
+#ifndef LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE
+#define LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE 51
+#endif
+/** DL 0x99 custom text: max decoded ASCII for EPD banner (no-op if EPD off). */
+#ifndef DISPLAY_DL_CUSTOM_TEXT_MAX
+#define DISPLAY_DL_CUSTOM_TEXT_MAX 96
+#endif
+#ifndef DL_CUSTOM_TEXT_DEFAULT_MINUTES
+#define DL_CUSTOM_TEXT_DEFAULT_MINUTES 5U
+#endif
 #define LORA_MSGQ_SIZE 30
 #define LORA_MESSAGE_ALIGNMENT 4
 #define LORA_THREAD_STACK_SIZE 2048
@@ -112,15 +125,45 @@
   0 /* counter sync: unconfirmed to avoid Rx                                   \
        timeout treated as link loss */
 /** Delay between queuing each counter-sync uplink (see counter_sync.c). 0 =
- * back-to-back; LoRa thread enforces LORA_UPLINK_MIN_INTERVAL_MS. A small
- * non-zero value (e.g. 100–200) reduces burst load on MAC/SPI-heavy builds. */
-#define COUNTER_SYNC_DELAY_MS 50
+ * back-to-back. Actual airtime spacing is dominated by LORA_UPLINK_MIN_INTERVAL_MS
+ * in the LoRa thread (EU868 fair use / complements stack duty-cycle logic).
+ * A non-zero value only smooths how fast the message queue fills (SPI/MAC). */
+#define COUNTER_SYNC_DELAY_MS 100
+/** Added to COUNTER_SYNC_DELAY_MS sleep before each counter-sync enqueue;
+ * seeded from DevEUI + btn + uptime — spreads fleet bursts on the gateway.
+ * Set 0 to disable jitter. Typical 400-800 ms. */
+#define COUNTER_SYNC_JITTER_MAX_MS 600
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1; gpio-keys aliases in DT overlay)
  * =============================================================================
  */
 #define NUM_BUTTONS 6
+
+/* LoRa: estimate uplinks to drain before DeviceTimeReq after a burst */
+
+/** Post-join: counter sync (+ 1 housekeeping snapshot queued after burst). */
+
+#define LORA_BURST_JOIN_TAIL_UPLINKS ((uint32_t)NUM_BUTTONS + 1U)
+/** HK: battery uplink + counter sync (+ snapshot last in housekeeping_run). */
+
+#define LORA_BURST_HK_TAIL_UPLINKS ((uint32_t)NUM_BUTTONS + 2U)
+
+/** Slack: lorawan retries, MAC interleave, worst-case counter-sync jitter. */
+
+#define LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS 5000U
+
+#define LORA_BURST_COUNTER_JITTER_BUDGET_MS                                                                          \
+  ((uint32_t)NUM_BUTTONS * (uint32_t)COUNTER_SYNC_JITTER_MAX_MS)
+
+#define LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS                                                              \
+  (((uint32_t)LORA_BURST_JOIN_TAIL_UPLINKS * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +                                \
+   (uint32_t)LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS + (uint32_t)LORA_BURST_COUNTER_JITTER_BUDGET_MS)
+
+#define LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS                                                                \
+  (((uint32_t)LORA_BURST_HK_TAIL_UPLINKS * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +                                  \
+   (uint32_t)LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS + (uint32_t)LORA_BURST_COUNTER_JITTER_BUDGET_MS)
+
 #define BUTTON_QUEUE_SIZE 16
 #define BUTTON_QUEUE_ALIGNMENT 4
 #define BUTTON_THREAD_STACK_SIZE 1536
@@ -154,7 +197,7 @@
 /* Staff: 20s (longer than FRD 10s* to allow Reboot combo 0+1+2+3 hold 10s). */
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS                                                 \
-  12000 /* prod: 12s; return to Normal on timeout */
+  20000 /* prod: 20s; return to Normal on timeout */
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -320,8 +363,10 @@
  * If exceeded a warning is logged. prod: 2. */
 #define TIME_SYNC_RTC_READBACK_DELTA_MAX_S 2
 
-/* Time sync is requested by smf_joined_work after all 6 counter-syncs are sent.
- * No post-join delay (DR set at join; counter sync then time sync). */
+/* DeviceTimeReq is scheduled by lora_schedule_time_sync_after_counter_burst()
+ * after counter (+ snapshot/HK burst) draining — see TIME_SYNC_BURST timing
+ * macros. ADR is enabled after OTAA succeeds so LinkADRReq can converge DR
+ * during that burst before device-time is requested. */
 
 /* =============================================================================
  * Power gating (rail manager)
@@ -421,19 +466,30 @@
 #if EPD_ENABLED
 /** Full-screen EPD bitmaps: 0 = EN assets, 1 = FR assets (compile-time). */
 #ifndef EPD_LOCALE_FR_BITMAPS
-#define EPD_LOCALE_FR_BITMAPS 0
+#define EPD_LOCALE_FR_BITMAPS 1
 #endif
 
 /** Main customer screen title above the last-cleaned timestamp. */
+
+#if EPD_LOCALE_FR_BITMAPS
+#define EPD_TEXT_LAST_CLEANED_HEADLINE "DERNIER NETTOYAGE"
+#else
 #define EPD_TEXT_LAST_CLEANED_HEADLINE "LAST CLEANED"
+#endif
+
 /** LoRa join in progress (shown before CONNECTED). */
 #define EPD_TEXT_CONNECTING "Connecting..."
 /** Product name on Device Info + Install header row (same string by default). */
 #define EPD_TEXT_BRAND_TITLE "flexbox"
 /** Footer line under Device Info. */
-#define EPD_TEXT_MANUFACTURER "quire.tech"
+#define EPD_TEXT_MANUFACTURER "quire.tech // jjp"
 /** Prefix before FW_VERSION_STRING on Device Info (refresh appends version). */
 #define EPD_TEXT_FW_PREFIX "fw  "
+/** Device Info screen: QR with FBN pipe payload. 0 omits QR and flex spacer
+ * slot; headings, DevEUI, counters, FW line, and manufacturer footer unchanged. */
+#ifndef EPD_DEVICE_INFO_QR
+#define EPD_DEVICE_INFO_QR 1
+#endif
 #endif /* EPD_ENABLED */
 
 /* =============================================================================

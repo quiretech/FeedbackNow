@@ -22,24 +22,30 @@ LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
 
-/* SF7/125 for time sync phase (DR0 downlinks often fail). Region-specific. */
-#if defined(CONFIG_LORAMAC_REGION_EU868)
-#define LORA_TIME_SYNC_DR LORAWAN_DR_5
-#define LORA_TIME_SYNC_DR_STR "5 [EU868]"
-#elif defined(CONFIG_LORAMAC_REGION_US915)
-#define LORA_TIME_SYNC_DR LORAWAN_DR_3
-#define LORA_TIME_SYNC_DR_STR "3 [US915]"
-#else
-#define LORA_TIME_SYNC_DR LORAWAN_DR_5
-#define LORA_TIME_SYNC_DR_STR "5"
-#endif
-
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
 
 /* Last uplink completion time (ms) for rate limiting; 0 = never sent yet */
 static uint32_t last_uplink_ms;
+
+/** Enforce LORA_UPLINK_MIN_INTERVAL_MS since last successful app MCPS send.
+ * MAC-only paths (LinkCheck, some join traffic) are not stamped here; see
+ * pacing before lorawan_request_link_check. EU868 duty-cycle compliance is
+ * still primarily enforced inside the LoRaMac regional layer when enabled. */
+static void lora_pace_uplink_spacing(void) {
+  if (LORA_UPLINK_MIN_INTERVAL_MS <= 0) {
+    return;
+  }
+  uint32_t now_ms = (uint32_t)k_uptime_get();
+  uint32_t elapsed = now_ms - last_uplink_ms;
+  if (last_uplink_ms != 0U &&
+      elapsed < (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) {
+    uint32_t wait_ms = (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS - elapsed;
+    LOG_DBG("LoRa rate limit: wait %u ms", (unsigned)wait_ms);
+    k_msleep(wait_ms);
+  }
+}
 
 /* Consecutive send failures; when >= LORA_SEND_FAILURES_BEFORE_BACKOFF we
  * clear joined and schedule re-join after backoff. */
@@ -248,18 +254,12 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     LOG_INF("lorawan_join() returned: %d", ret);
 
     if (ret == 0) {
-      /* Set SF7/125 before probe / time sync: DR0 downlinks often fail on some
-       * gateways. ADR disabled at init; re-enabled after time sync completes.
-       */
-      int dr_ret = lorawan_set_datarate(LORA_TIME_SYNC_DR);
-      if (dr_ret == 0) {
-        LOG_INF("DR set to %s (SF7/125) for time sync; ADR off until sync done",
-                LORA_TIME_SYNC_DR_STR);
-      } else if (dr_ret != -EINVAL) {
-        /* -EINVAL = already at target DR (e.g. join set DR5) */
-        LOG_WRN("lorawan_set_datarate(DR=" LORA_TIME_SYNC_DR_STR ") failed: %d",
-                dr_ret);
-      }
+
+      lorawan_enable_adr(true);
+
+      LOG_INF("ADR enabled after join — expect LinkADRReq during counter-sync "
+              "burst; DeviceTimeReq follows deferred schedule.");
+
 #if LORA_POST_JOIN_MAC_PROBE_RETRIES > 0
       LOG_INF("Verifying MAC can transmit after join API success...");
       if (!lora_mac_probe_after_join()) {
@@ -397,19 +397,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
       lora_uplink_msg_t msg = {0};
       if (lora_get_event(&msg, K_NO_WAIT)) {
         if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
-          /* Rate limit: ensure min interval between uplinks (LoRa Alliance /
-           * duty cycle). Wait if we sent too recently. */
-          if (LORA_UPLINK_MIN_INTERVAL_MS > 0) {
-            uint32_t now_ms = (uint32_t)k_uptime_get();
-            uint32_t elapsed = now_ms - last_uplink_ms;
-            if (last_uplink_ms != 0 &&
-                elapsed < (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) {
-              uint32_t wait_ms =
-                  (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS - elapsed;
-              LOG_DBG("LoRa rate limit: wait %u ms", (unsigned)wait_ms);
-              k_msleep(wait_ms);
-            }
-          }
+          /* Rate limit: fair use + spacing before next PHY burst (see
+           * lora_pace_uplink_spacing). */
+          lora_pace_uplink_spacing();
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
           if (ret == 0) {
             last_uplink_ms = (uint32_t)k_uptime_get();
@@ -480,14 +470,19 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                     LORA_JOIN_BACKOFF_HOURS > 0 ? "hours" : "1 min");
           }
         } else if (cmd == LORA_CMD_TIME_SYNC) {
+          /* DeviceTimeReq often rides the next MCPS uplink; spacing avoids
+           * back-to-back PHY with the last app frame. */
+          lora_pace_uplink_spacing();
           time_sync_request_and_update_rtc();
         } else if (cmd == LORA_CMD_TIME_SYNC_RETRY) {
+          lora_pace_uplink_spacing();
           time_sync_retry_request();
         } else if (cmd == LORA_CMD_ENABLE_ADR) {
           lorawan_enable_adr(true);
           LOG_INF("ADR re-enabled (time sync done; network will manage DR)");
         } else if (cmd == LORA_CMD_LINK_CHECK ||
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
+          lora_pace_uplink_spacing();
           bool force = (cmd == LORA_CMD_LINK_CHECK_FORCE);
           (void)lorawan_request_link_check(force);
         }
