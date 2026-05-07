@@ -398,7 +398,7 @@
 
     lv_obj_set_width(dl_custom_msg_label, 368);
 
-    lv_obj_set_style_text_font(dl_custom_msg_label, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(dl_custom_msg_label, &roboto_bold_36, LV_PART_MAIN);
 
     lv_obj_set_style_text_color(dl_custom_msg_label, lv_color_black(),
                                 LV_PART_MAIN);

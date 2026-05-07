@@ -26,7 +26,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[2]  # batchregistration → aws_onboarding → onboarding → v1.1
 ONBOARDING_DIR = REPO_ROOT / "onboarding"
 DEFAULT_CSV = ONBOARDING_DIR / "eui_registry.csv"
-EU868_CSV = ONBOARDING_DIR / "eui_registry_EU868.csv"
+#EU868_CSV = ONBOARDING_DIR / "eui_registry_EU868.csv"
+#DEFAULT_CSV = Path("/home/jpandya/Desktop/registry_fbnow.csv")
 
 
 logging.basicConfig(
