@@ -19,11 +19,9 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
-#include "battery_adc.h"
 #include "buttons.h"
 #include "display_manager.h"
 #include "leds.h"
-#include "lora_app.h"
 #include "pn5180.h"
 #include "power_ctrl.h"
 #include "rail_manager.h"
@@ -33,6 +31,9 @@
 
 #if EPD_ENABLED
 #include <lvgl.h>
+LV_FONT_DECLARE(roboto_20);
+LV_FONT_DECLARE(roboto_28);
+LV_FONT_DECLARE(roboto_36);
 #endif
 
 LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
@@ -45,6 +46,16 @@ LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 #define ANSI_YELLOW "\033[33m"
 #define ANSI_BLUE "\033[34m"
 #define ANSI_CYAN "\033[36m"
+
+/* After final EPD update, disable peripheral rails (DUT stays on USB). */
+#define QA_RAILS_OFF_DELAY_MS 15000
+#define QA_STEP_COUNT 7
+
+static void qa_step_banner(int step, const char *title) {
+  LOG_INF("");
+  LOG_INF(ANSI_BOLD ANSI_CYAN ">>> Step %d/%d: %s <<<" ANSI_RESET, step,
+          QA_STEP_COUNT, title);
+}
 
 /* Test IDs */
 typedef enum {
@@ -63,13 +74,13 @@ typedef struct {
   test_id_t id;
   const char *name;
   bool passed;
-  char detail[24];
+  char detail[40];
 } test_result_t;
 
 static test_result_t test_results[TEST_COUNT] = {
-    {TEST_NFC, "NFC:", false, ""},  {TEST_EPD, "EPD", false, ""},
-    {TEST_ADC, "ADC:", false, ""},  {TEST_EEPROM, "EEPROM", false, ""},
-    {TEST_RTC, "RTC:", false, ""},  {TEST_BUTTON, "Button:", false, ""},
+    {TEST_NFC, "NFC", false, ""},     {TEST_EPD, "EPD", false, ""},
+    {TEST_ADC, "ADC", false, ""},     {TEST_EEPROM, "EEPROM", false, ""},
+    {TEST_RTC, "RTC", false, ""},     {TEST_BUTTON, "BTN", false, ""},
     {TEST_LORA, "LoRa", false, ""},
 };
 
@@ -194,26 +205,37 @@ static bool test_epd(void) {
     return false;
   }
 
-  /* Create a simple "Hello World" screen */
+  /* Splash: title centered, smaller status below */
   lv_obj_t *screen = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
 
-  lv_obj_t *label = lv_label_create(screen);
-  lv_label_set_text(label, "TEST SUITE - Running... Do not power off");
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_center(label);
+  lv_obj_t *title = lv_label_create(screen);
+  lv_label_set_text(title, "FlexBox Self-Test");
+  lv_obj_set_style_text_font(title, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_color(title, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, -22);
 
-  lv_scr_load(screen);
+  lv_obj_t *sub = lv_label_create(screen);
+  lv_label_set_text(sub, "Running...");
+  lv_obj_set_style_text_font(sub, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(sub, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_align_to(sub, title, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
 
-  /* Process LVGL tasks to render */
-  for (int i = 0; i < 20; i++) {
+  lv_screen_load(screen);
+
+  for (int i = 0; i < 24; i++) {
     lv_task_handler();
-    k_msleep(50);
+    k_msleep(40);
   }
 
-  LOG_INF(ANSI_GREEN "[TEST] EPD: ✓ PASS - Display initialized and 'EPD Test "
-                     "Passed' rendered" ANSI_RESET);
+  snprintf(test_results[TEST_EPD].detail, sizeof(test_results[TEST_EPD].detail),
+           "OK");
+  LOG_INF(ANSI_GREEN
+          "[TEST] EPD: ✓ PASS - Display initialized (splash shown)" ANSI_RESET);
   return true;
 #else
   LOG_WRN(ANSI_YELLOW
@@ -378,6 +400,8 @@ static bool test_eeprom(void) {
     return false;
   }
 
+  snprintf(test_results[TEST_EEPROM].detail,
+           sizeof(test_results[TEST_EEPROM].detail), "OK");
   LOG_INF(ANSI_GREEN
           "[TEST] EEPROM: ✓ PASS - Read/write test successful" ANSI_RESET);
   return true;
@@ -482,44 +506,35 @@ static bool test_button(void) {
   }
 
   LOG_INF(ANSI_YELLOW
-          "[TEST] Button: Press ALL %d buttons within 15 seconds..." ANSI_RESET,
-          EXPECTED_BUTTON_COUNT);
+          "[TEST] Button: Tap each of buttons 0..%d once (any order), "
+          "15s max — LEDs blink on new button." ANSI_RESET,
+          EXPECTED_BUTTON_COUNT - 1);
 
   int64_t start_time = k_uptime_get();
-  int64_t timeout = 15000; // 15 seconds
+  const int64_t timeout_ms = 15000;
+  uint32_t prev_mask = 0;
 
-  while (k_uptime_get() - start_time < timeout) {
-    button_event_t event;
+  while (k_uptime_get() - start_time < timeout_ms) {
+    uint32_t held = buttons_get_held_mask();
+    uint32_t newly = held & ~prev_mask;
+    prev_mask = held;
 
-    // Calculate remaining time for the poll
-    int64_t remaining = timeout - (k_uptime_get() - start_time);
-    if (remaining <= 0)
-      break;
-
-    // Check for an event (non-blocking or short timeout)
-    if (buttons_get_event(&event, K_MSEC(remaining > 100 ? 100 : remaining))) {
-
-      if (event.type == BUTTON_EVENT_PRESS) {
-        // Check if this is a new button we haven't seen yet
-        if (!(buttons_pressed_mask & BIT(event.button_id))) {
-          buttons_pressed_mask |= BIT(event.button_id);
-          unique_buttons_found++;
-
-          LOG_INF("[TEST] Button: %d pressed! (%d/%d)", event.button_id,
-                  unique_buttons_found, EXPECTED_BUTTON_COUNT);
-
-          /* Visual feedback: Blink LED on successful press */
-          led_set(0, true);
-          k_msleep(100);
-          led_set(0, false);
-        }
+    for (int b = 0; b < EXPECTED_BUTTON_COUNT; b++) {
+      if ((newly & BIT(b)) && !(buttons_pressed_mask & BIT(b))) {
+        buttons_pressed_mask |= BIT(b);
+        unique_buttons_found++;
+        LOG_INF("[TEST] Button: %d seen (%d/%d)", b, unique_buttons_found,
+                EXPECTED_BUTTON_COUNT);
+        led_set(0, true);
+        k_msleep(80);
+        led_set(0, false);
       }
     }
 
-    /* Exit early if all buttons are found */
     if (unique_buttons_found >= EXPECTED_BUTTON_COUNT) {
       break;
     }
+    k_msleep(25);
   }
 
   if (unique_buttons_found >= EXPECTED_BUTTON_COUNT) {
@@ -700,6 +715,12 @@ static bool test_lora(void) {
 }
 
 /* Print test summary with color coding */
+/* Summary / EPD list order matches operator flow (not enum order). */
+static const test_id_t k_result_order[TEST_COUNT] = {
+    TEST_EPD,   TEST_ADC,   TEST_EEPROM, TEST_RTC, TEST_LORA,
+    TEST_NFC,   TEST_BUTTON,
+};
+
 static void print_test_summary(void) {
   LOG_INF("");
   LOG_INF("========================================");
@@ -710,10 +731,26 @@ static void print_test_summary(void) {
   int passed = 0;
   for (int i = 0; i < TEST_COUNT; i++) {
     if (test_results[i].passed) {
-      LOG_INF(ANSI_GREEN "  ✓ %-20s PASS" ANSI_RESET, test_results[i].name);
       passed++;
+    }
+  }
+
+  for (int o = 0; o < TEST_COUNT; o++) {
+    test_id_t id = k_result_order[o];
+    if (test_results[id].passed) {
+      if (test_results[id].detail[0] != '\0') {
+        LOG_INF(ANSI_GREEN "  ✓ %-8s PASS  %s" ANSI_RESET,
+                test_results[id].name, test_results[id].detail);
+      } else {
+        LOG_INF(ANSI_GREEN "  ✓ %-8s PASS" ANSI_RESET, test_results[id].name);
+      }
     } else {
-      LOG_INF(ANSI_RED "  ✗ %-20s FAIL" ANSI_RESET, test_results[i].name);
+      if (test_results[id].detail[0] != '\0') {
+        LOG_INF(ANSI_RED "  ✗ %-8s FAIL  %s" ANSI_RESET, test_results[id].name,
+                test_results[id].detail);
+      } else {
+        LOG_INF(ANSI_RED "  ✗ %-8s FAIL" ANSI_RESET, test_results[id].name);
+      }
     }
   }
 
@@ -746,6 +783,17 @@ static void led_blink_pattern(int count, int on_ms, int off_ms) {
   }
 }
 
+#if EPD_ENABLED
+static void epd_summary_style_rule(lv_obj_t *o) {
+  lv_obj_set_style_bg_color(o, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(o, 0, LV_PART_MAIN);
+  lv_obj_set_style_radius(o, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(o, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+}
+#endif
+
 static void epd_render_final_summary(void) {
 #if EPD_ENABLED
   const struct device *display_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
@@ -755,97 +803,124 @@ static void epd_render_final_summary(void) {
     return;
   }
 
-  lv_display_t *disp = lv_display_get_default();
-  if (disp == NULL) {
+  if (lv_display_get_default() == NULL) {
     LOG_ERR(ANSI_RED
             "EPD summary: ✗ FAIL - LVGL display not initialized" ANSI_RESET);
     return;
   }
 
-  lv_obj_t *screen = lv_obj_create(NULL);
-  lv_obj_set_style_bg_color(screen, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
-
-  /* Header */
-  lv_obj_t *header = lv_label_create(screen);
-  lv_label_set_text(header, "FlexBox TEST SUITE");
-  lv_obj_set_style_text_color(header, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 8);
-
-  /* Column headers */
-  lv_obj_t *pass_header = lv_label_create(screen);
-  lv_label_set_text(pass_header, "PASS");
-  lv_obj_set_style_text_color(pass_header, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(pass_header, LV_ALIGN_TOP_LEFT, 8, 28);
-
-  lv_obj_t *fail_header = lv_label_create(screen);
-  lv_label_set_text(fail_header, "FAIL");
-  lv_obj_set_style_text_color(fail_header, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(fail_header, LV_ALIGN_TOP_RIGHT, -8, 28);
-
-  /* Vertical divider */
-  int32_t vres = lv_display_get_vertical_resolution(disp);
-  lv_obj_t *divider = lv_obj_create(screen);
-  lv_obj_set_size(divider, 2, vres > 60 ? vres - 60 : vres);
-  lv_obj_set_style_bg_color(divider, lv_color_black(), LV_PART_MAIN);
-  lv_obj_set_style_bg_opa(divider, LV_OPA_40, LV_PART_MAIN);
-  lv_obj_clear_flag(divider, LV_OBJ_FLAG_SCROLLABLE);
-  lv_obj_align(divider, LV_ALIGN_TOP_MID, 0, 40);
-
-  /* Test entries */
-  int pass_row = 0;
-  int fail_row = 0;
-  const int row_height = 18;
-  const int row_y_start = 48;
   int passed = 0;
 
   for (int i = 0; i < TEST_COUNT; i++) {
-    char line[48];
-    if (test_results[i].detail[0] != '\0') {
-      snprintf(line, sizeof(line), "%s  %s", test_results[i].name,
-               test_results[i].detail);
-    } else {
-      snprintf(line, sizeof(line), "%s", test_results[i].name);
-    }
-
-    lv_obj_t *label = lv_label_create(screen);
-    lv_label_set_text(label, line);
-    lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-
     if (test_results[i].passed) {
-      lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8,
-                   row_y_start + pass_row * row_height);
-      pass_row++;
       passed++;
-    } else {
-      lv_obj_align(label, LV_ALIGN_TOP_RIGHT, -8,
-                   row_y_start + fail_row * row_height);
-      fail_row++;
     }
   }
 
-  /* Footer: pass count only (RTC timestamp shown on RTC line) */
-  char footer_left[24];
+  lv_obj_t *screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(screen, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
+  lv_obj_add_flag(screen, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+
+  const int margin_x = 12;
+  const int rule_w = 376;
+
+  lv_obj_t *hdr = lv_label_create(screen);
+  lv_label_set_text(hdr, "flexbox self-test");
+  lv_obj_set_style_text_font(hdr, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(hdr, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(hdr, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+  lv_obj_align(hdr, LV_ALIGN_TOP_LEFT, margin_x, 8);
+
+  lv_obj_t *rule_top = lv_obj_create(screen);
+  lv_obj_set_size(rule_top, rule_w, 2);
+  epd_summary_style_rule(rule_top);
+  lv_obj_align_to(rule_top, hdr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 6);
+
+  lv_obj_t *list = lv_obj_create(screen);
+  lv_obj_set_width(list, rule_w);
+  lv_obj_set_layout(list, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(list, 3, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(list, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(list, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(list, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_align_to(list, rule_top, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);
+
+  for (int o = 0; o < TEST_COUNT; o++) {
+    test_id_t id = k_result_order[o];
+    const char *st = test_results[id].passed ? "OK " : "X  ";
+    char leftbuf[24];
+
+    (void)snprintf(leftbuf, sizeof(leftbuf), "%s%s", st, test_results[id].name);
+
+    lv_obj_t *row = lv_obj_create(list);
+    lv_obj_set_width(row, rule_w);
+    lv_obj_set_layout(row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_START);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(row, 10, LV_PART_MAIN);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *left = lv_label_create(row);
+    lv_label_set_text(left, leftbuf);
+    lv_obj_set_style_text_font(left, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(left, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(left, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+
+    lv_obj_t *right = lv_label_create(row);
+    lv_label_set_text(right,
+                      test_results[id].detail[0] != '\0'
+                          ? test_results[id].detail
+                          : "-");
+    lv_obj_set_style_text_font(right, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(right, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(right, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+    lv_label_set_long_mode(right, LV_LABEL_LONG_WRAP);
+    lv_obj_set_flex_grow(right, 1);
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+  }
+
+  lv_obj_set_height(list, LV_SIZE_CONTENT);
+
+  lv_obj_update_layout(screen);
+
+  lv_obj_t *rule_bot = lv_obj_create(screen);
+  lv_obj_set_size(rule_bot, rule_w, 2);
+  epd_summary_style_rule(rule_bot);
+  lv_obj_align_to(rule_bot, list, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);
+
+  char verdict[40];
+  lv_obj_t *vlab = lv_label_create(screen);
   if (passed == TEST_COUNT) {
-    snprintf(footer_left, sizeof(footer_left), "ALL PASS");
+    (void)snprintf(verdict, sizeof(verdict), "OK ALL PASS");
   } else {
-    snprintf(footer_left, sizeof(footer_left), "%d/%d PASSED", passed,
-             TEST_COUNT);
+    (void)snprintf(verdict, sizeof(verdict), "X  %d/%d pass", passed, TEST_COUNT);
   }
+  lv_label_set_text(vlab, verdict);
+  lv_obj_set_style_text_font(vlab, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(vlab, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(vlab, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+  lv_obj_align_to(vlab, rule_bot, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 12);
 
-  lv_obj_t *footer_l = lv_label_create(screen);
-  lv_label_set_text(footer_l, footer_left);
-  lv_obj_set_style_text_color(footer_l, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(footer_l, LV_ALIGN_BOTTOM_LEFT, 8, -8);
+  lv_screen_load(screen);
+  lv_obj_update_layout(screen);
 
-  lv_scr_load(screen);
-
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 30; i++) {
     lv_task_handler();
-    k_msleep(50);
+    k_msleep(40);
   }
 
-  LOG_INF(ANSI_GREEN "EPD summary: Final QA summary rendered" ANSI_RESET);
+  LOG_INF(ANSI_GREEN "EPD: final summary shown" ANSI_RESET);
 #endif
 }
 
@@ -1003,8 +1078,16 @@ int main(void) {
 
   LOG_INF("");
   LOG_INF("========================================");
-  LOG_INF("Test Suite Starting");
+  LOG_INF("FlexBox Self-Test (USB powered)");
   LOG_INF("========================================");
+  LOG_INF("");
+  LOG_INF("You will:");
+  LOG_INF("  1-5  Automated checks (display, ADC, EEPROM, RTC, LoRa+beacon).");
+  LOG_INF("  6    Hold an ISO15693 tag on the NFC antenna.");
+  LOG_INF("  7    Tap each front button 0..5 once (any order).");
+  LOG_INF("");
+  LOG_INF("Peripheral rails turn off %d s after the result screen (DUT on USB).",
+          QA_RAILS_OFF_DELAY_MS / 1000);
   LOG_INF("");
 
   k_sleep(K_SECONDS(1));
@@ -1013,6 +1096,12 @@ int main(void) {
   ret = power_ctrl_init();
   if (ret < 0) {
     LOG_ERR("Power control init failed: %d", ret);
+    return ret;
+  }
+
+  ret = rail_manager_init();
+  if (ret < 0) {
+    LOG_ERR("Rail manager init failed: %d", ret);
     return ret;
   }
 
@@ -1049,34 +1138,42 @@ int main(void) {
   LOG_INF(ANSI_BOLD "Starting peripheral tests..." ANSI_RESET);
   LOG_INF("");
 
-  /* Run all non-interactive tests sequentially */
+  int step = 1;
+
+  qa_step_banner(step++, "EPD (display)");
   test_results[TEST_EPD].passed = test_epd();
   LOG_INF("");
   k_msleep(100);
 
+  qa_step_banner(step++, "ADC (battery sense)");
   test_results[TEST_ADC].passed = test_adc();
   LOG_INF("");
   k_msleep(100);
 
+  qa_step_banner(step++, "EEPROM");
   test_results[TEST_EEPROM].passed = test_eeprom();
   LOG_INF("");
   k_msleep(100);
 
-  test_results[TEST_NFC].passed = test_nfc();
-  LOG_INF("");
-  k_msleep(100);
-
+  qa_step_banner(step++, "RTC (I2C clock)");
   test_results[TEST_RTC].passed = test_rtc();
   LOG_INF("");
   k_msleep(100);
 
+  qa_step_banner(step++, "LoRa (915 MHz ping ↔ QA beacon)");
   test_results[TEST_LORA].passed = test_lora();
   LOG_INF("");
   k_msleep(10);
 
+  qa_step_banner(step++, "NFC (ISO15693 tag on antenna)");
+  test_results[TEST_NFC].passed = test_nfc();
+  LOG_INF("");
+  k_msleep(100);
+
   /* LED cue before interactive button test */
   led_blink_pattern(3, 100, 100);
 
+  qa_step_banner(step++, "Buttons 0..5 (tap each once)");
   test_results[TEST_BUTTON].passed = test_button();
   LOG_INF("");
   k_msleep(100);
@@ -1091,10 +1188,13 @@ int main(void) {
   print_test_summary();
 
   LOG_INF("");
-  k_msleep(20000);
+  LOG_INF("Waiting %d ms before disabling peripheral rails (EPD image stays).",
+          QA_RAILS_OFF_DELAY_MS);
+  k_msleep(QA_RAILS_OFF_DELAY_MS);
   shutdown_external_power();
-  LOG_INF(ANSI_BOLD ANSI_CYAN "Test suite completed. External rails disabled "
-                              "for low power." ANSI_RESET);
+  LOG_INF(ANSI_BOLD ANSI_CYAN
+          "Test suite completed. External rails disabled (USB still powers MCU)."
+          ANSI_RESET);
 
   /* Keep system running */
   while (1) {

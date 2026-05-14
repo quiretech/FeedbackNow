@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-/** Call once after EEPROM is available (e.g. after button_counter_store_init). */
+/** Call once after EEPROM is available (e.g. from display_manager_init). */
 int last_cleaned_store_init(void);
 
 /**

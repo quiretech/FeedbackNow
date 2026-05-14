@@ -11,9 +11,7 @@ LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
 /* Pull GPIO spec from DT alias - single LED */
 #define LED0_NODE DT_ALIAS(led0)
 
-// LED command queue is now defined in led_manager.c
-
-/* Array of LED GPIO specs - now just one LED */
+/* Array of LED GPIO specs - single LED0 alias from devicetree */
 const struct gpio_dt_spec leds[NUM_LEDS] = {
     GPIO_DT_SPEC_GET_OR(LED0_NODE, gpios, {0}),
 };
@@ -43,5 +41,3 @@ int led_set(int led_idx, bool val) {
   }
   return gpio_pin_set_dt(&leds[led_idx], val);
 }
-
-/* LED timing and patterns are in led_manager (event-driven). */
