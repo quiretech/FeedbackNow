@@ -43,5 +43,8 @@ __pycache__/
 # Archives (optional - remove if you want to track these)
 *.zip
 
+# ChirpStack API token (v1.1 onboarding)
+**/onboarding/api_key
+
 # AWS automation generated configs
 aws-iot-core-lorawan/automation/batchregistration/lorawan_configs/

@@ -18,6 +18,7 @@ enum display_screen_id {
   DISPLAY_SCREEN_CLEANING,
   DISPLAY_SCREEN_CONNECTING,
   DISPLAY_SCREEN_DEVICE_INFO,
+  DISPLAY_SCREEN_BEACON,
   DISPLAY_SCREEN_COUNT
 };
 
@@ -55,6 +56,15 @@ void display_set_pending_last_cleaned_and_apply(uint32_t epoch);
 
 /** Enqueue full refresh (clear ghosting). */
 void display_request_full_refresh(void);
+
+/**
+ * LoRa QA beacon firmware (BEACON_MODE): minimal EPD — FlexBox title, LoRa
+ * beacon subtitle, listening line. No-op when EPD_ENABLED is 0.
+ */
+void display_beacon_show_listening(void);
+
+/** After a successful ping/pong exchange: show RSSI, SNR, and pong index. */
+void display_beacon_show_last_pong(int16_t rssi, int8_t snr, uint16_t pong_index);
 
 #ifdef __cplusplus
 }

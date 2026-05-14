@@ -22,15 +22,15 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0323"
+#define DEVICE_UNIT_ID_STRING "UNIT-0312"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
  * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
  * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1778729298ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-14T03:28:18Z"
+#define DEVICE_PROVISION_UNIX_UTC 1778730213ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-14T03:43:33Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================

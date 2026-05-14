@@ -26,6 +26,7 @@
 #include "lora_app.h"
 #include "pn5180.h"
 #include "power_ctrl.h"
+#include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
 #include <zephyr/drivers/lora.h>
@@ -885,6 +886,37 @@ static void beacon_build_pong(uint8_t *buf) {
 static int beacon_main(void) {
   LOG_INF("=== LoRa QA Beacon starting ===");
 
+  int ret_boot = power_ctrl_init();
+  if (ret_boot < 0) {
+    LOG_ERR("Beacon: power_ctrl_init failed: %d", ret_boot);
+    return ret_boot;
+  }
+  ret_boot = rail_manager_init();
+  if (ret_boot < 0) {
+    LOG_ERR("Beacon: rail_manager_init failed: %d", ret_boot);
+    return ret_boot;
+  }
+
+  LOG_INF("Beacon: enabling rails for LoRa + EPD...");
+  power_ctrl_set(POWER_EN_3V3, true);
+  k_msleep(50);
+  power_ctrl_set(POWER_EN_1V8, true);
+  k_msleep(50);
+  power_ctrl_set(POWER_EN_3V3A, true);
+  k_msleep(50);
+  power_ctrl_set(POWER_EN_3V6, true);
+  k_msleep(100);
+
+#if EPD_ENABLED
+  ret_boot = display_manager_init();
+  if (ret_boot != 0) {
+    LOG_WRN("Beacon: display_manager_init failed (%d) — continuing without EPD",
+            ret_boot);
+  } else {
+    display_beacon_show_listening();
+  }
+#endif
+
   const struct device *lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
   if (!device_is_ready(lora_dev)) {
     LOG_ERR("LoRa device not ready — check overlay");
@@ -952,6 +984,10 @@ static int beacon_main(void) {
       LOG_INF("TX pong #%u [0x%02X 0x%02X 0x%02X 0x%02X]",
               beacon_pong_counter - 1, tx_buf[0], tx_buf[1], tx_buf[2],
               tx_buf[3]);
+#if EPD_ENABLED
+      display_beacon_show_last_pong(rssi, snr,
+                                    (uint16_t)(beacon_pong_counter - 1U));
+#endif
     }
   }
 

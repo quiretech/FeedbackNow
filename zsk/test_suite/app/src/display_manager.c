@@ -38,6 +38,7 @@ enum display_job_type {
   JOB_SHOW_CLEANING,
   JOB_SHOW_CONNECTING,
   JOB_SHOW_DEVICE_INFO,
+  JOB_SHOW_BEACON,
   JOB_FULL_REFRESH,
 };
 
@@ -65,7 +66,16 @@ static lv_obj_t *screen_thanks;
 static lv_obj_t *screen_cleaning;
 static lv_obj_t *screen_connecting;
 static lv_obj_t *screen_device_info;
+static lv_obj_t *screen_beacon;
+static lv_obj_t *beacon_line_listen;
+static lv_obj_t *beacon_line_stats;
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
+
+/* Written only from beacon thread; read in display work context. */
+static bool beacon_epd_idle;
+static int16_t beacon_epd_rssi;
+static int8_t beacon_epd_snr;
+static uint16_t beacon_epd_pong;
 
 /* LVGL draw buffers (monochrome: +8 bytes for palette)
  * For DIRECT mode: need full screen buffer
@@ -209,6 +219,36 @@ static void create_lvgl_screens(void) {
   lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
   lv_obj_center(label);
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
+
+  /* Screen: BEACON (LoRa QA beacon firmware) */
+  screen_beacon = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen_beacon, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(screen_beacon, LV_OPA_COVER, LV_PART_MAIN);
+  label = lv_label_create(screen_beacon);
+  lv_label_set_text(label, "FlexBox");
+  lv_obj_set_style_text_font(label, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 24);
+  label = lv_label_create(screen_beacon);
+  lv_label_set_text(label, "LoRa QA beacon");
+  lv_obj_set_style_text_font(label, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 88);
+  beacon_line_listen = lv_label_create(screen_beacon);
+  lv_label_set_text(beacon_line_listen, "Listening...");
+  lv_obj_set_style_text_font(beacon_line_listen, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(beacon_line_listen, lv_color_black(), LV_PART_MAIN);
+  lv_obj_align(beacon_line_listen, LV_ALIGN_TOP_MID, 0, 132);
+  beacon_line_stats = lv_label_create(screen_beacon);
+  lv_label_set_text(beacon_line_stats, "");
+  lv_obj_set_style_text_font(beacon_line_stats, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(beacon_line_stats, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(beacon_line_stats, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_label_set_long_mode(beacon_line_stats, LV_LABEL_LONG_WRAP);
+  lv_obj_set_width(beacon_line_stats, 360);
+  lv_obj_align_to(beacon_line_stats, beacon_line_listen, LV_ALIGN_OUT_BOTTOM_MID, 0,
+                  12);
+  lv_obj_add_flag(screen_beacon, LV_OBJ_FLAG_HIDDEN);
 }
 
 /* Format epoch as yyyy/mm/dd hh:mm (UTC). Buffer at least 17 bytes. */
@@ -275,6 +315,9 @@ static void do_render(const struct device *display, enum display_job_type type,
   if (screen_device_info) {
     lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
   }
+  if (screen_beacon) {
+    lv_obj_add_flag(screen_beacon, LV_OBJ_FLAG_HIDDEN);
+  }
 
   /* Show the requested screen */
   switch (type) {
@@ -307,6 +350,24 @@ static void do_render(const struct device *display, enum display_job_type type,
     LOG_INF("[EPD] show DEVICE_INFO");
     scr_to_show = screen_device_info;
     break;
+  case JOB_SHOW_BEACON: {
+    char stats[48];
+    LOG_INF("[EPD] show BEACON (idle=%d)", (int)beacon_epd_idle);
+    if (beacon_line_listen && beacon_line_stats) {
+      if (beacon_epd_idle) {
+        lv_label_set_text(beacon_line_listen, "Listening...");
+        lv_label_set_text(beacon_line_stats, "");
+      } else {
+        lv_label_set_text(beacon_line_listen, "Last ping / pong");
+        (void)snprintf(stats, sizeof(stats), "RSSI %d dBm  SNR %d\nPong #%u",
+                       (int)beacon_epd_rssi, (int)beacon_epd_snr,
+                       (unsigned)beacon_epd_pong);
+        lv_label_set_text(beacon_line_stats, stats);
+      }
+    }
+    scr_to_show = screen_beacon;
+    break;
+  }
   case JOB_FULL_REFRESH:
     LOG_INF("[EPD] full refresh");
     /* Show current screen again to force refresh */
@@ -328,6 +389,9 @@ static void do_render(const struct device *display, enum display_job_type type,
       break;
     case DISPLAY_SCREEN_DEVICE_INFO:
       scr_to_show = screen_device_info;
+      break;
+    case DISPLAY_SCREEN_BEACON:
+      scr_to_show = screen_beacon;
       break;
     default:
       break;
@@ -412,6 +476,10 @@ static void display_work_handler(struct k_work *work) {
   case JOB_SHOW_DEVICE_INFO:
     current_screen = DISPLAY_SCREEN_DEVICE_INFO;
     do_render(display, JOB_SHOW_DEVICE_INFO, 0);
+    break;
+  case JOB_SHOW_BEACON:
+    current_screen = DISPLAY_SCREEN_BEACON;
+    do_render(display, JOB_SHOW_BEACON, 0);
     break;
   case JOB_FULL_REFRESH:
     do_render(display, JOB_FULL_REFRESH, 0);
@@ -578,5 +646,23 @@ void display_set_pending_last_cleaned_and_apply(uint32_t epoch) {
 void display_request_full_refresh(void) {
 #if EPD_ENABLED
   enqueue_job(JOB_FULL_REFRESH, 0);
+#endif
+}
+
+void display_beacon_show_listening(void) {
+#if EPD_ENABLED
+  beacon_epd_idle = true;
+  enqueue_job(JOB_SHOW_BEACON, 0);
+#endif
+}
+
+void display_beacon_show_last_pong(int16_t rssi, int8_t snr,
+                                     uint16_t pong_index) {
+#if EPD_ENABLED
+  beacon_epd_idle = false;
+  beacon_epd_rssi = rssi;
+  beacon_epd_snr = snr;
+  beacon_epd_pong = pong_index;
+  enqueue_job(JOB_SHOW_BEACON, 0);
 #endif
 }
