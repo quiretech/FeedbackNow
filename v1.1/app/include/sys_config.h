@@ -194,10 +194,10 @@
  * Combo hold durations (FRD 3.1) — extend by adding entries in input layer
  * =============================================================================
  */
-#define COMBO_STAFF_HOLD_MS 2000       /* 0+1: enter Staff */
-#define COMBO_DEVICE_INFO_HOLD_MS 3000 /* 0+1+5: Device Info */
-#define COMBO_JOIN_HOLD_MS 3000        /* 0+1+2 in Staff: deliberate join */
-#define COMBO_REBOOT_HOLD_MS 8000      /* 0+1+2+3 in Staff: reboot */
+#define COMBO_STAFF_HOLD_MS 1500       /* 0+1: enter Staff */
+#define COMBO_DEVICE_INFO_HOLD_MS 2000 /* 0+1+5: Device Info */
+#define COMBO_JOIN_HOLD_MS 2000        /* 0+1+2 in Staff: deliberate join */
+#define COMBO_REBOOT_HOLD_MS 5000      /* 0+1+2+3 in Staff: reboot */
 
 /* =============================================================================
  * Mode timeouts (FRD 3.3, 3.4) — return to Normal when elapsed
@@ -263,12 +263,12 @@
   * ------------------------- */
  
  /* Power on: identity blink */
- #define LED_POWER_ON_BLINKS  2
+ #define LED_POWER_ON_BLINKS  3
  #define LED_POWER_ON_MS      120
  #define LED_POWER_ON_OFF_MS  120
  
  /* Reboot: stable ON presence */
- #define LED_REBOOT_HOLD_MS  2000
+ #define LED_REBOOT_HOLD_MS  3000
  
  
  /* -------------------------
@@ -276,7 +276,7 @@
   * ------------------------- */
  
  /* Allow NFC / confirm burst to complete cleanly */
- #define LED_CONFIRM_SMF_BLOCK_MS  500
+ #define LED_CONFIRM_SMF_BLOCK_MS  1000
 
 /* =============================================================================
  * EEPROM / persistent storage

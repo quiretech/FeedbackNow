@@ -19,6 +19,7 @@
 #include <lvgl.h>
 
 /* Font declarations */
+LV_FONT_DECLARE(roboto_20);
 LV_FONT_DECLARE(roboto_28);
 LV_FONT_DECLARE(roboto_36);
 LV_FONT_DECLARE(roboto_bold_42);
@@ -67,9 +68,26 @@ static lv_obj_t *screen_cleaning;
 static lv_obj_t *screen_connecting;
 static lv_obj_t *screen_device_info;
 static lv_obj_t *screen_beacon;
-static lv_obj_t *beacon_line_listen;
-static lv_obj_t *beacon_line_stats;
+static lv_obj_t *beacon_hdr;
+static lv_obj_t *beacon_rule_top;
+static lv_obj_t *beacon_subtitle;
+static lv_obj_t *beacon_rule_mid;
+static lv_obj_t *beacon_list;
+static lv_obj_t *beacon_row_l[3];
+static lv_obj_t *beacon_row_r[3];
 static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
+
+#define BEACON_MARGIN_X 12
+#define BEACON_RULE_W 376
+
+static void beacon_hrule_style(lv_obj_t *o) {
+  lv_obj_set_style_bg_color(o, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(o, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_border_width(o, 0, LV_PART_MAIN);
+  lv_obj_set_style_radius(o, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(o, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
+}
 
 /* Written only from beacon thread; read in display work context. */
 static bool beacon_epd_idle;
@@ -220,34 +238,83 @@ static void create_lvgl_screens(void) {
   lv_obj_center(label);
   lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
 
-  /* Screen: BEACON (LoRa QA beacon firmware) */
+  /* Screen: BEACON (LoRa QA beacon — layout aligned with self-test EPD) */
   screen_beacon = lv_obj_create(NULL);
   lv_obj_set_style_bg_color(screen_beacon, lv_color_white(), LV_PART_MAIN);
   lv_obj_set_style_bg_opa(screen_beacon, LV_OPA_COVER, LV_PART_MAIN);
-  label = lv_label_create(screen_beacon);
-  lv_label_set_text(label, "FlexBox");
-  lv_obj_set_style_text_font(label, &roboto_36, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 24);
-  label = lv_label_create(screen_beacon);
-  lv_label_set_text(label, "LoRa QA beacon");
-  lv_obj_set_style_text_font(label, &roboto_28, LV_PART_MAIN);
-  lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 88);
-  beacon_line_listen = lv_label_create(screen_beacon);
-  lv_label_set_text(beacon_line_listen, "Listening...");
-  lv_obj_set_style_text_font(beacon_line_listen, &roboto_28, LV_PART_MAIN);
-  lv_obj_set_style_text_color(beacon_line_listen, lv_color_black(), LV_PART_MAIN);
-  lv_obj_align(beacon_line_listen, LV_ALIGN_TOP_MID, 0, 132);
-  beacon_line_stats = lv_label_create(screen_beacon);
-  lv_label_set_text(beacon_line_stats, "");
-  lv_obj_set_style_text_font(beacon_line_stats, &roboto_28, LV_PART_MAIN);
-  lv_obj_set_style_text_color(beacon_line_stats, lv_color_black(), LV_PART_MAIN);
-  lv_obj_set_style_text_align(beacon_line_stats, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-  lv_label_set_long_mode(beacon_line_stats, LV_LABEL_LONG_WRAP);
-  lv_obj_set_width(beacon_line_stats, 360);
-  lv_obj_align_to(beacon_line_stats, beacon_line_listen, LV_ALIGN_OUT_BOTTOM_MID, 0,
-                  12);
+  lv_obj_set_style_border_width(screen_beacon, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(screen_beacon, 0, LV_PART_MAIN);
+  lv_obj_add_flag(screen_beacon, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+
+  beacon_hdr = lv_label_create(screen_beacon);
+  lv_label_set_text(beacon_hdr, "flexbox self-test");
+  lv_obj_set_style_text_font(beacon_hdr, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(beacon_hdr, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(beacon_hdr, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+  lv_obj_align(beacon_hdr, LV_ALIGN_TOP_LEFT, BEACON_MARGIN_X, 8);
+
+  beacon_rule_top = lv_obj_create(screen_beacon);
+  lv_obj_set_size(beacon_rule_top, BEACON_RULE_W, 2);
+  beacon_hrule_style(beacon_rule_top);
+  lv_obj_align_to(beacon_rule_top, beacon_hdr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 6);
+
+  beacon_subtitle = lv_label_create(screen_beacon);
+  lv_label_set_text(beacon_subtitle, "lora qa beacon");
+  lv_obj_set_style_text_font(beacon_subtitle, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(beacon_subtitle, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(beacon_subtitle, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+  lv_obj_align_to(beacon_subtitle, beacon_rule_top, LV_ALIGN_OUT_BOTTOM_LEFT, 0,
+                  6);
+
+  beacon_rule_mid = lv_obj_create(screen_beacon);
+  lv_obj_set_size(beacon_rule_mid, BEACON_RULE_W, 2);
+  beacon_hrule_style(beacon_rule_mid);
+  lv_obj_align_to(beacon_rule_mid, beacon_subtitle, LV_ALIGN_OUT_BOTTOM_LEFT, 0,
+                  8);
+
+  beacon_list = lv_obj_create(screen_beacon);
+  lv_obj_set_width(beacon_list, BEACON_RULE_W);
+  lv_obj_set_layout(beacon_list, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(beacon_list, LV_FLEX_FLOW_COLUMN);
+  lv_obj_set_flex_align(beacon_list, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                        LV_FLEX_ALIGN_START);
+  lv_obj_set_style_pad_row(beacon_list, 3, LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(beacon_list, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(beacon_list, 0, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(beacon_list, 0, LV_PART_MAIN);
+  lv_obj_clear_flag(beacon_list, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_align_to(beacon_list, beacon_rule_mid, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 8);
+
+  for (int i = 0; i < 3; i++) {
+    lv_obj_t *row = lv_obj_create(beacon_list);
+    lv_obj_set_width(row, BEACON_RULE_W);
+    lv_obj_set_layout(row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_column(row, 10, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    beacon_row_l[i] = lv_label_create(row);
+    lv_obj_set_style_text_font(beacon_row_l[i], &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(beacon_row_l[i], lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(beacon_row_l[i], LV_TEXT_ALIGN_LEFT,
+                                LV_PART_MAIN);
+
+    beacon_row_r[i] = lv_label_create(row);
+    lv_obj_set_style_text_font(beacon_row_r[i], &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(beacon_row_r[i], lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(beacon_row_r[i], LV_TEXT_ALIGN_RIGHT,
+                                LV_PART_MAIN);
+    lv_label_set_long_mode(beacon_row_r[i], LV_LABEL_LONG_WRAP);
+    lv_obj_set_flex_grow(beacon_row_r[i], 1);
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+  }
+
+  lv_obj_set_height(beacon_list, LV_SIZE_CONTENT);
   lv_obj_add_flag(screen_beacon, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -351,18 +418,28 @@ static void do_render(const struct device *display, enum display_job_type type,
     scr_to_show = screen_device_info;
     break;
   case JOB_SHOW_BEACON: {
-    char stats[48];
+    char rbuf[24];
+    char sbuf[16];
+    char pbuf[16];
     LOG_INF("[EPD] show BEACON (idle=%d)", (int)beacon_epd_idle);
-    if (beacon_line_listen && beacon_line_stats) {
+    if (beacon_row_l[0] && beacon_row_r[0]) {
       if (beacon_epd_idle) {
-        lv_label_set_text(beacon_line_listen, "Listening...");
-        lv_label_set_text(beacon_line_stats, "");
+        lv_label_set_text(beacon_row_l[0], "listen");
+        lv_label_set_text(beacon_row_r[0], "915 MHz SF7");
+        lv_label_set_text(beacon_row_l[1], "rx");
+        lv_label_set_text(beacon_row_r[1], "ping");
+        lv_label_set_text(beacon_row_l[2], "tx");
+        lv_label_set_text(beacon_row_r[2], "pong");
       } else {
-        lv_label_set_text(beacon_line_listen, "Last ping / pong");
-        (void)snprintf(stats, sizeof(stats), "RSSI %d dBm  SNR %d\nPong #%u",
-                       (int)beacon_epd_rssi, (int)beacon_epd_snr,
-                       (unsigned)beacon_epd_pong);
-        lv_label_set_text(beacon_line_stats, stats);
+        (void)snprintf(rbuf, sizeof(rbuf), "%d dBm", (int)beacon_epd_rssi);
+        (void)snprintf(sbuf, sizeof(sbuf), "%d", (int)beacon_epd_snr);
+        (void)snprintf(pbuf, sizeof(pbuf), "#%u", (unsigned)beacon_epd_pong);
+        lv_label_set_text(beacon_row_l[0], "rssi");
+        lv_label_set_text(beacon_row_r[0], rbuf);
+        lv_label_set_text(beacon_row_l[1], "snr");
+        lv_label_set_text(beacon_row_r[1], sbuf);
+        lv_label_set_text(beacon_row_l[2], "pong");
+        lv_label_set_text(beacon_row_r[2], pbuf);
       }
     }
     scr_to_show = screen_beacon;

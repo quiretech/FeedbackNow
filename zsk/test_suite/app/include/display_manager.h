@@ -58,12 +58,12 @@ void display_set_pending_last_cleaned_and_apply(uint32_t epoch);
 void display_request_full_refresh(void);
 
 /**
- * LoRa QA beacon firmware (BEACON_MODE): minimal EPD — FlexBox title, LoRa
- * beacon subtitle, listening line. No-op when EPD_ENABLED is 0.
+ * LoRa QA beacon (BEACON_MODE): EPD matches self-test style — title, rules,
+ * left/right metric rows (idle vs last exchange). No-op when EPD_ENABLED is 0.
  */
 void display_beacon_show_listening(void);
 
-/** After a successful ping/pong exchange: show RSSI, SNR, and pong index. */
+/** After a successful ping/pong: refresh rows (rssi / snr / pong #). */
 void display_beacon_show_last_pong(int16_t rssi, int8_t snr, uint16_t pong_index);
 
 #ifdef __cplusplus
