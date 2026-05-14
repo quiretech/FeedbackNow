@@ -128,7 +128,10 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
 
     LOG_INF("NFC scan i=%u btn=%u blk=%d", intent, button_id,
             NFC_READ_BLOCK);
-    deadline_ms = k_uptime_get_32() + NFC_SCAN_TIMEOUT_MS;
+    uint32_t scan_t0 = k_uptime_get_32();
+    deadline_ms = scan_t0 + NFC_SCAN_PHASE1_MS;
+    const uint32_t deadline_cap = scan_t0 + NFC_SCAN_TOTAL_MS;
+    bool saw_inventory = false;
 
     while (k_uptime_get_32() < deadline_ms &&
            atomic_get(&cancel_requested_atomic) == 0) {
@@ -136,6 +139,12 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       if (ret != 0) {
         k_msleep(NFC_POLL_INTERVAL_MS);
         continue;
+      }
+      if (!saw_inventory) {
+        saw_inventory = true;
+        if (deadline_ms < deadline_cap) {
+          deadline_ms = deadline_cap;
+        }
       }
       ret = pn5180_read_block(nfc_dev, uid, NFC_READ_BLOCK, block_data, 4);
       if (ret == 0) {

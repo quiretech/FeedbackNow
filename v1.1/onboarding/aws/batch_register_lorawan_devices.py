@@ -1,13 +1,16 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 #
-# Repurposed to read onboarding/eui_registry.csv (asset_id, dev_eui, join_eui, app_key)
-# and register all devices with AWS IoT Core for LoRaWAN.
+# Repurposed to read onboarding/flexbox_euis/eui_registry.csv (asset_id, dev_eui, join_eui, app_key,
+# optional name_prefix / tag_client / tag_location / hw_profile for AWS naming and tags) and register all devices
+# with AWS IoT Core for LoRaWAN.
 #
 # Usage:
 #   From repo root (v1.1):
-#     python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
+#     python onboarding/aws/batch_register_lorawan_devices.py \
 #       --region us-east-1 --device-profile-id <UUID> --service-profile-id <UUID> --destination-name <Name>
+#   EU868 registry (eui_registry_EU868.csv):
+#     ... --EU
 #   With dry run (no API calls):
 #     ... --dryrun
 
@@ -19,11 +22,20 @@ from pathlib import Path
 
 import boto3
 
-# Default CSV: same directory as this script
-SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_CSV = SCRIPT_DIR / "eui_registry.csv"
+ONBOARDING_DIR = Path(__file__).resolve().parent.parent
+_REGISTRY_DIR = ONBOARDING_DIR / "flexbox_euis"
+DEFAULT_CSV = _REGISTRY_DIR / "eui_registry.csv"
+EU868_CSV = _REGISTRY_DIR / "eui_registry_EU868.csv"
 
-
+# AWS IoT Wireless resource tag: stable key; CSV column `hw_profile` supplies value.
+_FLEXBOX_HW_PROFILE_TAG_KEY = "Variant"
+# Values written by gen_euis.py from EPD_ENABLED; edit CSV only if correcting legacy rows.
+_VALID_HW_PROFILES = frozenset({"FLEXBOX_PLUS", "FLEXBOX"})
+# Older gen_euis rows before product rename
+_LEGACY_HW_PROFILE_ALIASES = {"EPD_NFC": "FLEXBOX_PLUS", "NFC_BUTTONS": "FLEXBOX"}
+_AWS_WIRELESS_NAME_MAX = 256
+_AWS_TAG_KEY_MAX = 128
+_AWS_TAG_VALUE_MAX = 256
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s: %(message)s",
@@ -39,8 +51,86 @@ def _normalize_hex(s: str, length: int, name: str) -> str:
     return h
 
 
+def _truncate(s: str, max_len: int) -> str:
+    if len(s) <= max_len:
+        return s
+    return s[:max_len]
+
+
+def wireless_device_name(
+    asset_id: str, dev_eui: str, name_prefix: str, tag_client: str
+) -> str:
+    """
+    AWS wireless device Name (unit = asset_id):
+    - No name_prefix and no tag_client: plain unit only (asset_id, or dev_eui fallback).
+    - Otherwise: ``<left>-<unit>`` — left is name_prefix when non-empty, else tag_client;
+      one hyphen before the unit (trailing hyphens on left trimmed).
+    """
+    base = (asset_id or "").strip() or dev_eui
+    p = (name_prefix or "").strip()
+    client = (tag_client or "").strip()
+    left = p if p else client
+    if not left:
+        return _truncate(base, _AWS_WIRELESS_NAME_MAX)
+    left = left.rstrip("-").strip() or (p or client)
+    out = f"{left}-{base}"
+    return _truncate(out, _AWS_WIRELESS_NAME_MAX)
+
+
+def wireless_device_tags(row: dict) -> list[dict[str, str]]:
+    """
+    AWS CreateWirelessDevice Tags (list of {Key, Value} dicts).
+
+    Always includes Variant from CSV `hw_profile` (gen_euis: FLEXBOX_PLUS | FLEXBOX).
+    Optionally Client / Location from tag_client / tag_location when non-blank.
+    """
+    tags: list[dict[str, str]] = []
+    prof = (row.get("hw_profile") or "").strip()
+    if prof in _LEGACY_HW_PROFILE_ALIASES:
+        prof = _LEGACY_HW_PROFILE_ALIASES[prof]
+    if not prof:
+        prof = "UNKNOWN"
+        logger.warning(
+            "asset_id=%s: missing hw_profile in CSV; using tag %s=%s "
+            "(re-run gen_euis to normalize CSV or set hw_profile to FLEXBOX_PLUS or FLEXBOX)",
+            row.get("asset_id"),
+            _FLEXBOX_HW_PROFILE_TAG_KEY,
+            prof,
+        )
+    elif prof not in _VALID_HW_PROFILES:
+        logger.warning(
+            "asset_id=%s: hw_profile=%r is not in %s (sending as-is)",
+            row.get("asset_id"),
+            prof,
+            sorted(_VALID_HW_PROFILES),
+        )
+    tags.append(
+        {
+            "Key": _truncate(_FLEXBOX_HW_PROFILE_TAG_KEY, _AWS_TAG_KEY_MAX),
+            "Value": _truncate(prof, _AWS_TAG_VALUE_MAX),
+        }
+    )
+    client = (row.get("tag_client") or "").strip()
+    if client:
+        tags.append(
+            {
+                "Key": _truncate("Client", _AWS_TAG_KEY_MAX),
+                "Value": _truncate(client, _AWS_TAG_VALUE_MAX),
+            }
+        )
+    loc = (row.get("tag_location") or "").strip()
+    if loc:
+        tags.append(
+            {
+                "Key": _truncate("Location", _AWS_TAG_KEY_MAX),
+                "Value": _truncate(loc, _AWS_TAG_VALUE_MAX),
+            }
+        )
+    return tags
+
+
 def load_eui_registry(csv_path: Path) -> list[dict]:
-    """Load eui_registry.csv (asset_id, dev_eui, join_eui, app_key)."""
+    """Load eui_registry CSV. Required columns: asset_id, dev_eui, join_eui, app_key (extras preserved)."""
     rows = []
     with open(csv_path, "r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
@@ -57,6 +147,10 @@ def load_eui_registry(csv_path: Path) -> list[dict]:
                         "dev_eui": dev_eui,
                         "join_eui": join_eui,
                         "app_key": app_key,
+                        "name_prefix": (r.get("name_prefix") or "").strip(),
+                        "tag_client": (r.get("tag_client") or "").strip(),
+                        "tag_location": (r.get("tag_location") or "").strip(),
+                        "hw_profile": (r.get("hw_profile") or "").strip(),
                     })
                 except Exception as e:
                     logger.error("Row %d: %s", i, e)
@@ -123,16 +217,29 @@ def register_wireless_device(
     dev_eui: str,
     join_eui: str,
     app_key: str,
+    name_prefix: str,
+    tag_client: str,
+    tag_location: str,
+    hw_profile: str,
     device_profile_id: str,
     service_profile_id: str,
     destination_name: str,
     dryrun: bool,
 ) -> bool:
+    row = {
+        "asset_id": asset_id,
+        "tag_client": tag_client,
+        "tag_location": tag_location,
+        "hw_profile": hw_profile,
+    }
+    display_name = wireless_device_name(asset_id, dev_eui, name_prefix, tag_client)
+    tags = wireless_device_tags(row)
     create_input = {
         "Type": "LoRaWAN",
-        "Name": asset_id or dev_eui,
-        "Description": asset_id or "",
+        "Name": display_name,
+        "Description": _truncate(display_name, 512),
         "DestinationName": destination_name,
+        "Tags": tags,
         "LoRaWAN": {
             "DevEui": dev_eui,
             "DeviceProfileId": device_profile_id,
@@ -143,7 +250,12 @@ def register_wireless_device(
             },
         },
     }
-    logger.info("Creating device DevEui=%s Name=%s", dev_eui, asset_id or dev_eui)
+    logger.info(
+        "Creating device DevEui=%s Name=%s Tags=%s",
+        dev_eui,
+        display_name,
+        tags,
+    )
     if dryrun:
         logger.info("[dryrun] would call create_wireless_device")
         return True
@@ -157,13 +269,24 @@ def register_wireless_device(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Register all devices from eui_registry.csv with AWS IoT Core for LoRaWAN.",
+        description=(
+            "Register all devices from eui_registry.csv with AWS IoT Core for LoRaWAN. "
+            "Optional CSV: tag_client / tag_location (tags; client also controls device Name). "
+            "Name = asset_id if name_prefix and tag_client are both empty; else (name_prefix or tag_client)-asset_id "
+            "(hyphen before unit; name_prefix wins when both set). "
+            "hw_profile (FLEXBOX_PLUS | FLEXBOX from gen_euis — always tag Variant)."
+        ),
     )
     parser.add_argument(
         "inputfilename",
         nargs="?",
-        default=str(DEFAULT_CSV),
-        help=f"Path to CSV (default: {DEFAULT_CSV})",
+        default=None,
+        help="Path to CSV (default: eui_registry_EU868.csv if --EU, else eui_registry.csv)",
+    )
+    parser.add_argument(
+        "--EU",
+        action="store_true",
+        help="Use EU868 registry (eui_registry_EU868.csv) when no input file is given",
     )
     parser.add_argument("--region", "-r", required=True, help="AWS region (e.g. us-east-1)")
     parser.add_argument("--device-profile-id", required=True, help="AWS IoT Wireless Device Profile ID (UUID)")
@@ -175,7 +298,10 @@ def main() -> int:
 
 
     args = parser.parse_args()
-    csv_path = Path(args.inputfilename)
+    if args.inputfilename is not None:
+        csv_path = Path(args.inputfilename)
+    else:
+        csv_path = EU868_CSV if args.EU else DEFAULT_CSV
 
     if not csv_path.exists():
         logger.error("CSV not found: %s", csv_path)
@@ -221,6 +347,10 @@ def main() -> int:
             dev_eui=r["dev_eui"],
             join_eui=r["join_eui"],
             app_key=r["app_key"],
+            name_prefix=r.get("name_prefix") or "",
+            tag_client=r.get("tag_client") or "",
+            tag_location=r.get("tag_location") or "",
+            hw_profile=r.get("hw_profile") or "",
             device_profile_id=args.device_profile_id.strip(),
             service_profile_id=args.service_profile_id.strip(),
             destination_name=args.destination_name.strip(),

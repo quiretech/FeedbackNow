@@ -26,10 +26,10 @@ from typing import Any, Callable, Iterable
 
 import grpc
 
-# Script lives in onboarding/; API key and CSV live there.
-ONBOARDING_DIR = Path(__file__).resolve().parent
+# Script lives in onboarding/chirpstack/; API key + CSV are under onboarding/.
+ONBOARDING_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_API_KEY_FILE = ONBOARDING_DIR / "api_key"
-DEFAULT_CSV_PATH = ONBOARDING_DIR / "eui_registry.csv"
+DEFAULT_CSV_PATH = ONBOARDING_DIR / "flexbox_euis" / "eui_registry.csv"
 DEFAULT_APPLICATION_ID = "1101c2be-d036-44bd-bfa5-2da441213bd0"
 DEFAULT_DEVICE_PROFILE_ID = "b89bb1a9-5ae7-4bd0-9b35-e88bb376eee7"
 

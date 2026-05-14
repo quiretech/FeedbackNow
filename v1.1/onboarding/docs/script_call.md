@@ -1,16 +1,16 @@
-# Default registry (eui_registry.csv)
-python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
+# Default registry (flexbox_euis/eui_registry.csv)
+python onboarding/aws/batch_register_lorawan_devices.py \
   --region us-east-1 --device-profile-id <UUID> --service-profile-id <UUID> --destination-name <Name>
 
-# EU868 registry (eui_registry_EU868.csv)
-python onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py --EU \
+# EU868 registry (flexbox_euis/eui_registry_EU868.csv)
+python onboarding/aws/batch_register_lorawan_devices.py --EU \
   --region us-east-1 --device-profile-id <UUID> --service-profile-id <UUID> --destination-name <Name>
 
 
 
 1. US915
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1> 
-python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
   --region us-east-1 \
   --device-profile-id 9ca0d988-eb68-485a-ab92-a210e134ab82 \
   --service-profile-id 9a8d999b-81d6-4071-8282-755b51d65d2e \
@@ -19,7 +19,7 @@ python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devic
 
 2. EU868
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1> 
-python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devices.py \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
   --EU \
   --region us-east-1 \
   --device-profile-id cf8adeae-ce9d-4a26-bcf2-c9805c2ef571 \
@@ -28,10 +28,10 @@ python3 onboarding/aws_onboarding/batchregistration/batch_register_lorawan_devic
   --last-only
 
 
-# gen_euis.py: default = US915 + eui_registry.csv + LR62E overlay + prj US915
+# gen_euis.py: default = US915 + flexbox_euis/eui_registry.csv + LR62E overlay + prj US915
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1\onboarding> clear; python3 .\gen_euis.py; clear
 
-# EU868 + eui_registry_EU868.csv + Seeed WIO overlay + prj EU868
+# EU868 + flexbox_euis/eui_registry_EU868.csv + Seeed WIO overlay + prj EU868
 PS C:\Users\jatan\Desktop\githubrepo\fb_now\v1.1\onboarding> clear; python3 .\gen_euis.py --EU; clear
 
 # Build profile only (swap region/hardware in tree without generating EUIs)

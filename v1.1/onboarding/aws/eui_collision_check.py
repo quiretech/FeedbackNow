@@ -2,13 +2,14 @@
 """
 eui_collision_check.py
 
-Reads eui_registry.csv and eui_registry_eu868.csv and reports:
-- Duplicate dev_eui
-- Duplicate join_eui
-- Duplicate app_key
-- Cross-field collisions (dev_eui == join_eui, etc.)
-- Duplicate asset_id
-- Collisions across both files
+Reads flexbox_euis/eui_registry.csv and flexbox_euis/eui_registry_EU868.csv and reports collisions on
+LoRaWAN identity fields only:
+
+- Duplicate dev_eui, join_eui, or app_key (across all loaded rows / files)
+- Cross-field clashes (one row's dev_eui equals another row's join_eui, etc.)
+
+asset_id is treated as an OEM-facing label only (same name may appear in US and EU
+CSVs); it is not checked for uniqueness.
 """
 
 import csv
@@ -72,9 +73,11 @@ def format_entry(e):
     return f"{src} (asset_id={e['asset_id']})"
 
 def main():
-    # Default files to check
-    main_csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("eui_registry.csv")
-    eu868_csv_path = Path("eui_registry_eu868.csv")
+    _onboarding_dir = Path(__file__).resolve().parent.parent
+    _registry_dir = _onboarding_dir / "flexbox_euis"
+    # Default files to check (run from any cwd)
+    main_csv_path = Path(sys.argv[1]) if len(sys.argv) > 1 else _registry_dir / "eui_registry.csv"
+    eu868_csv_path = _registry_dir / "eui_registry_EU868.csv"
     problems_found = False
 
     files_loaded = []
@@ -87,7 +90,7 @@ def main():
     files_loaded.append(load_csv(main_csv_path, "main"))
     sources.append(str(main_csv_path))
 
-    # Optionally include eui_registry_eu868.csv if present
+    # Optionally include EU868 registry if present
     if eu868_csv_path.exists() and eu868_csv_path.resolve() != main_csv_path.resolve():
         files_loaded.append(load_csv(eu868_csv_path, "eu868"))
         sources.append(str(eu868_csv_path))
@@ -96,9 +99,10 @@ def main():
     all_rows = [row for rows in files_loaded for row in rows]
 
     print(f"\nLoaded {sum(map(len, files_loaded))} rows from: {', '.join(sources)}\n")
+    print("(Skipping asset_id: labels may repeat across region files.)\n")
 
-    # Per-file duplicate detection (for user clarity, also report source file)
-    for field in ["asset_id", "dev_eui", "join_eui", "app_key"]:
+    # Duplicate keys/EUIs only — not asset_id (OEM label; client may add prefixes)
+    for field in ["dev_eui", "join_eui", "app_key"]:
         duplicates = check_duplicates(all_rows, field)
         if duplicates:
             problems_found = True

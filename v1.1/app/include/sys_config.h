@@ -22,16 +22,25 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0306"
+#define DEVICE_UNIT_ID_STRING "UNIT-0323"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
  * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
  * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1778014709ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-05T20:58:29Z"
+#define DEVICE_PROVISION_UNIX_UTC 1778729298ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-14T03:28:18Z"
 /* END PROVISION_UTC (gen_euis.py) */
+
+/* =============================================================================
+ * Registry / AWS onboarding — CSV name_prefix (read by onboarding/gen_euis.py)
+ * Set to "" for none. Not modified by gen_euis.py (edit by hand per deployment).
+ * =============================================================================
+ */
+#ifndef DEVICE_REGISTRY_NAME_PREFIX_STRING
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "LAX"
+#endif
 
 /* =============================================================================
  * LoRa (FRD 4.5)
@@ -315,7 +324,7 @@
  */
 #define RTC_SET_TIME_ON_BOOT 1
 #define RTC_FORCE_SET_TIME_ON_BOOT                                             \
-  1 /* prod: 0 (do not overwrite RTC from build-time) */
+  0 /* prod: 0 (do not overwrite RTC from build-time) */
 /* Fallback calendar time when DEVICE_PROVISION_UNIX_UTC is 0 (see rtc.c). */
 #define RTC_SET_YEAR 2026
 #define RTC_SET_MONTH 1
@@ -416,13 +425,19 @@
  */
 /** Block number to read for 4-byte card data (e.g. user ID or custom data). */
 #define NFC_READ_BLOCK 5
-/** Max time to wait for card read before posting timeout (ms). */
-#define NFC_SCAN_TIMEOUT_MS 5000
+/** Phase 1: if no tag has been inventoried yet, give up after this many ms
+ *  from scan start (faster exit when nothing is presented). */
+#define NFC_SCAN_PHASE1_MS 6000
+/** Absolute cap from scan start (ms). SMF NFC-mode timer uses this value; the
+ *  worker extends its deadline up to (scan_t0 + NFC_SCAN_TOTAL_MS) after the
+ *  first successful inventory so a weak ISO15693 coupling can still finish
+ *  read_block without dropping out at phase 1. */
+#define NFC_SCAN_TOTAL_MS 12000
 /** Delay after 3.6V rail is turned on before touching PN5180 (ms). Covers
  *  regulator settle + chip internal POR. */
 #define NFC_POWER_SETTLE_MS 150
 /** Inventory/read retry cadence inside the scan loop (ms). */
-#define NFC_POLL_INTERVAL_MS 200
+#define NFC_POLL_INTERVAL_MS 100
 
 /** Max attempts for pn5180_init + pn5180_configure before giving up and
  *  posting a fault. Attempt 1 is a normal init after standard settle;
@@ -466,7 +481,7 @@
 #if EPD_ENABLED
 /** Full-screen EPD bitmaps: 0 = EN assets, 1 = FR assets (compile-time). */
 #ifndef EPD_LOCALE_FR_BITMAPS
-#define EPD_LOCALE_FR_BITMAPS 1
+#define EPD_LOCALE_FR_BITMAPS 0
 #endif
 
 /** Main customer screen title above the last-cleaned timestamp. */
@@ -482,7 +497,7 @@
 /** Product name on Device Info + Install header row (same string by default). */
 #define EPD_TEXT_BRAND_TITLE "flexbox"
 /** Footer line under Device Info. */
-#define EPD_TEXT_MANUFACTURER "quire.tech // jjp"
+#define EPD_TEXT_MANUFACTURER "quire.tech"
 /** Prefix before FW_VERSION_STRING on Device Info (refresh appends version). */
 #define EPD_TEXT_FW_PREFIX "fw  "
 /** Device Info screen: QR with FBN pipe payload. 0 omits QR and flex spacer

@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
 static uint8_t app_key[] = LORAWAN_APP_KEY;
+static bool boot_dev_eui_logged;
 
 /* Last uplink completion time (ms) for rate limiting; 0 = never sent yet */
 static uint32_t last_uplink_ms;
@@ -107,6 +108,15 @@ static void lora_log_join_ids(void) {
   LOG_DBG("OTAA EUIs:");
   LOG_HEXDUMP_DBG(dev_eui, sizeof(dev_eui), "DevEUI");
   LOG_HEXDUMP_DBG(join_eui, sizeof(join_eui), "JoinEUI");
+}
+
+/* Ensure installers can see DevEUI at boot with default INFO logging. */
+static void lora_log_boot_dev_eui_once(void) {
+  if (boot_dev_eui_logged) {
+    return;
+  }
+  LOG_HEXDUMP_INF(dev_eui, sizeof(dev_eui), "Boot DevEUI");
+  boot_dev_eui_logged = true;
 }
 
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
@@ -337,6 +347,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                                          .otaa.app_key = app_key,
                                          .otaa.nwk_key = app_key,
                                          .otaa.dev_nonce = 0};
+  lora_log_boot_dev_eui_once();
 
   /* Join is command-driven: first boot waits for SMF (Staff+COMBO_JOIN);
    * subsequent boot auto-posts LORA_CMD_JOIN_SILENT (no Connecting screen;

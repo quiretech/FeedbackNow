@@ -44,7 +44,7 @@ After each layer: confirm or refine; then update this doc and proceed.
 | Subsystem | Responsibility | Owns / Drives |
 |-----------|----------------|---------------|
 | **Input** | Button scanning (0–5), combo detection (0+1, 0+1+2, 0+1+5, 0+1+2+3), hold timers, debounce | Raw button state; combo events (e.g. staff_mode_request, device_info_request) |
-| **System mode** | Normal / Staff / NFC Scan / Device Info / Reboot path; timeouts (10s staff, 5s NFC, 30s device info) | Current system mode; mode transition logic |
+| **System mode** | Normal / Staff / NFC Scan / Device Info / Reboot path; timeouts (20s staff, NFC scan up to 12s with phase-1 early end if no tag, 30s device info) | Current system mode; mode transition logic |
 | **NFC** | PN5180 control, ISO15693 read, 4-byte User ID; only active when mode = NFC Scan | NFC session state; success/failure/timeout result |
 | **LoRa / network** | SX1262, LoRaWAN Class A, OTAA, join/rejoin, uplink scheduling, downlink handling | Network state (joined/disconnected); uplink queue when connected; downlink command handling |
 | **Application logic** | Map (mode + button + NFC) to actions: public vote, check-in, check-out, registered vote; enforce public 5s lockout; trigger uplink payload build | Action requests; no persistent event queue when disconnected (counters only per FRD) |
@@ -94,7 +94,7 @@ After each layer: confirm or refine; then update this doc and proceed.
 | **Main / system-mode thread** | Owns system mode FSM; evaluates button combos and timeouts; drives mode transitions and coordinates NFC start/cancel | Can block on short waits (e.g. debounce); must not block on long I/O (NFC, EEPROM) if done in same thread — delegate or use work. |
 | **Button / input** | Scan GPIO, detect combos and hold durations | Typically timer-driven or thread with short sleep; debounce is short; combo timers (2s, 3s, 10s) need a single place to avoid races. |
 | **LoRa stack** | MAC/PHY, join, send, receive; Class A RX windows | Blocking on radio is acceptable in a dedicated thread or in LoRa driver callbacks; application must not assume immediate send. |
-| **NFC** | PN5180 poll/read when in NFC Scan mode | Blocking with timeout (e.g. 5s) is acceptable in NFC thread or work queue; must be cancellable when mode exits. |
+| **NFC** | PN5180 poll/read when in NFC Scan mode | Blocking with bounded timeout (see `NFC_SCAN_*` in `sys_config.h`) is acceptable in NFC thread; must be cancellable when mode exits. |
 | **LED** | Run pattern (solid, blink, N blinks) | Non-blocking from app perspective: LED owns a timer/thread that advances pattern; "set pattern" is a request. |
 | **EPD** | Update display; run 5s/30s/45min timers | EPD refresh can block (slow); run in work queue or low-priority thread so main loop and buttons remain responsive. |
 | **RTC / alarms** | Heartbeat jitter, rejoin interval, wake from sleep | Timer callbacks or alarm IRQ; minimal work in ISR; schedule work for heartbeat/rejoin logic. |
@@ -108,7 +108,7 @@ After each layer: confirm or refine; then update this doc and proceed.
 ### Blocking Considerations
 
 - **EEPROM write** on each button press: Keep write short; consider small delay or work queue so one slow write does not stall button response (or accept brief block if write is fast enough).
-- **NFC read**: Up to 5s timeout; run in dedicated thread or work queue so system mode can still react to timeouts/cancel.
+- **NFC read**: Bounded scan (phase 1 + total cap); run in dedicated thread so system mode can still react to timeouts/cancel.
 - **LoRa send**: Class A uplink blocks until TX and RX windows complete; LoRa thread or async API so application does not block.
 - **EPD update**: Slow (seconds); always offloaded so UI and buttons stay responsive.
 
@@ -157,20 +157,20 @@ stateDiagram-v2
     [*] --> NormalMode
     NormalMode --> StaffMode: Btn_0_1_hold_2s
     NormalMode --> DeviceInfo: Btn_0_1_5_hold_3s
-    StaffMode --> NormalMode: Timeout_10s
+    StaffMode --> NormalMode: Timeout_20s
     StaffMode --> NormalMode: Deliberate_join_0_1_2_hold_3s
     StaffMode --> Reboot: Btn_0_1_2_3_hold_10s
     StaffMode --> NFCScan: Btn_0_to_5_pressed
     DeviceInfo --> NormalMode: Any_btn_or_timeout_30s
     Reboot --> [*]: LED_solid_3s_then_reboot
-    NFCScan --> NormalMode: Timeout_5s_or_fail
+    NFCScan --> NormalMode: Timeout_or_fail
     NFCScan --> ProcessAction: Card_read_ok
     ProcessAction --> NormalMode: Done
 ```
 
 - **Normal:** Public taps (0–5) → vote + lockout 5s; no staff combo active.
-- **Staff:** LED solid; 10s timeout or combo (join/reboot) or single button → NFC Scan.
-- **NFC Scan:** LED 1 Hz blink; 5s timeout or fail → Normal; success → ProcessAction then Normal.
+- **Staff:** LED solid; 20s timeout or combo (join/reboot) or single button → NFC Scan.
+- **NFC Scan:** LED slow pulse while waiting; scan ends at failure after phase 1 if no tag was inventoried, else continues until total cap (see `sys_config.h`); SMF timer matches total cap; success → Normal with uplink/display.
 - **Device Info:** EPD (Variant A) or status uplink; 30s or any button → Normal.
 - **Reboot:** LED solid 3s then reboot.
 - **ProcessAction:** Check-in / check-out / registered vote; then transition to Normal.
@@ -179,8 +179,8 @@ stateDiagram-v2
 
 | Timeout | Value | Owner | Mechanism |
 |---------|--------|--------|-----------|
-| Staff mode | 10s | System mode FSM | k_timer started on entry to Staff; on expiry post event or call FSM "timeout"; FSM transitions to Normal. |
-| NFC scan | 5s | System mode or NFC | NFC work with 5s timeout; on timeout NFC posts "nfc_timeout"; FSM transitions to Normal. |
+| Staff mode | 20s | System mode FSM | k_timer started on entry to Staff; on expiry post event or call FSM "timeout"; FSM transitions to Normal. |
+| NFC scan | 12s max (`NFC_SCAN_TOTAL_MS`); 6s phase 1 if no inventory (`NFC_SCAN_PHASE1_MS`) | System mode FSM + NFC worker | SMF starts k_timer for total cap; worker extends its deadline to total cap after first successful inventory so `read_block` can complete; on expiry NFC posts timeout; FSM transitions to Normal. |
 | Device info | 30s | System mode FSM | k_timer on entry to DeviceInfo; on expiry transition to Normal. |
 | Public lockout | 5s | Application logic | Last-vote timestamp; reject press if &lt; 5s. |
 | EPD "Thanks" | 5s | EPD subsystem | Internal timer; after 5s EPD returns to "Last Cleaned". |
@@ -330,12 +330,12 @@ flowchart LR
 
 ### Phase 3: NFC and Staff mode
 
-**Goal:** Staff mode entry (0+1 hold 2s), timeouts (10s staff, 5s NFC), NFC scan (work queue), check-in/check-out/registered vote.
+**Goal:** Staff mode entry (0+1 hold 2s), timeouts (20s staff, NFC scan policy in `sys_config.h`), NFC scan (dedicated thread), check-in/check-out/registered vote.
 
 | Step | Task | Notes |
 |------|------|--------|
-| 3.1 | **Staff mode in SMF:** On staff_mode_request (0+1 hold 2s), transition to Staff; start 10s timeout; LED solid. On staff_timeout or deliberate_join (0+1+2 hold 3s), transition to Normal. On 0+1+2+3 hold 10s, transition to Reboot. On single button 0..5 in Staff, transition to NFCScan, pass button id. | |
-| 3.2 | **NFC subsystem:** PN5180 driver, ISO15693 read, 4-byte User ID. When SMF enters NFCScan, call NFC_scan_start(button_id); NFC runs in work queue with 5s timeout; on completion posts **nfc_result** (success + User ID, or timeout/error) to SMF queue. | SMF consumes nfc_result; on success transition to ProcessAction with button_id + User ID; on timeout/error to Normal. |
+| 3.1 | **Staff mode in SMF:** On staff_mode_request (0+1 hold 2s), transition to Staff; start staff timeout (`STAFF_TIMEOUT_MS`); LED solid. On staff_timeout or deliberate_join (0+1+2 hold 3s), transition to Normal. On 0+1+2+3 hold 10s, transition to Reboot. On single button 0..5 in Staff, transition to NFCScan, pass button id. | |
+| 3.2 | **NFC subsystem:** PN5180 driver, ISO15693 read, 4-byte User ID. When SMF enters NFCScan, call `nfc_scan_start(...)`; NFC runs in a dedicated thread with bounded scan (`NFC_SCAN_PHASE1_MS` / `NFC_SCAN_TOTAL_MS`); on completion posts **nfc_result** (success + User ID, or timeout/error) to SMF queue. | SMF consumes nfc_result; on success handles check-in/out/vote; on timeout/error to Normal. |
 | 3.3 | **ProcessAction:** Check-in (btn 0), check-out (btn 1), registered vote (btn 2..5). Build uplink (0x01/0x02/0x03), LED feedback (3 blinks), then transition to Normal. | |
 | 3.4 | **Deliberate join (first boot):** When has_joined_once is false, Staff + 0+1+2 hold 3s triggers join attempt (signal LoRa thread or post “start_join” to LoRa); on success set has_joined_once. | |
 

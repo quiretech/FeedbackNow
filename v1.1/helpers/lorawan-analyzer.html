@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRaWAN RF Analyzer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0f172a;
+            --secondary: #1e293b;
+            --accent: #06b6d4;
+            --accent-warm: #f97316;
+            --good: #10b981;
+            --warning: #f59e0b;
+            --critical: #ef4444;
+            --neutral: #94a3b8;
+            --border: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Courier New', monospace;
+            background: linear-gradient(135deg, var(--primary) 0%, #0a0f1b 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 40px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-warm) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+        }
+
+        .card h2 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 240px;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent) 0%, #0891b2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(6, 182, 212, 0.1);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent);
+            transform: scaleX(0);
+            transform-origin: left;
+            animation: scaleIn 0.6s ease-out forwards;
+        }
+
+        @keyframes scaleIn {
+            to {
+                transform: scaleX(1);
+            }
+        }
+
+        .metric-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--neutral);
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            letter-spacing: -1px;
+        }
+
+        .metric-unit {
+            font-size: 13px;
+            color: var(--neutral);
+            margin-left: 4px;
+        }
+
+        .metric-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(100, 116, 139, 0.3);
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .metric-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-warm) 100%);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+
+        .quality-indicator {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 8px;
+        }
+
+        .quality-good {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--good);
+        }
+
+        .quality-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .quality-critical {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--critical);
+        }
+
+        .gateway-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+
+        .gateway-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .gateway-item:hover {
+            border-color: var(--accent);
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .gateway-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .gateway-eui {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .gateway-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .gateway-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .gateway-metric-label {
+            color: var(--text-secondary);
+        }
+
+        .gateway-metric-value {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .success-message {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #86efac;
+            padding: 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+
+        .frequency-badge {
+            display: inline-block;
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--accent);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 8px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .frequency-badge.warning {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .signal-wave {
+            display: inline-block;
+            width: 20px;
+            height: 16px;
+            margin-right: 8px;
+            vertical-align: middle;
+            opacity: 0.7;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .info-section {
+            background: rgba(6, 182, 212, 0.05);
+            border-left: 3px solid var(--accent);
+            padding: 14px;
+            border-radius: 4px;
+            margin: 16px 0;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .device-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .device-info-item {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px;
+        }
+
+        .device-info-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--neutral);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .device-info-value {
+            font-size: 13px;
+            color: var(--text-primary);
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--neutral);
+            font-size: 12px;
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <div class="logo-icon">📡</div>
+                <div>
+                    <h1>LoRaWAN RF Analyzer</h1>
+                    <p class="subtitle">Local payload analysis tool • Real-time signal quality assessment</p>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Input Section -->
+            <div class="card">
+                <h2>📥 Payload Input</h2>
+                <textarea id="payloadInput" placeholder="Paste your AWS LoRaWAN payload JSON here..."></textarea>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="analyzePayload()">Analyze</button>
+                    <button class="btn-secondary" onclick="clearInput()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Quick Metrics -->
+            <div class="card">
+                <h2>⚡ Quick Metrics</h2>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="metric-label">Best RSSI</div>
+                        <div class="metric-value">
+                            <span id="bestRssi">—</span>
+                            <span class="metric-unit">dBm</span>
+                        </div>
+                        <div id="bestRssiQuality" class="quality-indicator hidden"></div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-label">Best SNR</div>
+                        <div class="metric-value">
+                            <span id="bestSnr">—</span>
+                            <span class="metric-unit">dB</span>
+                        </div>
+                        <div id="bestSnrQuality" class="quality-indicator hidden"></div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-label">Avg RSSI</div>
+                        <div class="metric-value">
+                            <span id="avgRssi">—</span>
+                            <span class="metric-unit">dBm</span>
+                        </div>
+                        <div class="metric-bar">
+                            <div id="avgRssiBar" class="metric-bar-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="metric">
+                        <div class="metric-label">Avg SNR</div>
+                        <div class="metric-value">
+                            <span id="avgSnr">—</span>
+                            <span class="metric-unit">dB</span>
+                        </div>
+                        <div class="metric-bar">
+                            <div id="avgSnrBar" class="metric-bar-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Analysis -->
+        <div class="card">
+            <h2>📊 Detailed Analysis</h2>
+            <div id="analysisContent">
+                <p style="color: var(--neutral); text-align: center; padding: 40px 0;">
+                    Paste a payload and click "Analyze" to see detailed RF metrics
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        LoRaWAN RF Analyzer • All processing is local • No data sent to servers
+    </div>
+
+    <script>
+        function analyzePayload() {
+            const input = document.getElementById('payloadInput').value.trim();
+            
+            if (!input) {
+                showError('Please paste a payload first');
+                return;
+            }
+
+            try {
+                // Try to parse as JSON
+                let payload;
+                try {
+                    payload = JSON.parse(input);
+                } catch (e) {
+                    showError('Invalid JSON format. Please check your payload.');
+                    return;
+                }
+
+                // Extract LoRaWAN metadata
+                const metadata = extractMetadata(payload);
+                
+                if (!metadata.gateways || metadata.gateways.length === 0) {
+                    showError('No gateway data found in payload. Check the payload structure.');
+                    return;
+                }
+
+                // Calculate metrics
+                const metrics = calculateMetrics(metadata.gateways);
+                
+                // Update UI
+                updateMetricsUI(metrics);
+                renderAnalysis(metadata, metrics);
+                
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            }
+        }
+
+        function extractMetadata(payload) {
+            let metadata = {
+                gateways: [],
+                deviceInfo: {}
+            };
+
+            // Handle AWS IoT Core format with nested JSON message
+            if (payload.message && typeof payload.message === 'string') {
+                try {
+                    const messageData = JSON.parse(payload.message);
+                    if (messageData['Uplink metadata']) {
+                        const uplinkMeta = JSON.parse(messageData['Uplink metadata']);
+                        metadata.gateways = uplinkMeta.Gateways || [];
+                        metadata.deviceInfo = {
+                            devEui: uplinkMeta.DevEui,
+                            devAddr: uplinkMeta.DevAddr,
+                            dataRate: uplinkMeta.DataRate,
+                            frequency: uplinkMeta.Frequency,
+                            spreadingFactor: uplinkMeta.SpreadingFactor,
+                            bandwidth: uplinkMeta.Bandwidth,
+                            fcnt: uplinkMeta.FCnt,
+                            fPort: uplinkMeta.FPort,
+                            adr: uplinkMeta.ADR,
+                            mtype: uplinkMeta.MType
+                        };
+                    }
+                } catch (e) {
+                    // Continue to next format
+                }
+            }
+
+            // Handle direct LoRaWAN metadata format
+            if (payload.WirelessMetadata?.LoRaWAN) {
+                const lora = payload.WirelessMetadata.LoRaWAN;
+                metadata.gateways = lora.Gateways || [];
+                metadata.deviceInfo = {
+                    devEui: lora.DevEui,
+                    devAddr: lora.DevAddr,
+                    dataRate: lora.DataRate,
+                    frequency: lora.Frequency,
+                    spreadingFactor: lora.SpreadingFactor,
+                    bandwidth: lora.Bandwidth,
+                    fcnt: lora.FCnt,
+                    fPort: lora.FPort,
+                    adr: lora.ADR,
+                    mtype: lora.MType,
+                    codeRate: lora.CodeRate
+                };
+            }
+
+            return metadata;
+        }
+
+        function calculateMetrics(gateways) {
+            const rssiValues = gateways.map(g => g.Rssi).filter(r => r !== undefined);
+            const snrValues = gateways.map(g => g.Snr).filter(s => s !== undefined);
+
+            const bestRssi = Math.max(...rssiValues);
+            const avgRssi = rssiValues.reduce((a, b) => a + b, 0) / rssiValues.length;
+            const bestSnr = Math.max(...snrValues);
+            const avgSnr = snrValues.reduce((a, b) => a + b, 0) / snrValues.length;
+
+            return {
+                bestRssi,
+                avgRssi,
+                bestSnr,
+                avgSnr,
+                gatewayCount: gateways.length,
+                rssiRange: { min: Math.min(...rssiValues), max: bestRssi },
+                snrRange: { min: Math.min(...snrValues), max: bestSnr }
+            };
+        }
+
+        function getQualityLevel(rssi, snr) {
+            if (rssi > -90 && snr > 5) return 'excellent';
+            if (rssi > -100 && snr > 2) return 'good';
+            if (rssi > -110 && snr > -5) return 'fair';
+            return 'poor';
+        }
+
+        function getQualityLabel(level) {
+            const labels = {
+                'excellent': 'Excellent',
+                'good': 'Good',
+                'fair': 'Fair',
+                'poor': 'Poor'
+            };
+            return labels[level] || 'Unknown';
+        }
+
+        function getQualityClass(level) {
+            const classes = {
+                'excellent': 'quality-good',
+                'good': 'quality-good',
+                'fair': 'quality-warning',
+                'poor': 'quality-critical'
+            };
+            return classes[level] || 'quality-critical';
+        }
+
+        function updateMetricsUI(metrics) {
+            // Best RSSI
+            const bestRssiQuality = getQualityLevel(metrics.bestRssi, metrics.bestSnr);
+            document.getElementById('bestRssi').textContent = metrics.bestRssi.toFixed(1);
+            const bestRssiEl = document.getElementById('bestRssiQuality');
+            bestRssiEl.textContent = getQualityLabel(bestRssiQuality);
+            bestRssiEl.className = `quality-indicator ${getQualityClass(bestRssiQuality)}`;
+            bestRssiEl.classList.remove('hidden');
+
+            // Best SNR
+            const bestSnrQuality = getQualityLevel(metrics.bestRssi, metrics.bestSnr);
+            document.getElementById('bestSnr').textContent = metrics.bestSnr.toFixed(2);
+            const bestSnrEl = document.getElementById('bestSnrQuality');
+            bestSnrEl.textContent = getQualityLabel(bestSnrQuality);
+            bestSnrEl.className = `quality-indicator ${getQualityClass(bestSnrQuality)}`;
+            bestSnrEl.classList.remove('hidden');
+
+            // Average RSSI (0 to -150 scale)
+            document.getElementById('avgRssi').textContent = metrics.avgRssi.toFixed(1);
+            const rssiPercent = Math.max(0, Math.min(100, ((150 + metrics.avgRssi) / 150) * 100));
+            document.getElementById('avgRssiBar').style.width = rssiPercent + '%';
+
+            // Average SNR (normalized)
+            document.getElementById('avgSnr').textContent = metrics.avgSnr.toFixed(2);
+            const snrPercent = Math.max(0, Math.min(100, ((metrics.avgSnr + 20) / 30) * 100));
+            document.getElementById('avgSnrBar').style.width = snrPercent + '%';
+        }
+
+        function renderAnalysis(metadata, metrics) {
+            let html = '';
+
+            // Overall assessment
+            const overallQuality = getQualityLevel(metrics.bestRssi, metrics.bestSnr);
+            const overallClass = getQualityClass(overallQuality);
+            html += `
+                <div class="info-section">
+                    <strong>Overall Link Quality:</strong>
+                    <span class="quality-indicator ${overallClass}" style="margin-left: 8px;">
+                        ${getQualityLabel(overallQuality)}
+                    </span>
+                    <br><br>
+                    ${getQualityExplanation(overallQuality, metrics)}
+                </div>
+            `;
+
+            // Device Information
+            const info = metadata.deviceInfo;
+            if (Object.keys(info).length > 0) {
+                html += '<div class="device-info">';
+                if (info.devEui) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Device EUI</div>
+                        <div class="device-info-value">${info.devEui}</div>
+                    </div>
+                `;
+                if (info.devAddr) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Device Address</div>
+                        <div class="device-info-value">${info.devAddr}</div>
+                    </div>
+                `;
+                if (info.fPort) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">FPort</div>
+                        <div class="device-info-value">${info.fPort}</div>
+                    </div>
+                `;
+                if (info.fcnt) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Frame Counter</div>
+                        <div class="device-info-value">${info.fcnt}</div>
+                    </div>
+                `;
+                if (info.spreadingFactor) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Spreading Factor</div>
+                        <div class="device-info-value">SF${info.spreadingFactor}</div>
+                    </div>
+                `;
+                if (info.bandwidth) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Bandwidth</div>
+                        <div class="device-info-value">${info.bandwidth} kHz</div>
+                    </div>
+                `;
+                if (info.frequency) {
+                    const freqMhz = (parseInt(info.frequency) / 1000000).toFixed(1);
+                    html += `
+                        <div class="device-info-item">
+                            <div class="device-info-label">Frequency</div>
+                            <div class="device-info-value">${freqMhz} MHz</div>
+                        </div>
+                    `;
+                }
+                if (info.dataRate) html += `
+                    <div class="device-info-item">
+                        <div class="device-info-label">Data Rate</div>
+                        <div class="device-info-value">DR${info.dataRate}</div>
+                    </div>
+                `;
+                html += '</div>';
+            }
+
+            // Gateway Analysis
+            html += '<h2 style="font-size: 16px; margin: 24px 0 16px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary);">📡 Gateway Analysis</h2>';
+            html += `<p style="color: var(--neutral); font-size: 13px; margin-bottom: 12px;">Received by ${metrics.gatewayCount} gateway${metrics.gatewayCount !== 1 ? 's' : ''}</p>`;
+            html += '<div class="gateway-list">';
+            
+            metadata.gateways.forEach((gw, idx) => {
+                const quality = getQualityLevel(gw.Rssi, gw.Snr);
+                const qualityClass = getQualityClass(quality);
+                html += `
+                    <div class="gateway-item">
+                        <div class="gateway-header">
+                            <span class="gateway-eui">GW ${idx + 1}: ${gw.GatewayEui}</span>
+                            <span class="quality-indicator ${qualityClass}" style="margin: 0;">
+                                ${getQualityLabel(quality)}
+                            </span>
+                        </div>
+                        <div class="gateway-metrics">
+                            <div class="gateway-metric">
+                                <span class="gateway-metric-label">RSSI</span>
+                                <span class="gateway-metric-value">${gw.Rssi} dBm</span>
+                            </div>
+                            <div class="gateway-metric">
+                                <span class="gateway-metric-label">SNR</span>
+                                <span class="gateway-metric-value">${gw.Snr.toFixed(2)} dB</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            // RF Insights
+            html += '<h2 style="font-size: 16px; margin: 24px 0 16px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary);">💡 RF Insights</h2>';
+            html += getInsights(metrics, metadata);
+
+            document.getElementById('analysisContent').innerHTML = html;
+        }
+
+        function getQualityExplanation(quality, metrics) {
+            const explanations = {
+                'excellent': `Excellent signal reception with RSSI at ${metrics.bestRssi.toFixed(1)} dBm and SNR at ${metrics.bestSnr.toFixed(2)} dB. Strong, stable link with no concerns.`,
+                'good': `Good signal reception with RSSI at ${metrics.bestRssi.toFixed(1)} dBm and SNR at ${metrics.bestSnr.toFixed(2)} dB. Reliable link with adequate margin.`,
+                'fair': `Fair signal reception with RSSI at ${metrics.bestRssi.toFixed(1)} dBm and SNR at ${metrics.bestSnr.toFixed(2)} dB. Link is usable but approaching threshold.`,
+                'poor': `Poor signal reception with RSSI at ${metrics.bestRssi.toFixed(1)} dBm and SNR at ${metrics.bestSnr.toFixed(2)} dB. Link is weak and unreliable.`
+            };
+            return explanations[quality] || 'Unable to determine quality';
+        }
+
+        function getInsights(metrics, metadata) {
+            let insights = '<ul style="list-style: none; padding: 0;">';
+            let count = 0;
+
+            // RSSI insights
+            if (metrics.bestRssi > -90) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Excellent RSSI - Strong reception</li>';
+                count++;
+            } else if (metrics.bestRssi > -100) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Good RSSI - Acceptable reception</li>';
+                count++;
+            } else if (metrics.bestRssi > -110) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--warning);">⚠</span> Weak RSSI - Consider improving antenna placement</li>';
+                count++;
+            } else {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--critical);">✗</span> Very weak RSSI - Likely link reliability issues</li>';
+                count++;
+            }
+
+            // SNR insights
+            if (metrics.bestSnr > 5) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Excellent SNR - Clear signal above noise</li>';
+                count++;
+            } else if (metrics.bestSnr > 0) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Good SNR - Usable signal</li>';
+                count++;
+            } else if (metrics.bestSnr > -5) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--warning);">⚠</span> Marginal SNR - Some interference present</li>';
+                count++;
+            } else {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--critical);">✗</span> Poor SNR - Heavy interference, consider frequency change</li>';
+                count++;
+            }
+
+            // Diversity
+            if (metrics.gatewayCount >= 3) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Good gateway diversity - ' + metrics.gatewayCount + ' gateways received</li>';
+                count++;
+            } else if (metrics.gatewayCount >= 2) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--warning);">⚠</span> Limited diversity - Only ' + metrics.gatewayCount + ' gateways</li>';
+                count++;
+            } else {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--critical);">✗</span> No diversity - Single gateway only</li>';
+                count++;
+            }
+
+            // RSSI range
+            const rssiSpread = metrics.rssiRange.max - metrics.rssiRange.min;
+            if (rssiSpread < 10) {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--good);">✓</span> Uniform coverage (RSSI spread: ' + rssiSpread.toFixed(1) + ' dB)</li>';
+                count++;
+            } else {
+                insights += '<li style="padding: 8px 0; border-bottom: 1px solid var(--border); color: var(--text-secondary);"><span style="color: var(--warning);">⚠</span> Variable coverage (RSSI spread: ' + rssiSpread.toFixed(1) + ' dB)</li>';
+                count++;
+            }
+
+            insights += '</ul>';
+            return insights;
+        }
+
+        function showError(message) {
+            const analysisContent = document.getElementById('analysisContent');
+            analysisContent.innerHTML = `<div class="error-message">${message}</div>`;
+            
+            // Clear metrics
+            document.getElementById('bestRssi').textContent = '—';
+            document.getElementById('bestSnr').textContent = '—';
+            document.getElementById('avgRssi').textContent = '—';
+            document.getElementById('avgSnr').textContent = '—';
+            document.getElementById('bestRssiQuality').classList.add('hidden');
+            document.getElementById('bestSnrQuality').classList.add('hidden');
+        }
+
+        function clearInput() {
+            document.getElementById('payloadInput').value = '';
+            document.getElementById('analysisContent').innerHTML = `
+                <p style="color: var(--neutral); text-align: center; padding: 40px 0;">
+                    Paste a payload and click "Analyze" to see detailed RF metrics
+                </p>
+            `;
+            
+            document.getElementById('bestRssi').textContent = '—';
+            document.getElementById('bestSnr').textContent = '—';
+            document.getElementById('avgRssi').textContent = '—';
+            document.getElementById('avgSnr').textContent = '—';
+            document.getElementById('bestRssiQuality').classList.add('hidden');
+            document.getElementById('bestSnrQuality').classList.add('hidden');
+        }
+
+        // Allow Enter key to analyze
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('payloadInput').addEventListener('keydown', function(e) {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    analyzePayload();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

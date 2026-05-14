@@ -1,7 +1,7 @@
 /**
  * System mode FSM: single thread, single input queue (per architecture).
  * States: Normal, Staff, NFCScan, DeviceInfo, Reboot, ProcessAction.
- * Implements: timeouts (Staff 10s, DeviceInfo 30s), Staff-first for
+ * Implements: timeouts (Staff 20s, DeviceInfo 30s), Staff-first for
  * Join/Reboot.
  *
  * Power gating: SMF owns 3.3A (peripheral rail) for all flows it dispatches.
@@ -468,7 +468,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         rail_manager_request_3v6();
         (void)led_manager_show(0, LED_PATTERN_NFC_WAITING);
         atomic_set(&mode_timeout_ev, SMF_EVT_NFC_TIMEOUT);
-        k_timer_start(&mode_timeout_timer, K_MSEC(NFC_SCAN_TIMEOUT_MS),
+        k_timer_start(&mode_timeout_timer, K_MSEC(NFC_SCAN_TOTAL_MS),
                       K_NO_WAIT);
         nfc_scan_start(intent, bid);
         LOG_INF("smf Staff->NFC btn=%u intent=%u", bid, intent);
@@ -561,6 +561,9 @@ static void smf_thread_fn(void *a, void *b, void *c) {
             uplink.confirmed = LORA_NFC_UPLINK_CONFIRMED;
             uplink.len = PAYLOAD_LEN_BYTES;
             memcpy(uplink.data, payload, PAYLOAD_LEN_BYTES);
+            LOG_INF("smf nfc payload intent=%u btn=%u len=%u", intent, bid,
+                    (unsigned)uplink.len);
+            LOG_HEXDUMP_INF(uplink.data, uplink.len, "NFC UL payload");
             if (lora_is_joined()) {
               if (lora_put_event(&uplink, K_MSEC(500)) == 0) {
                 LOG_INF("smf nfc_ul ok intent=%u", intent);
