@@ -435,7 +435,7 @@
 #define NFC_SCAN_TOTAL_MS 12000
 /** Delay after 3.6V rail is turned on before touching PN5180 (ms). Covers
  *  regulator settle + chip internal POR. */
-#define NFC_POWER_SETTLE_MS 150
+#define NFC_POWER_SETTLE_MS 500
 /** Inventory/read retry cadence inside the scan loop (ms). */
 #define NFC_POLL_INTERVAL_MS 100
 
