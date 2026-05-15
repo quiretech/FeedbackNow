@@ -12,6 +12,7 @@
  * risk of blocking the MAC thread.
  */
 #include "lora_link_stats.h"
+#include "mapek_link.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -60,6 +61,8 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
   }
 
   k_mutex_unlock(&stats_mutex);
+
+  mapek_link_feed_link_check(demod_margin, nb_gateways);
 
   LOG_DBG("LinkCheckAns margin=%u dB gateways=%u (samples=%u)",
           (unsigned)demod_margin, (unsigned)nb_gateways,

@@ -29,8 +29,8 @@
  * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
  * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1778730213ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-14T03:43:33Z"
+#define DEVICE_PROVISION_UNIX_UTC 1778887956ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-15T23:32:36Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -114,6 +114,15 @@
  * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
  * disable. Typical: 3. */
 #define LORA_SEND_FAILURES_BEFORE_BACKOFF 3
+/** MAPE-K link Monitor: EWMA update uses ewma += ((sample<<8)-ewma)>>MAPEK_LINK_EWMA_SHIFT
+ * (approx. alpha = 1/2^shift). 3 => ~1/8 per sample; increase for slower smoothing. */
+#ifndef MAPEK_LINK_EWMA_SHIFT
+#define MAPEK_LINK_EWMA_SHIFT 3U
+#endif
+/** Periodic INF snapshot from mapek_link (0 = disable periodic timer log). */
+#ifndef MAPEK_LINK_MONITOR_LOG_INTERVAL_MS
+#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 30000U
+#endif
 #define LORA_BUTTON_PORT 2
 
 /** Uplink confirmation policy (field-stable profile)
