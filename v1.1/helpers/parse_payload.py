@@ -13,9 +13,8 @@ Examples:
   python3 parse_payload.py --format b64 "<aUWnMQAEAAAKAAA=>"
 
 Format (11 bytes):
-  [0..3] timestamp (epoch seconds, big-endian)
-  [4]    event type
-  [5..]  event-specific
+  Default: [0..3] timestamp (epoch seconds, big-endian), [4] event type, [5..] event-specific
+  Exception — 0x14 (FPort 21, DL 0x08): [0]=0x14, no leading ts; see Event types below.
 
 Event types (from app/include/payload_gen.h):
   0x00 = EVT_BUTTON:         [5]=button_id, [6..8]=counter (24-bit BE), [9..10]=reserved
@@ -26,8 +25,9 @@ Event types (from app/include/payload_gen.h):
   0x12 = EVT_COUNTER_SYNC:   [5]=button_id, [6..8]=counter (24-bit BE), [9..10]=reserved
   0x13 = EVT_DEVICE_STATE_SNAPSHOT (FPort 20 HK: post-join, daily HK, DL 0x04): [0..3]=ts BE,
          [4]=0x13, [5..8]=last_cleaned_epoch BE (EEPROM), [9..10]=tz_offset_min int16 BE
-  0x14 = EVT_DEVICE_VERSION_INFO (FPort 21, DL 0x08 fw/hw version query): [0..3]=ts BE, [4]=0x14,
-         [5..7]=fw major/minor/patch, [8..10]=hw major/minor/patch
+  0x14 = EVT_DEVICE_VERSION_INFO (FPort 21, DL 0x08): **no leading ts** — [0]=0x14,
+         [1..3]=fw maj/min/patch, [4..6]=hw maj/min/patch, [7]=1 if EPD build else 0,
+         [8..10]=reserved 0
 """
 
 from __future__ import annotations
@@ -158,6 +158,20 @@ def main(argv: list[str]) -> int:
     print(f"- input_format: {used_fmt}")
     print(f"- raw_hex:    {_fmt_hex(payload)}")
 
+    if payload[0] == 0x14:
+        fw = f"{payload[1]}.{payload[2]}.{payload[3]}"
+        hw = f"{payload[4]}.{payload[5]}.{payload[6]}"
+        epd = payload[7]
+        reserved = payload[8:11]
+        print("- layout:     version_info ([0]=0x14, no timestamp)")
+        print(f"- event_id:   0x14 ({EVT_NAMES[0x14]})")
+        print("- association: device_version_info")
+        print(f"- fw_version: {fw}")
+        print(f"- hw_version: {hw}")
+        print(f"- epd_enabled: {epd} (0=no-EPD variant A, 1=EPD variant B)")
+        print(f"- reserved:   0x{_fmt_hex(reserved)}")
+        return 0
+
     ts = int.from_bytes(payload[0:4], "big", signed=False)
     evt = payload[4]
 
@@ -221,12 +235,6 @@ def main(argv: list[str]) -> int:
         print(f"- last_cleaned_epoch_utc: {last_cleaned} ({utc.isoformat()})")
    
         print(f"- tz_offset_minutes: {tz}")
-    elif evt == 0x14:  # fw/hw version (DL 0x08 query, fport 21)
-        fw = f"{payload[5]}.{payload[6]}.{payload[7]}"
-        hw = f"{payload[8]}.{payload[9]}.{payload[10]}"
-        print("- association: device_version_info")
-        print(f"- fw_version: {fw}")
-        print(f"- hw_version: {hw}")
     else:
         tail = payload[5:]
         print("- association: unknown")

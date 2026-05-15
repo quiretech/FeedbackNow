@@ -170,19 +170,24 @@ int payload_gen_build_device_state_snapshot(uint32_t epoch_s,
   return 0;
 }
 
-int payload_gen_build_device_version_info(uint32_t epoch_s, uint8_t *out_buf) {
+int payload_gen_build_device_version_info(uint8_t *out_buf) {
   if (!out_buf) {
     return -EINVAL;
   }
   memset(out_buf, 0, PAYLOAD_LEN_BYTES);
-  write_be32(out_buf, epoch_s);
-  out_buf[4] = EVT_DEVICE_VERSION_INFO;
-  out_buf[5] = (uint8_t)FW_VERSION_MAJOR;
-  out_buf[6] = (uint8_t)FW_VERSION_MINOR;
-  out_buf[7] = (uint8_t)FW_VERSION_PATCH;
-  out_buf[8] = (uint8_t)HW_VERSION_MAJOR;
-  out_buf[9] = (uint8_t)HW_VERSION_MINOR;
-  out_buf[10] = (uint8_t)HW_VERSION_PATCH;
+  out_buf[0] = EVT_DEVICE_VERSION_INFO;
+  out_buf[1] = (uint8_t)FW_VERSION_MAJOR;
+  out_buf[2] = (uint8_t)FW_VERSION_MINOR;
+  out_buf[3] = (uint8_t)FW_VERSION_PATCH;
+  out_buf[4] = (uint8_t)HW_VERSION_MAJOR;
+  out_buf[5] = (uint8_t)HW_VERSION_MINOR;
+  out_buf[6] = (uint8_t)HW_VERSION_PATCH;
+#if EPD_ENABLED
+  out_buf[7] = 1u;
+#else
+  out_buf[7] = 0u;
+#endif
+  /* [8..10] reserved (zero) */
   return 0;
 }
 
@@ -203,6 +208,12 @@ void payload_decode_log(const uint8_t *buf, size_t len) {
     LOG_WRN("decode: invalid buffer");
     return;
   }
+  if (buf[0] == EVT_DEVICE_VERSION_INFO) {
+    LOG_INF("Decoded VersionInfo (no ts): fw=%u.%u.%u hw=%u.%u.%u epd=%u",
+            buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+    return;
+  }
+
   uint32_t ts = ((uint32_t)buf[0] << 24) | ((uint32_t)buf[1] << 16) |
                 ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
   uint8_t evt = buf[4];

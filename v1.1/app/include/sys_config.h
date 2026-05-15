@@ -457,7 +457,7 @@
  * EPD (Variant A vs B) — set to 0 for build without display
  * =============================================================================
  */
-#define EPD_ENABLED 1
+#define EPD_ENABLED 0
 /** Thanks screen duration before returning to last cleaned (ms). */
 #define EPD_THANKS_DISPLAY_MS 1500
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms).
@@ -590,9 +590,9 @@
  * =============================================================================
  */
 #define FW_VERSION_MAJOR 1
-#define FW_VERSION_MINOR 3
-#define FW_VERSION_PATCH 1
-#define FW_VERSION_STRING "1.3.1"
+#define FW_VERSION_MINOR 4
+#define FW_VERSION_PATCH 0
+#define FW_VERSION_STRING "1.4.0"
 
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4

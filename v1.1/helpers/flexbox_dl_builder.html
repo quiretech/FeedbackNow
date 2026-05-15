@@ -293,7 +293,7 @@
   <div class="tab-cmd" id="tab7">
     <div class="card">
       <div class="card-title">0x08 — Firmware / hardware version query <span class="badge blue">1 byte</span></div>
-      <div class="card-desc">Device queues a single confirmed uplink: <strong>EVT_DEVICE_VERSION_INFO (0x14)</strong> on <strong>FPort 21</strong> (fw/hw semver). TZ and last cleaned are <em>not</em> sent here — they ride on <strong>FPort 20</strong> as EVT <strong>0x13</strong> after join, daily HK, 0x04, or successful 0x03.</div>
+      <div class="card-desc">Device queues a single uplink: <strong>EVT_DEVICE_VERSION_INFO (0x14)</strong> on <strong>FPort 21</strong> — <strong>no leading timestamp</strong>; bytes are <code>0x14</code>, fw semver (3), hw semver (3), then <strong>1</strong> if the build includes EPD else <strong>0</strong>, plus three reserved zeros. TZ and last cleaned are <em>not</em> sent here — they ride on <strong>FPort 20</strong> as EVT <strong>0x13</strong> after join, daily HK, 0x04, or successful 0x03.</div>
     </div>
     <div class="card">
       <div class="card-title">Output — 0x08 FW/HW version query</div>

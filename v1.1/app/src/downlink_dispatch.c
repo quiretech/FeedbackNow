@@ -146,13 +146,8 @@ static void downlink_queue_fw_hw_version_uplink(void) {
     return;
   }
 
-  uint32_t epoch_s = 0;
-  if (rtc_get_epoch_seconds(&epoch_s) != 0 || epoch_s == 0) {
-    epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-  }
-
   uint8_t ver[PAYLOAD_LEN_BYTES];
-  if (payload_gen_build_device_version_info(epoch_s, ver) != 0) {
+  if (payload_gen_build_device_version_info(ver) != 0) {
     return;
   }
 

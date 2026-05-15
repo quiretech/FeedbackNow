@@ -22,8 +22,8 @@ enum payload_event_type {
   EVT_COUNTER_SYNC = 0x12,   // ts + button_id(1) + counter(3)
 
   /* 0x13 on FPORT_HOUSEKEEPING (20): post-join, daily HK, DL 0x04 — ts, last_cleaned
-   *     (EEPROM), tz int16 BE minutes east of UTC
-   * 0x14 on FPORT_DEVICE_INFO (21): DL 0x08 (fw/hw version query) only — semver */
+   *     (EEPROM), tz int16 BE minutes from UTC
+   * 0x14 on FPORT_DEVICE_INFO (21): DL 0x08 — no leading ts; see build_device_version_info */
   EVT_DEVICE_STATE_SNAPSHOT = 0x13,
   EVT_DEVICE_VERSION_INFO = 0x14,
 
@@ -129,9 +129,12 @@ int payload_gen_build_device_state_snapshot(uint32_t epoch_s,
 
 /**
  * FW/HW version info (EVT 0x14, uplink on FPORT_DEVICE_INFO for DL 0x08 query).
- * [0..3] ts BE, [4] EVT_DEVICE_VERSION_INFO, [5..7] fw maj/min/patch, [8..10] hw.
+ * **Layout differs from other 11-byte events:** no UTC timestamp. Bytes [8..10]=0
+ * reserved.
+ * [0]=EVT_DEVICE_VERSION_INFO, [1..3]=fw maj/min/patch, [4..6]=hw maj/min/patch,
+ * [7]=1 if EPD_ENABLED else 0, [8..10]=0.
  */
-int payload_gen_build_device_version_info(uint32_t epoch_s, uint8_t *out_buf);
+int payload_gen_build_device_version_info(uint8_t *out_buf);
 
 /* To extend: add enum payload_event_type, FPort, and a build_* function. */
 
