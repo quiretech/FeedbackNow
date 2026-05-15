@@ -457,7 +457,7 @@
  * EPD (Variant A vs B) — set to 0 for build without display
  * =============================================================================
  */
-#define EPD_ENABLED 0
+#define EPD_ENABLED 1
 /** Thanks screen duration before returning to last cleaned (ms). */
 #define EPD_THANKS_DISPLAY_MS 1500
 /** Cleaning screen auto-revert to last cleaned if no check-out (ms).
