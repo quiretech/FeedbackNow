@@ -123,6 +123,52 @@
 #ifndef MAPEK_LINK_MONITOR_LOG_INTERVAL_MS
 #define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 30000U
 #endif
+/** MAPE-K Analyze: EWMA on degradation score 0=best 255=worst (separate from Monitor path EWMA). */
+#ifndef MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT
+#define MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT 4U
+#endif
+/** LinkCheckReq sent but no Ans yet longer than this → add degradation (RF diagnostic). */
+#ifndef MAPEK_ANALYZE_LC_PENDING_POOR_MS
+#define MAPEK_ANALYZE_LC_PENDING_POOR_MS 45000U
+#endif
+/** Last app confirmed MCPS RX-timeout within this age counts toward RF stress. */
+#ifndef MAPEK_ANALYZE_MCPS_RX_TO_RECENT_MS
+#define MAPEK_ANALYZE_MCPS_RX_TO_RECENT_MS 120000U
+#endif
+#ifndef MAPEK_RF_MARGIN_EXCELLENT_MIN
+#define MAPEK_RF_MARGIN_EXCELLENT_MIN 22U
+#endif
+#ifndef MAPEK_RF_MARGIN_GOOD_MIN
+#define MAPEK_RF_MARGIN_GOOD_MIN 16U
+#endif
+#ifndef MAPEK_RF_MARGIN_FAIR_MIN
+#define MAPEK_RF_MARGIN_FAIR_MIN 10U
+#endif
+#ifndef MAPEK_RF_GW_GOOD_MIN
+#define MAPEK_RF_GW_GOOD_MIN 2U
+#endif
+#ifndef MAPEK_RF_GW_FAIR_MIN
+#define MAPEK_RF_GW_FAIR_MIN 1U
+#endif
+/** EWMA RSSI (dBm): above = contribution to excellent side. */
+#ifndef MAPEK_RF_RSSI_GOOD_DB
+#define MAPEK_RF_RSSI_GOOD_DB (-80)
+#endif
+#ifndef MAPEK_RF_RSSI_FAIR_DB
+#define MAPEK_RF_RSSI_FAIR_DB (-95)
+#endif
+#ifndef MAPEK_RF_RSSI_POOR_DB
+#define MAPEK_RF_RSSI_POOR_DB (-105)
+#endif
+#ifndef MAPEK_RF_SNR_GOOD_MIN
+#define MAPEK_RF_SNR_GOOD_MIN 7
+#endif
+#ifndef MAPEK_RF_SNR_FAIR_MIN
+#define MAPEK_RF_SNR_FAIR_MIN 4
+#endif
+#ifndef MAPEK_RF_SNR_POOR_MIN
+#define MAPEK_RF_SNR_POOR_MIN 2
+#endif
 #define LORA_BUTTON_PORT 2
 
 /** Uplink confirmation policy (field-stable profile)

@@ -10,6 +10,7 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <string.h>
 
 LOG_MODULE_REGISTER(mapek_link, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -51,6 +52,12 @@ static uint32_t mcps_cnt_lc_fail;
 static bool lc_req_pending;
 static uint32_t lc_req_sent_ms;
 
+/** Analyze: smoothed degradation 0=best 255=worst (EWMA on score, not on RF samples). */
+static uint16_t an_smoothed_deg;
+static mapek_link_analyze_snapshot_t an_last;
+
+static void analyze_reset_locked(void);
+static void analyze_run_locked(void);
 static void monitor_log_inf_locked(void);
 
 static uint8_t classify_mcps_ret(int ret) {
@@ -136,6 +143,151 @@ static void snapshot_fill_locked(mapek_link_monitor_snapshot_t *out) {
   out->linkcheck_req_sent_uptime_ms = lc_req_sent_ms;
 }
 
+static mapek_link_rf_state_t map_deg_to_rf_state(uint8_t sm) {
+  if (sm < 64U) {
+    return MAPEK_LINK_RF_EXCELLENT;
+  }
+  if (sm < 128U) {
+    return MAPEK_LINK_RF_GOOD;
+  }
+  if (sm < 192U) {
+    return MAPEK_LINK_RF_FAIR;
+  }
+  return MAPEK_LINK_RF_POOR;
+}
+
+static void analyze_reset_locked(void) {
+  an_smoothed_deg = 0U;
+  memset(&an_last, 0, sizeof(an_last));
+  an_last.rf_state = MAPEK_LINK_RF_UNKNOWN;
+}
+
+static void analyze_run_locked(void) {
+  const uint32_t now = k_uptime_get_32();
+  const bool have_lc = lc_have;
+  const bool have_dl = dl_have;
+  const bool have_rf = have_lc || have_dl;
+
+  uint32_t rsn = 0U;
+  uint16_t raw_deg = 0U;
+
+  if (have_rf) {
+    if (have_lc) {
+      const uint8_t m =
+          (ewma_margin_q8 >= 0)
+              ? (uint8_t)((uint32_t)ewma_margin_q8 >> 8U)
+              : lc_last_margin;
+      const uint8_t g =
+          (ewma_nb_gw_q8 >= 0)
+              ? (uint8_t)((uint32_t)ewma_nb_gw_q8 >> 8U)
+              : lc_last_nb_gw;
+
+      if (m < MAPEK_RF_MARGIN_EXCELLENT_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_LOW_MARGIN;
+        if (m < MAPEK_RF_MARGIN_FAIR_MIN) {
+          raw_deg += 70U;
+        } else if (m < MAPEK_RF_MARGIN_GOOD_MIN) {
+          raw_deg += 45U;
+        } else {
+          raw_deg += 22U;
+        }
+      }
+
+      if (g < MAPEK_RF_GW_FAIR_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_LOW_GW;
+        raw_deg += 55U;
+      } else if (g < MAPEK_RF_GW_GOOD_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_LOW_GW;
+        raw_deg += 25U;
+      }
+    } else {
+      rsn |= MAPEK_ANALYZE_REASON_NO_LINKCHECK;
+      raw_deg += 28U;
+    }
+
+    if (have_dl) {
+      const int16_t er = (ewma_rssi_q8 != INT32_MIN)
+                             ? (int16_t)(ewma_rssi_q8 >> 8)
+                             : dl_last_rssi;
+      const int8_t es = (ewma_snr_q8 != INT32_MIN)
+                            ? (int8_t)(ewma_snr_q8 >> 8)
+                            : dl_last_snr;
+
+      if (er <= MAPEK_RF_RSSI_POOR_DB) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_RSSI;
+        raw_deg += 65U;
+      } else if (er <= MAPEK_RF_RSSI_FAIR_DB) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_RSSI;
+        raw_deg += 40U;
+      } else if (er <= MAPEK_RF_RSSI_GOOD_DB) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_RSSI;
+        raw_deg += 18U;
+      }
+
+      if (es < MAPEK_RF_SNR_POOR_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_SNR;
+        raw_deg += 50U;
+      } else if (es < MAPEK_RF_SNR_FAIR_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_SNR;
+        raw_deg += 28U;
+      } else if (es < MAPEK_RF_SNR_GOOD_MIN) {
+        rsn |= MAPEK_ANALYZE_REASON_WEAK_DL_SNR;
+        raw_deg += 12U;
+      }
+    } else {
+      rsn |= MAPEK_ANALYZE_REASON_NO_DL;
+      raw_deg += 28U;
+    }
+
+    if (lc_req_pending) {
+      const uint32_t age_ms = now - lc_req_sent_ms;
+      if (age_ms >= MAPEK_ANALYZE_LC_PENDING_POOR_MS) {
+        rsn |= MAPEK_ANALYZE_REASON_LC_PENDING_STALE;
+        raw_deg += 50U;
+      }
+    }
+
+    if (mcps_last_kind == (uint8_t)MAPEK_UL_MCPS_APP && mcps_last_confirmed &&
+        mcps_last_class == (uint8_t)MAPEK_MCPS_CLASS_RX_TIMEOUT) {
+      const uint32_t age_mcps = now - mcps_last_uptime_ms;
+      if (age_mcps <= MAPEK_ANALYZE_MCPS_RX_TO_RECENT_MS) {
+        rsn |= MAPEK_ANALYZE_REASON_MCPS_RX_TIMEOUT;
+        raw_deg += 40U;
+      }
+    }
+  } else {
+    rsn |= MAPEK_ANALYZE_REASON_NO_LINKCHECK | MAPEK_ANALYZE_REASON_NO_DL;
+    raw_deg = 220U;
+  }
+
+  if (raw_deg > 255U) {
+    raw_deg = 255U;
+  }
+
+  {
+    const int prev = (int)an_smoothed_deg;
+    const int tgt = (int)raw_deg;
+    int nxt = prev + ((tgt - prev) >> (int)MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT);
+    if (nxt < 0) {
+      nxt = 0;
+    }
+    if (nxt > 255) {
+      nxt = 255;
+    }
+    an_smoothed_deg = (uint16_t)nxt;
+  }
+
+  const uint8_t sm8 = (uint8_t)an_smoothed_deg;
+  const mapek_link_rf_state_t rf_st =
+      have_rf ? map_deg_to_rf_state(sm8) : MAPEK_LINK_RF_UNKNOWN;
+
+  an_last.rf_state = rf_st;
+  an_last.session_joined = mon_joined;
+  an_last.reasons = rsn;
+  an_last.degradation_raw = (uint8_t)raw_deg;
+  an_last.degradation_smoothed = sm8;
+}
+
 static void monitor_reset_locked(void) {
   ewma_margin_q8 = -1;
   ewma_nb_gw_q8 = -1;
@@ -170,6 +322,8 @@ static void monitor_reset_locked(void) {
   mcps_cnt_lc_fail = 0U;
   lc_req_pending = false;
   lc_req_sent_ms = 0U;
+
+  analyze_reset_locked();
 }
 
 static void monitor_log_timer_handler(struct k_timer *timer);
@@ -191,6 +345,8 @@ static void monitor_log_work_handler(struct k_work *work) {
 }
 
 static void monitor_log_inf_locked(void) {
+  analyze_run_locked();
+
   mapek_link_monitor_snapshot_t s;
   snapshot_fill_locked(&s);
 
@@ -210,6 +366,12 @@ static void monitor_log_inf_locked(void) {
       (unsigned)s.linkcheck_req_pending, (unsigned)s.mcps_app_ok_count,
       (unsigned)s.mcps_app_fail_count, (unsigned)s.mcps_lc_tx_ok_count,
       (unsigned)s.mcps_lc_tx_fail_count);
+
+  LOG_INF(
+      "mapek An: rf=%u sess=%u d=%u/%u rsn=0x%08x",
+      (unsigned)an_last.rf_state, (unsigned)an_last.session_joined,
+      (unsigned)an_last.degradation_raw,
+      (unsigned)an_last.degradation_smoothed, (unsigned)an_last.reasons);
 }
 
 void mapek_link_init(void) {
@@ -229,7 +391,9 @@ void mapek_link_init(void) {
 }
 
 void mapek_link_step(void) {
-  /* Reserved for Analyze/Plan/Execute; periodic INF uses timer work item. */
+  k_mutex_lock(&mon_mutex, K_FOREVER);
+  analyze_run_locked();
+  k_mutex_unlock(&mon_mutex);
 }
 
 void mapek_link_feed_link_check(uint8_t demod_margin_db, uint8_t nb_gateways) {
@@ -350,6 +514,13 @@ void mapek_link_feed_join(bool joined) {
     ewma_snr_q8 = INT32_MIN;
     lc_req_pending = false;
     lc_req_sent_ms = 0U;
+    an_smoothed_deg = 200U;
+    an_last.rf_state = MAPEK_LINK_RF_UNKNOWN;
+    an_last.session_joined = false;
+    an_last.reasons = MAPEK_ANALYZE_REASON_NO_LINKCHECK |
+                      MAPEK_ANALYZE_REASON_NO_DL;
+    an_last.degradation_raw = 220U;
+    an_last.degradation_smoothed = (uint8_t)an_smoothed_deg;
     LOG_INF("mapek join cleared: LC/DL samples + EWMA reset");
   }
 
@@ -363,6 +534,17 @@ bool mapek_link_monitor_get(mapek_link_monitor_snapshot_t *out) {
 
   k_mutex_lock(&mon_mutex, K_FOREVER);
   snapshot_fill_locked(out);
+  k_mutex_unlock(&mon_mutex);
+  return true;
+}
+
+bool mapek_link_analyze_get(mapek_link_analyze_snapshot_t *out) {
+  if (out == NULL) {
+    return false;
+  }
+
+  k_mutex_lock(&mon_mutex, K_FOREVER);
+  *out = an_last;
   k_mutex_unlock(&mon_mutex);
   return true;
 }

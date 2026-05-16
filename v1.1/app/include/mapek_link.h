@@ -4,11 +4,11 @@
  * Feeds from MAC/stack callbacks use try-lock only (non-blocking). Join feeds run
  * from the LoRa thread. Call mapek_link_step() from the LoRa thread each poll cycle.
  *
- * Roadmap (not implemented yet):
- *  - One consolidated `mapek_link` INFO snapshot Log covering Monitor + Analyze +
- *    Plan + Execute for a single “whole stack” view.
- *  - Per-phase getters (e.g. mapek_link_monitor_get, later analyze/plan/execute_get)
- *    so UI (EPD / operator screens) can query layers without parsing logs.
+ * Analyze: RF-only link_state + separate session_joined (MAC). Monitor `joined`
+ * is updated only from the LoRa thread via mapek_link_feed_join — Analyze never
+ * writes join state; Plan/Execute drive rejoin when policy says so.
+ *
+ * Roadmap: consolidated `mapek_link` log line for all MAPE-K phases; Plan/Execute getters.
  */
 #ifndef MAPEK_LINK_H
 #define MAPEK_LINK_H
@@ -87,6 +87,36 @@ typedef struct {
   uint32_t linkcheck_req_sent_uptime_ms;
 } mapek_link_monitor_snapshot_t;
 
+/** RF link quality only (not MAC join). UNKNOWN = no LC/DL telemetry yet. */
+typedef enum {
+  MAPEK_LINK_RF_UNKNOWN = 0,
+  MAPEK_LINK_RF_EXCELLENT = 1,
+  MAPEK_LINK_RF_GOOD = 2,
+  MAPEK_LINK_RF_FAIR = 3,
+  MAPEK_LINK_RF_POOR = 4,
+} mapek_link_rf_state_t;
+
+/** Analyze reason bits (why we degraded / UNKNOWN). */
+#define MAPEK_ANALYZE_REASON_LOW_MARGIN        (1u << 0)
+#define MAPEK_ANALYZE_REASON_LOW_GW            (1u << 1)
+#define MAPEK_ANALYZE_REASON_LC_PENDING_STALE  (1u << 2)
+#define MAPEK_ANALYZE_REASON_WEAK_DL_RSSI        (1u << 3)
+#define MAPEK_ANALYZE_REASON_WEAK_DL_SNR       (1u << 4)
+#define MAPEK_ANALYZE_REASON_NO_LINKCHECK      (1u << 5)
+#define MAPEK_ANALYZE_REASON_NO_DL             (1u << 6)
+#define MAPEK_ANALYZE_REASON_MCPS_RX_TIMEOUT   (1u << 7)
+
+typedef struct {
+  mapek_link_rf_state_t rf_state;
+  /** Same as Monitor joined; MAC/session — not folded into rf_state. */
+  bool session_joined;
+  uint32_t reasons;
+  /** Instant degradation 0=best 255=worst (pre-smooth). */
+  uint8_t degradation_raw;
+  /** Smoothed degradation mapped to rf_state when telemetry exists. */
+  uint8_t degradation_smoothed;
+} mapek_link_analyze_snapshot_t;
+
 /** Bitmask for mapek_link_feed_dl(). */
 #define MAPEK_DL_FEED_APP_PAYLOAD       ((uint8_t)(1u << 0))
 #define MAPEK_DL_FEED_LORAWAN_TIME_UPD ((uint8_t)(1u << 1))
@@ -119,6 +149,9 @@ void mapek_link_feed_join(bool joined);
 
 /** Copy Monitor snapshot; safe from any thread. */
 bool mapek_link_monitor_get(mapek_link_monitor_snapshot_t *out);
+
+/** Last Analyze pass (updated in mapek_link_step + periodic log). Thread-safe copy. */
+bool mapek_link_analyze_get(mapek_link_analyze_snapshot_t *out);
 
 #ifdef __cplusplus
 }
