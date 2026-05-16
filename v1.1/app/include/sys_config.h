@@ -169,6 +169,16 @@
 #ifndef MAPEK_RF_SNR_POOR_MIN
 #define MAPEK_RF_SNR_POOR_MIN 2
 #endif
+/** MAPE-K Plan: queue immediate LinkCheck (force) on a fixed cadence while joined (feeds Monitor).
+ * Weak RF can stay FAIR/POOR indefinitely; timer avoids probing every minute. 0 = disabled. */
+// #ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
+// #define MAPEK_PLAN_LINKCHECK_PERIOD_MS (6U * 60U * 60U * 1000U)
+// #endif
+
+
+#ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
+#define MAPEK_PLAN_LINKCHECK_PERIOD_MS (10U * 1000U)
+#endif
 #define LORA_BUTTON_PORT 2
 
 /** Uplink confirmation policy (field-stable profile)

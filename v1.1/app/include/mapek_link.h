@@ -6,9 +6,12 @@
  *
  * Analyze: RF-only link_state + separate session_joined (MAC). Monitor `joined`
  * is updated only from the LoRa thread via mapek_link_feed_join — Analyze never
- * writes join state; Plan/Execute drive rejoin when policy says so.
+ * writes join state; join backoff remains owned by lora_thread (Plan does not clear joined).
  *
- * Roadmap: consolidated `mapek_link` log line for all MAPE-K phases; Plan/Execute getters.
+ * Plan: queues immediate LinkCheckReq via `lora_request_link_check(true)` on a timer cadence
+ * while session_joined (MAPEK_PLAN_LINKCHECK_PERIOD_MS in sys_config.h).
+ *
+ * Roadmap: consolidated log line + Plan/Execute getters for richer intents.
  */
 #ifndef MAPEK_LINK_H
 #define MAPEK_LINK_H

@@ -3,6 +3,7 @@
  */
 #include "mapek_link.h"
 
+#include "lora_app.h"
 #include "sys_config.h"
 
 #include <zephyr/kernel.h>
@@ -56,8 +57,12 @@ static uint32_t lc_req_sent_ms;
 static uint16_t an_smoothed_deg;
 static mapek_link_analyze_snapshot_t an_last;
 
+/** Plan: anchor for periodic LinkCheck — updated on join arm and each queued probe. */
+static uint32_t plan_last_linkcheck_req_ms;
+
 static void analyze_reset_locked(void);
 static void analyze_run_locked(void);
+static void plan_execute_locked(void);
 static void monitor_log_inf_locked(void);
 
 static uint8_t classify_mcps_ret(int ret) {
@@ -288,6 +293,32 @@ static void analyze_run_locked(void) {
   an_last.degradation_smoothed = sm8;
 }
 
+/**
+ * Plan → Execute: periodic LinkCheckReq (force / immediate MCPS, not piggyback).
+ * Runs on LoRa thread inside mapek_link_step / periodic log; uses lora_cmd queue only.
+ */
+static void plan_execute_locked(void) {
+  if (MAPEK_PLAN_LINKCHECK_PERIOD_MS == 0U) {
+    return;
+  }
+  if (!an_last.session_joined) {
+    return;
+  }
+  if (plan_last_linkcheck_req_ms == 0U) {
+    return;
+  }
+
+  const uint32_t now = k_uptime_get_32();
+  if ((now - plan_last_linkcheck_req_ms) < MAPEK_PLAN_LINKCHECK_PERIOD_MS) {
+    return;
+  }
+
+  plan_last_linkcheck_req_ms = now;
+  lora_request_link_check(true);
+  LOG_INF("mapek Plan: LinkCheckReq queued (period_ms=%u)",
+          (unsigned)MAPEK_PLAN_LINKCHECK_PERIOD_MS);
+}
+
 static void monitor_reset_locked(void) {
   ewma_margin_q8 = -1;
   ewma_nb_gw_q8 = -1;
@@ -323,6 +354,8 @@ static void monitor_reset_locked(void) {
   lc_req_pending = false;
   lc_req_sent_ms = 0U;
 
+  plan_last_linkcheck_req_ms = 0U;
+
   analyze_reset_locked();
 }
 
@@ -346,6 +379,7 @@ static void monitor_log_work_handler(struct k_work *work) {
 
 static void monitor_log_inf_locked(void) {
   analyze_run_locked();
+  plan_execute_locked();
 
   mapek_link_monitor_snapshot_t s;
   snapshot_fill_locked(&s);
@@ -393,6 +427,7 @@ void mapek_link_init(void) {
 void mapek_link_step(void) {
   k_mutex_lock(&mon_mutex, K_FOREVER);
   analyze_run_locked();
+  plan_execute_locked();
   k_mutex_unlock(&mon_mutex);
 }
 
@@ -503,6 +538,9 @@ void mapek_link_feed_join(bool joined) {
     mon_joined = joined;
     mon_join_transition_ms = k_uptime_get_32();
     LOG_INF("mapek feed join -> %u", (unsigned)joined);
+    if (joined && MAPEK_PLAN_LINKCHECK_PERIOD_MS > 0U) {
+      plan_last_linkcheck_req_ms = k_uptime_get_32();
+    }
   }
 
   if (!joined) {
@@ -514,6 +552,7 @@ void mapek_link_feed_join(bool joined) {
     ewma_snr_q8 = INT32_MIN;
     lc_req_pending = false;
     lc_req_sent_ms = 0U;
+    plan_last_linkcheck_req_ms = 0U;
     an_smoothed_deg = 200U;
     an_last.rf_state = MAPEK_LINK_RF_UNKNOWN;
     an_last.session_joined = false;
