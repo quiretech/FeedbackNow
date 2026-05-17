@@ -49,10 +49,6 @@ static void lora_pace_uplink_spacing(void) {
   }
 }
 
-/* Consecutive send failures; when >= LORA_SEND_FAILURES_BEFORE_BACKOFF we
- * clear joined and schedule re-join after backoff. */
-static uint32_t consecutive_send_failures;
-
 /* Next LORA_CMD_JOIN_SILENT may show join LED only when this is non-zero (set
  * for the auto-post right after boot when has_joined_once; cleared before
  * backoff rejoin and when handling LORA_CMD_JOIN). */
@@ -82,6 +78,26 @@ K_WORK_DEFINE(join_after_backoff_work, join_after_backoff_work_handler);
 static void join_after_backoff_timer_expiry(struct k_timer *timer) {
   (void)timer;
   (void)k_work_submit(&join_after_backoff_work);
+}
+
+static k_timeout_t lora_join_backoff_timeout(void) {
+  return LORA_JOIN_BACKOFF_HOURS > 0 ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
+                                     : K_MINUTES(1);
+}
+
+/** Clear joined, abort time sync, notify SMF, schedule silent rejoin. */
+static void lora_session_lost_teardown(const char *reason) {
+  if (!lora_is_joined()) {
+    return;
+  }
+  LOG_WRN("LoRa session lost (%s)", reason);
+  atomic_set(&lora_joined_flag, 0);
+  mapek_link_feed_join(false);
+  time_sync_abort_on_link_lost();
+  lora_reset_dr_time_sync_retry();
+  (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
+  k_timer_start(&join_after_backoff_timer, lora_join_backoff_timeout(),
+                K_NO_WAIT);
 }
 
 static void join_after_backoff_work_handler(struct k_work *work) {
@@ -126,8 +142,6 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 
   if (data == NULL || len == 0 || len > LORA_MAX_PAYLOAD_SIZE) {
     LOG_ERR("Invalid parameters: data=%p, len=%zu", data, len);
-    mapek_link_feed_mcps_uplink(-EINVAL, (uint8_t)MAPEK_UL_MCPS_APP, port,
-                                0U, confirmed);
     return -EINVAL;
   }
 
@@ -167,9 +181,6 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
     LOG_ERR("UL send failed port=%u: %d", (unsigned)port, ret);
   }
 
-  mapek_link_feed_mcps_uplink(ret, (uint8_t)MAPEK_UL_MCPS_APP, port,
-                              (uint8_t)len, confirmed);
-
   return ret;
 }
 
@@ -185,9 +196,9 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
  */
 static bool lora_mac_probe_after_join(void) {
   for (int i = 0; i < LORA_POST_JOIN_MAC_PROBE_RETRIES; i++) {
+    mapek_link_feed_probe_begin((uint8_t)MAPEK_PROBE_SOURCE_JOIN);
     int sret = lorawan_request_link_check(true);
-    mapek_link_feed_mcps_uplink(sret, (uint8_t)MAPEK_UL_MCPS_LINK_CHECK, 0, 0,
-                                false);
+    mapek_link_feed_probe_tx(sret);
     if (sret == 0) {
       last_uplink_ms = (uint32_t)k_uptime_get();
       LOG_DBG("post-join probe OK (attempt %d)", i + 1);
@@ -292,7 +303,6 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       rail_manager_release_3v3a();
 
       LOG_INF("LoRaWAN joined");
-      consecutive_send_failures = 0;
       k_timer_stop(&join_after_backoff_timer);
       atomic_set(&lora_joined_flag, 1);
       mapek_link_feed_join(true);
@@ -421,47 +431,10 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
           if (ret == 0) {
             last_uplink_ms = (uint32_t)k_uptime_get();
-            consecutive_send_failures = 0;
           } else if (ret < 0) {
             LOG_ERR("Failed to send LoRa message: %d", ret);
             if (ret == -ENOTCONN) {
-              if (lora_is_joined()) {
-                atomic_set(&lora_joined_flag, 0);
-                mapek_link_feed_join(false);
-                time_sync_abort_on_link_lost();
-                lora_reset_dr_time_sync_retry();
-                (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
-                k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
-                                          ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
-                                          : K_MINUTES(1);
-                k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
-                LOG_INF("ENOTCONN: cleared joined; rejoin after backoff");
-              }
-            } else if (ret != -EBUSY && ret != -EAGAIN) {
-              /* Only count confirmed uplink failures (-116 Rx timeout) toward
-               * "link lost". Unconfirmed: no ACK expected, -116 is benign. */
-              if (msg.confirmed) {
-                consecutive_send_failures++;
-                if (LORA_SEND_FAILURES_BEFORE_BACKOFF > 0 &&
-                    consecutive_send_failures >=
-                        (uint32_t)LORA_SEND_FAILURES_BEFORE_BACKOFF &&
-                    lora_is_joined()) {
-                  LOG_WRN(
-                      "Link lost: %u consecutive confirmed send failures; "
-                      "clearing joined, scheduling re-join after backoff",
-                      consecutive_send_failures);
-                  atomic_set(&lora_joined_flag, 0);
-                  mapek_link_feed_join(false);
-                  time_sync_abort_on_link_lost();
-                  lora_reset_dr_time_sync_retry();
-                  consecutive_send_failures = 0;
-                  (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
-                  k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
-                                            ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
-                                            : K_MINUTES(1);
-                  k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
-                }
-              }
+              lora_session_lost_teardown("ENOTCONN");
             }
           }
         } else {
@@ -481,12 +454,12 @@ static void lora_thread_fn(void *a, void *b, void *c) {
           if (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd))) {
             /* Join cycle failed (e.g. 20 attempts); schedule retry after
              * backoff. */
-            k_timeout_t backoff = LORA_JOIN_BACKOFF_HOURS > 0
-                                      ? K_HOURS(LORA_JOIN_BACKOFF_HOURS)
-                                      : K_MINUTES(1);
-            k_timer_start(&join_after_backoff_timer, backoff, K_NO_WAIT);
+            k_timer_start(&join_after_backoff_timer, lora_join_backoff_timeout(),
+                          K_NO_WAIT);
             LOG_INF("join cycle failed; backoff retry scheduled");
           }
+        } else if (cmd == LORA_CMD_SESSION_LOST) {
+          lora_session_lost_teardown("mapek");
         } else if (cmd == LORA_CMD_TIME_SYNC) {
           /* DeviceTimeReq often rides the next MCPS uplink; spacing avoids
            * back-to-back PHY with the last app frame. */
@@ -502,9 +475,9 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
           lora_pace_uplink_spacing();
           bool force = (cmd == LORA_CMD_LINK_CHECK_FORCE);
+          mapek_link_feed_probe_begin((uint8_t)MAPEK_PROBE_SOURCE_OTHER);
           int lc_ret = lorawan_request_link_check(force);
-          mapek_link_feed_mcps_uplink(lc_ret, (uint8_t)MAPEK_UL_MCPS_LINK_CHECK,
-                                      0, 0, false);
+          mapek_link_feed_probe_tx(lc_ret);
         }
       }
       k_poll_event_init(ev_cmdq, K_POLL_TYPE_MSGQ_DATA_AVAILABLE,

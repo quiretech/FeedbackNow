@@ -84,6 +84,10 @@ void lora_request_link_check(bool force_request) {
                                    : LORA_CMD_LINK_CHECK);
 }
 
+void lora_request_session_lost(void) {
+  (void)lora_cmd_put(LORA_CMD_SESSION_LOST);
+}
+
 void lora_reset_dr_time_sync_retry(void) {
   atomic_set(&dr_time_sync_retry_requested, 0);
 }

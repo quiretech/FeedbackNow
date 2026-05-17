@@ -42,6 +42,7 @@ enum lora_cmd_type {
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
   LORA_CMD_LINK_CHECK_FORCE, /* Send empty frame now for LinkCheckReq */
   LORA_CMD_ENABLE_ADR,       /* lorawan_enable_adr(true); idempotent */
+  LORA_CMD_SESSION_LOST,     /* MAPE-K: clear joined, backoff, silent rejoin */
   LORA_CMD_COUNT
 };
 
@@ -117,6 +118,13 @@ void lora_request_enable_adr(void);
  * immediately; false appends to next uplink.
  */
 void lora_request_link_check(bool force_request);
+
+/**
+ * Request session teardown and join backoff (MAPE-K Execute). LoRa thread clears
+ * joined, posts SMF_EVT_DISCONNECTED, schedules LORA_CMD_JOIN_SILENT after
+ * LORA_JOIN_BACKOFF_HOURS. Idempotent while already not joined.
+ */
+void lora_request_session_lost(void);
 
 /**
  * Reset one-shot DR-based time sync retry guard. Call on each new join cycle

@@ -7,8 +7,9 @@
  * sync. Values marked * in FRD are tunable here.
  *
  * --- Production lock-down (ensure these before release) ---
- * LORA_JOIN_BACKOFF_HOURS     : 0 = test (1 min), prod = 6–24 (per FRD).
- * HEARTBEAT_USE_DEVEUI_JITTER : 1 = prod (daily + jitter), 0 = test
+ * MAPEK_LAB_FAST_TEST         : must be 0 for release (1 = desk MAPE-K tests).
+ * LORA_JOIN_BACKOFF_HOURS     : prod 1 h; MAPEK_LAB_FAST_TEST → 1 min.
+ * HEARTBEAT_USE_DEVEUI_JITTER : overridden when MAPEK_LAB_FAST_TEST (120 s HK).
  * (every 120s). EEPROM_*_FACTORY_RESET_ON_BOOT : all 0 for prod (no wipe on
  * boot). EEPROM_JOIN_STATE_CLEAR_ON_BOOT : 0 for prod (persist join state).
  * SYS_CONFIG_EEPROM_PROBE_LOG : 0 for prod (no hex dump at boot).
@@ -46,6 +47,12 @@
  * LoRa (FRD 4.5)
  * =============================================================================
  */
+/** Desk test: fast MAPE-K stale/probe/session-lost + 1 min rejoin backoff.
+ * Set to 1, build, flash, run MAPE-K tests. Production release: must be 0. */
+#ifndef MAPEK_LAB_FAST_TEST
+#define MAPEK_LAB_FAST_TEST 0
+#endif
+
 #define LORA_MAX_PAYLOAD_SIZE 11
 /** Application downlink FRMPayload max length (SMF_EVT_DOWNLINK buffer). Can be
  * larger than uplink LORA_MAX_PAYLOAD_SIZE; DR/region defines air limit (~51 B
@@ -72,14 +79,13 @@
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 20
 /** After all attempts in a cycle fail, wait this many hours before next join
  * cycle (deployed device cannot be re-joined by human). Must be integer
- * (K_HOURS expects int). Use 0 for testing (1-min backoff); prod: 6–24 (per
- * FRD).
- *
- * BACKOFF TEST: set to 0 (1-min backoff), HEARTBEAT_USE_DEVEUI_JITTER=0,
- * LORA_SEND_FAILURES_BEFORE_BACKOFF=2, LORA_HEARTBEAT_UPLINK_CONFIRMED=1
- * to verify rejoin logic in ~5 min.
+ * (K_HOURS expects int). 0 = 1-min backoff (MAPEK_LAB_FAST_TEST); prod: 1 h.
  */
-#define LORA_JOIN_BACKOFF_HOURS 6 // prod: 6; test: 0
+#if MAPEK_LAB_FAST_TEST
+#define LORA_JOIN_BACKOFF_HOURS 0
+#else
+#define LORA_JOIN_BACKOFF_HOURS 1
+#endif
 #define LORA_MAX_RETRIES 5
 #define LORA_SEND_BUSY_RETRY_MS 5000
 /** Minimum interval (ms) between uplink transmissions. Enforced by LoRa thread
@@ -110,30 +116,62 @@
  *  real airtime burst. */
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
 #define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
-/** After this many consecutive lorawan_send() failures, clear joined and
- * schedule join backoff (re-join after LORA_JOIN_BACKOFF_HOURS). Set to 0 to
- * disable. Typical: 3. */
-#define LORA_SEND_FAILURES_BEFORE_BACKOFF 3
 /** MAPE-K link Monitor: EWMA update uses ewma += ((sample<<8)-ewma)>>MAPEK_LINK_EWMA_SHIFT
  * (approx. alpha = 1/2^shift). 3 => ~1/8 per sample; increase for slower smoothing. */
 #ifndef MAPEK_LINK_EWMA_SHIFT
 #define MAPEK_LINK_EWMA_SHIFT 3U
 #endif
-/** Periodic INF snapshot from mapek_link (0 = disable periodic timer log). */
+#if MAPEK_LAB_FAST_TEST
+/** MAPE-K lab profile (~8–10 min Test A: STALE → 3 Plan LC → session lost → rejoin). */
+#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 0U
+#define MAPEK_PROBE_ANS_TIMEOUT_MS (30U * 1000U)
+#define MAPEK_LNS_HEARD_STALE_MS (2U * 60U * 1000U)
+#define MAPEK_PLAN_PROBE_COOLDOWN_MS (45U * 1000U)
+#define MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS (90U * 1000U)
+#define MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN 3U
+#define MAPEK_SESSION_LOST_ENABLE 1
+#define MAPEK_SESSION_LOST_PROBE_FAILS 3U
+#define MAPEK_PLAN_LINKCHECK_PERIOD_MS 0U
+#else
+/** Unused: MAPE-K logs one event line only (no periodic timer). */
 #ifndef MAPEK_LINK_MONITOR_LOG_INTERVAL_MS
-#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 30000U
+#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 0U
 #endif
+/** Analyze: after probe TX, wait this long for heard advance before NO_ANSWER. */
+#ifndef MAPEK_PROBE_ANS_TIMEOUT_MS
+#define MAPEK_PROBE_ANS_TIMEOUT_MS (2U * 60U * 1000U)
+#endif
+/** Analyze/Plan: no DL/LinkCheckAns refresh → STALE; Plan queues LinkCheck. */
+#ifndef MAPEK_LNS_HEARD_STALE_MS
+#define MAPEK_LNS_HEARD_STALE_MS (6U * 60U * 60U * 1000U)
+#endif
+/** Plan: min ms between Plan-driven LinkCheck probes (healthy / low fail count). */
+#ifndef MAPEK_PLAN_PROBE_COOLDOWN_MS
+#define MAPEK_PLAN_PROBE_COOLDOWN_MS (30U * 60U * 1000U)
+#endif
+/** Plan: cooldown after MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN probe failures. */
+#ifndef MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS
+#define MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS (2U * 60U * 60U * 1000U)
+#endif
+/** Plan: use long cooldown when probe_fail_count >= this. */
+#ifndef MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN
+#define MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN 3U
+#endif
+/** Execute: after this many Plan probe failures while STALE/DEGRADED, request
+ * LoRa session lost (OTAA rejoin after LORA_JOIN_BACKOFF_HOURS). */
+#ifndef MAPEK_SESSION_LOST_ENABLE
+#define MAPEK_SESSION_LOST_ENABLE 1
+#endif
+#ifndef MAPEK_SESSION_LOST_PROBE_FAILS
+#define MAPEK_SESSION_LOST_PROBE_FAILS MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN
+#endif
+#ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
+#define MAPEK_PLAN_LINKCHECK_PERIOD_MS 0U
+#endif
+#endif /* MAPEK_LAB_FAST_TEST */
 /** MAPE-K Analyze: EWMA on degradation score 0=best 255=worst (separate from Monitor path EWMA). */
 #ifndef MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT
 #define MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT 4U
-#endif
-/** LinkCheckReq sent but no Ans yet longer than this → add degradation (RF diagnostic). */
-#ifndef MAPEK_ANALYZE_LC_PENDING_POOR_MS
-#define MAPEK_ANALYZE_LC_PENDING_POOR_MS 45000U
-#endif
-/** Last app confirmed MCPS RX-timeout within this age counts toward RF stress. */
-#ifndef MAPEK_ANALYZE_MCPS_RX_TO_RECENT_MS
-#define MAPEK_ANALYZE_MCPS_RX_TO_RECENT_MS 120000U
 #endif
 #ifndef MAPEK_RF_MARGIN_EXCELLENT_MIN
 #define MAPEK_RF_MARGIN_EXCELLENT_MIN 22U
@@ -169,16 +207,6 @@
 #ifndef MAPEK_RF_SNR_POOR_MIN
 #define MAPEK_RF_SNR_POOR_MIN 2
 #endif
-/** MAPE-K Plan: queue immediate LinkCheck (force) on a fixed cadence while joined (feeds Monitor).
- * Weak RF can stay FAIR/POOR indefinitely; timer avoids probing every minute. 0 = disabled. */
-// #ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
-// #define MAPEK_PLAN_LINKCHECK_PERIOD_MS (6U * 60U * 60U * 1000U)
-// #endif
-
-
-#ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
-#define MAPEK_PLAN_LINKCHECK_PERIOD_MS (10U * 1000U)
-#endif
 #define LORA_BUTTON_PORT 2
 
 /** Uplink confirmation policy (field-stable profile)
@@ -191,7 +219,7 @@
 #define LORA_BUTTON_UPLINK_CONFIRMED                                           \
   0                                 /* public votes: unconfirmed (FRD 4.5)     \
                                      */
-#define LORA_NFC_UPLINK_CONFIRMED 1 /* check-in/out/vote: confirmed */
+#define LORA_NFC_UPLINK_CONFIRMED 0 /* check-in/out/vote: unconfirmed */
 #define LORA_HEARTBEAT_UPLINK_CONFIRMED                                        \
   0 /* battery/counter in housekeeping                                         \
      */
@@ -473,10 +501,18 @@
  */
 /** When 1, heartbeat runs once per day at 00:00 UTC + DevEUI-based offset
  * (minutes). When 0, runs every HOUSEKEEPING_INTERVAL_SECONDS (e.g. for test).
- * prod: 1; BACKOFF TEST; 0 (heartbeat every 120s). */
+ * MAPEK_LAB_FAST_TEST: 0 (HK every 120 s). Prod: 1. */
+#if MAPEK_LAB_FAST_TEST
+#define HEARTBEAT_USE_DEVEUI_JITTER 0
+#else
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
+#endif
 /** Fallback interval (seconds) when jitter is off or RTC unavailable. */
+#if MAPEK_LAB_FAST_TEST
+#define HOUSEKEEPING_INTERVAL_SECONDS 120
+#else
 #define HOUSEKEEPING_INTERVAL_SECONDS 86400
+#endif
 /** After enabling 3.3A/3.3 for battery ADC read; 0 = no wait. */
 #define HOUSEKEEPING_RAIL_ADC_SETTLE_MS 100
 /** Seconds per day (for daily schedule). */

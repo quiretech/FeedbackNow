@@ -157,7 +157,7 @@ void housekeeping_run(void) {
     }
   }
 
-  lora_request_link_check(true);
+  /* LinkCheck is MAPE-K Plan only; HK uses DeviceTime after counter burst. */
   counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
   downlink_queue_housekeeping_state_snapshot();
 
