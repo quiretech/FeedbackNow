@@ -55,6 +55,16 @@ static int pn5180_reset(const struct device *dev) {
   return PN5180_OK;
 }
 
+static k_timeout_t pn5180_op_timeout(const struct device *dev) {
+  const struct pn5180_config *config = dev->config;
+  uint32_t ms = config->timeout_ms;
+
+  if (ms < 100U) {
+    ms = 100U;
+  }
+  return K_MSEC(ms);
+}
+
 static bool wait_until_available(const struct device *dev,
                                  k_timeout_t timeout) {
   const struct pn5180_config *config = dev->config;
@@ -90,7 +100,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
   const struct pn5180_config *config = dev->config;
   int ret;
 
-  if (!wait_until_available(dev, K_MSEC(50))) {
+  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -106,7 +116,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
     return PN5180_ERR_SPI;
   }
 
-  if (!wait_until_busy(dev, K_MSEC(50))) {
+  if (!wait_until_busy(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -114,7 +124,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
   cs_high(dev);
   k_msleep(PN5180_CS_GUARD_DELAY_MS);
 
-  if (!wait_until_available(dev, K_MSEC(50))) {
+  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -130,7 +140,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
 
   memset(recv_buf, 0x00, recv_len);
 
-  if (!wait_until_available(dev, K_MSEC(50))) {
+  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -146,7 +156,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
     return PN5180_ERR_SPI;
   }
 
-  if (!wait_until_busy(dev, K_MSEC(50))) {
+  if (!wait_until_busy(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -154,7 +164,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
   cs_high(dev);
   k_msleep(PN5180_CS_GUARD_DELAY_MS);
 
-  if (!wait_until_available(dev, K_MSEC(50))) {
+  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }

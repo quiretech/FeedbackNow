@@ -287,7 +287,7 @@
  * Combo hold durations (FRD 3.1) — extend by adding entries in input layer
  * =============================================================================
  */
-#define COMBO_STAFF_HOLD_MS 1500       /* 0+1: enter Staff */
+#define COMBO_STAFF_HOLD_MS 1000       /* 0+1: enter Staff */
 #define COMBO_DEVICE_INFO_HOLD_MS 2000 /* 0+1+5: Device Info */
 #define COMBO_JOIN_HOLD_MS 2000        /* 0+1+2 in Staff: deliberate join */
 #define COMBO_REBOOT_HOLD_MS 5000      /* 0+1+2+3 in Staff: reboot */
@@ -534,9 +534,11 @@
  *  first successful inventory so a weak ISO15693 coupling can still finish
  *  read_block without dropping out at phase 1. */
 #define NFC_SCAN_TOTAL_MS 12000
-/** Delay after 3.6V rail is turned on before touching PN5180 (ms). Covers
- *  regulator settle + chip internal POR. */
-#define NFC_POWER_SETTLE_MS 500
+/** Settle (ms) after cold 3.6V bring-up pulse before PN5180 init. Match boot
+ * margin (~1 s rail on in main) — 500 ms was too short after long power-off. */
+#define NFC_POWER_SETTLE_MS 1000
+/** 3.6V off time (ms) before cold bring-up settle (clears wedged BUSY). */
+#define NFC_COLD_BOOT_OFF_MS 50
 /** Inventory/read retry cadence inside the scan loop (ms). */
 #define NFC_POLL_INTERVAL_MS 100
 

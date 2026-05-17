@@ -40,17 +40,23 @@ static atomic_t scan_intent_atomic = ATOMIC_INIT(0);
 static atomic_t scan_button_id_atomic = ATOMIC_INIT(0);
 static atomic_t cancel_requested_atomic = ATOMIC_INIT(0);
 
-/* Tracks whether we believe the PN5180 is in a known-good state AND still
- * powered. Cleared on init failure, successful timeout (chip may be wedged),
- * or whenever rail_manager reports 3.6V is off. Updated only from the worker
- * thread, so no atomic/lock needed. */
-static bool nfc_chip_alive;
+/* Warm skip only after a successful scan ended with prepare_poweroff, and only
+ * while still inside the 3.6V keep-alive window (chip has not been powered off).
+ * Worker thread only — no lock needed. */
+static bool nfc_warm_eligible;
+static uint32_t nfc_warm_until_ms;
 
 /**
  * Try pn5180_init + pn5180_configure with a recovery cycle between attempts.
  * Returns 0 on success, negative on persistent failure. Caller must hold 3.6V
  * (via rail_manager_request_3v6) so the recovery pulse stays within ref>0.
  */
+static void nfc_cold_bringup(void) {
+  LOG_DBG("NFC cold bringup: 3.6V pulse off=%u settle=%u ms",
+          NFC_COLD_BOOT_OFF_MS, NFC_POWER_SETTLE_MS);
+  rail_manager_pulse_3v6_recovery(NFC_COLD_BOOT_OFF_MS, NFC_POWER_SETTLE_MS);
+}
+
 static int nfc_init_with_recovery(void) {
   int ret = -EIO;
 
@@ -70,12 +76,14 @@ static int nfc_init_with_recovery(void) {
     if (ret != 0) {
       LOG_ERR("pn5180_init failed (attempt %d/%d): %d", attempt,
               NFC_INIT_MAX_ATTEMPTS, ret);
+      (void)pn5180_prepare_poweroff(nfc_dev);
       continue;
     }
     ret = pn5180_configure(nfc_dev, PN5180_PROTOCOL_ISO15693);
     if (ret != 0) {
       LOG_ERR("pn5180_configure failed (attempt %d/%d): %d", attempt,
               NFC_INIT_MAX_ATTEMPTS, ret);
+      (void)pn5180_prepare_poweroff(nfc_dev);
       continue;
     }
     LOG_INF("NFC probe ok attempt %d/%d %lld ms", attempt,
@@ -85,6 +93,7 @@ static int nfc_init_with_recovery(void) {
 
   LOG_ERR("persistent chip fault after %d attempts; NFC scan aborted",
           NFC_INIT_MAX_ATTEMPTS);
+  (void)pn5180_prepare_poweroff(nfc_dev);
   return ret;
 }
 
@@ -110,17 +119,16 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
     k_mutex_unlock(&scan_params_mutex);
     atomic_set(&cancel_requested_atomic, 0);
 
-    /* Warm-path: if the 3.6V keep-alive has held the chip powered since the
-     * last clean scan, we skip pn5180_init+configure. get_inventory re-loads
-     * ISO15693 config itself, so we only need a healthy, powered chip. */
-    bool warm = nfc_chip_alive && rail_manager_is_3v6_on();
+    uint32_t now_ms = k_uptime_get_32();
+    bool warm = nfc_warm_eligible && rail_manager_is_3v6_on() &&
+                (now_ms < nfc_warm_until_ms);
     if (warm) {
-      LOG_DBG("NFC powered, skip chip re-init");
+      LOG_DBG("NFC warm skip init (last scan clean shutdown)");
     } else {
-      /* Cold-path: allow rail to settle, then init with recovery. */
-      k_msleep(NFC_POWER_SETTLE_MS);
+      nfc_cold_bringup();
       if (nfc_init_with_recovery() != 0) {
-        nfc_chip_alive = false;
+        nfc_warm_eligible = false;
+        nfc_warm_until_ms = 0U;
         (void)smf_post_nfc_result(0, intent, button_id, NULL);
         goto next_scan;
       }
@@ -151,8 +159,8 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
         LOG_INF("NFC read ok blk=%d", NFC_READ_BLOCK);
         (void)smf_post_nfc_result(1, intent, button_id, block_data);
         (void)pn5180_prepare_poweroff(nfc_dev);
-        /* Chip is idle with RF off; safe to keep alive for the next scan. */
-        nfc_chip_alive = true;
+        nfc_warm_eligible = true;
+        nfc_warm_until_ms = k_uptime_get_32() + RAIL_MANAGER_3V6_KEEPALIVE_MS;
         goto next_scan;
       }
       LOG_DBG("NFC read_block ret=%d", ret);
@@ -166,7 +174,8 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
     LOG_INF("NFC scan end (timeout/cancel)");
     (void)smf_post_nfc_result(0, intent, button_id, NULL);
     (void)pn5180_prepare_poweroff(nfc_dev);
-    nfc_chip_alive = false;
+    nfc_warm_eligible = false;
+    nfc_warm_until_ms = 0U;
 
   next_scan:
     (void)0;
@@ -217,7 +226,8 @@ int nfc_service_init(void) {
   }
 
   k_mutex_init(&scan_params_mutex);
-  nfc_chip_alive = false;
+  nfc_warm_eligible = false;
+  nfc_warm_until_ms = 0U;
 
   /* Self-test runs while boot rails are still manually held on by main() —
    * no rail_manager request needed here. */
