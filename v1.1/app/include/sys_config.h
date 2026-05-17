@@ -23,15 +23,15 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0312"
+#define DEVICE_UNIT_ID_STRING "UNIT-0044"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
  * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
  * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1778887956ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-15T23:32:36Z"
+#define DEVICE_PROVISION_UNIX_UTC 1778982738ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-17T01:52:18Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -603,58 +603,42 @@
 #define EPD_TEXT_MANUFACTURER "quire.tech"
 /** Prefix before FW_VERSION_STRING on Device Info (refresh appends version). */
 #define EPD_TEXT_FW_PREFIX "fw  "
-/** Device Info screen: QR with FBN pipe payload. 0 omits QR and flex spacer
- * slot; headings, DevEUI, counters, FW line, and manufacturer footer unchanged. */
-#ifndef EPD_DEVICE_INFO_QR
-#define EPD_DEVICE_INFO_QR 0
-#endif
 #endif /* EPD_ENABLED */
 
 /* =============================================================================
- * Install / commissioning screen (Stage 3+) — demod margin + gateway count
+ * Device status screen — join + link check + counters (staff + commission boot)
  * =============================================================================
- * When EPD_INSTALL_INFO_SCREEN is 1: shown once per boot after first JOIN (or
- * first JOIN_CYCLE_FAILED) on commissioning-class resets (cold power-on,
- * reset pin, deliberate sys_reboot). Not shown on watchdog/brownout or
- * runtime backoff rejoins.
- *
- * Set to 0 to omit the first-boot link-quality + QR install screen; SMF
- * still runs counter sync / time sync on join success, and the join-fail path
- * uses the same customer-facing "last cleaned" work as a non-commission boot.
+ * Shown after first JOIN / JOIN_FAIL on commissioning-class boots for
+ * EPD_DEVICE_STATUS_COMMISSION_MS, and on staff 0+1+5 combo (DEVICE_INFO_TIMEOUT_MS).
+ * Link tiers use post-join LinkCheckAns in lora_link_stats (no on-screen re-probe).
  */
-#ifndef EPD_INSTALL_INFO_SCREEN
-#define EPD_INSTALL_INFO_SCREEN 0
-#endif
+#define EPD_DEVICE_STATUS_COMMISSION_MS 15000
+/** Demod margin (dB) thresholds for 4-tier link label (lowercase on EPD). */
+#define EPD_LINK_MARGIN_EXCELLENT_DB 20
+#define EPD_LINK_MARGIN_GOOD_DB 10
+#define EPD_LINK_MARGIN_FAIR_DB 3
+/* Below FAIR threshold => weak */
 
-#if EPD_INSTALL_INFO_SCREEN
-/** How long to hold the install screen before auto-transition to Last Cleaned. */
-#define EPD_INSTALL_INFO_DISPLAY_MS 15000
-/** Demod margin (dB) thresholds for 4-tier label. Picked to be conservative
- *  on LoRaWAN SF7/125 (DR3 US915): margin here is how far above demod floor
- *  the nearest gateway received our uplink, so higher is better. */
-#define INSTALL_LINK_MARGIN_EXCELLENT_DB 20
-#define INSTALL_LINK_MARGIN_GOOD_DB 10
-#define INSTALL_LINK_MARGIN_FAIR_DB 3
-/* Below 3 dB => WEAK */
-/* <= 0 dB or no answer => VERY WEAK / FAIL */
-
-/* Install screen strings (same section as thresholds; gated on this flag). */
-#define EPD_INSTALL_LINK_LABEL_PREFIX "LINK: "
-#define EPD_INSTALL_LINK_PENDING_PLACEHOLDER "--"
-#define EPD_INSTALL_LINK_QUALITY_EXCELLENT "EXCELLENT"
-#define EPD_INSTALL_LINK_QUALITY_GOOD "GOOD"
-#define EPD_INSTALL_LINK_QUALITY_FAIR "FAIR"
-#define EPD_INSTALL_LINK_QUALITY_WEAK "WEAK"
-#define EPD_INSTALL_MARGIN_FMT_WITH_VALUE "margin   %d dB"
-#define EPD_INSTALL_MARGIN_TEXT_EMPTY "margin   -- dB"
-#define EPD_INSTALL_GATEWAYS_FMT "gateways  %u"
-#endif
+#define EPD_STATUS_LABEL_LINK "link"
+#define EPD_STATUS_LABEL_GATEWAYS "gateways"
+#define EPD_STATUS_LABEL_MARGIN "margin"
+#define EPD_STATUS_LABEL_STATUS "status"
+#define EPD_STATUS_LINK_EXCELLENT "excellent"
+#define EPD_STATUS_LINK_GOOD "good"
+#define EPD_STATUS_LINK_FAIR "fair"
+#define EPD_STATUS_LINK_WEAK "weak"
+#define EPD_STATUS_LINK_NO_RESPONSE "no response"
+#define EPD_STATUS_JOINED "joined"
+#define EPD_STATUS_NOT_JOINED "not joined"
+#define EPD_STATUS_VALUE_NONE "--"
+#define EPD_STATUS_MARGIN_SUFFIX " db"
+#define EPD_STATUS_FW_PREFIX "fw: "
 /**
  * EPD and LoRa share SPI. Button path uses display_show_thanks_sync: EPD first
  * (block until done), then LoRa/EEPROM with clear SPI for downlinks.
  *
  * DISPLAY_WORK_DELAY_MS: delay for async LAST_CLEANED / CLEANING from
- * enqueue_job (e.g. thanks_timer). DEVICE_INFO / CONNECTING / LOGO use 0 ms
+ * enqueue_job (e.g. thanks_timer). DEVICE_STATUS / CONNECTING / LOGO use 0 ms
  * (staff or join UI, no uplink race). SMF uses display_show_*_sync for
  * last-cleaned after Device Info timeout and device-info entry so LED/rail
  * and EPD flush stay ordered. Must be >= ~4500 ms when scheduling after

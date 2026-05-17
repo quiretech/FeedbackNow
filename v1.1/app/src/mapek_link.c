@@ -57,6 +57,9 @@ static mapek_probe_outcome_t kn_last_terminal_outcome;
 
 static mapek_link_state_t log_prev_link_state;
 
+/** Edge detector for terminal probe outcomes; reset on each new probe arm. */
+static mapek_probe_outcome_t analyze_prev_outcome;
+
 static void analyze_reset_locked(void);
 static void analyze_run_locked(void);
 static void plan_execute_locked(void);
@@ -328,12 +331,12 @@ static void analyze_reset_locked(void) {
   an_last.link_state = MAPEK_LINK_STATE_OK;
   an_last.probe_outcome = MAPEK_PROBE_OUTCOME_NONE;
   log_prev_link_state = MAPEK_LINK_STATE_OK;
+  analyze_prev_outcome = MAPEK_PROBE_OUTCOME_NONE;
 }
 
 static void analyze_run_locked(void) {
   const uint32_t now = k_uptime_get_32();
   uint32_t rsn = 0U;
-  static mapek_probe_outcome_t prev_outcome = MAPEK_PROBE_OUTCOME_NONE;
   mapek_probe_outcome_t po;
   char ev[40];
 
@@ -348,21 +351,21 @@ static void analyze_run_locked(void) {
   an_last.probe_fail_count = kn_probe_fail_count;
 
   po = analyze_probe_outcome_locked(now);
-  if (po != prev_outcome &&
+  if (po != analyze_prev_outcome &&
       (po == MAPEK_PROBE_OUTCOME_SUCCESS || po == MAPEK_PROBE_OUTCOME_NO_ANSWER ||
        po == MAPEK_PROBE_OUTCOME_TX_FAIL)) {
     const uint8_t src = probe_source;
 
     knowledge_on_probe_terminal_locked(po);
     probe_disarm_locked();
-    prev_outcome = po;
+    analyze_prev_outcome = po;
     an_last.probe_outcome = po;
     an_last.link_state = analyze_link_state_locked(now);
     (void)snprintf(ev, sizeof(ev), "probe %s src=%s",
                    mapek_probe_outcome_str(po), mapek_probe_src_str(src));
     mapek_log_locked(ev);
   } else if (po == MAPEK_PROBE_OUTCOME_NONE) {
-    prev_outcome = MAPEK_PROBE_OUTCOME_NONE;
+    analyze_prev_outcome = MAPEK_PROBE_OUTCOME_NONE;
     an_last.probe_outcome = po;
     an_last.link_state = analyze_link_state_locked(now);
   } else {
@@ -580,6 +583,11 @@ void mapek_link_feed_probe_begin(uint8_t source) {
     source = kn_next_probe_source;
     kn_next_probe_source = (uint8_t)MAPEK_PROBE_SOURCE_UNKNOWN;
   }
+
+  /* New arm: allow the next terminal outcome to increment pf (Plan often
+   * queues the following LC in the same step as NO_ANSWER, leaving
+   * analyze_prev_outcome stuck on NO_ANSWER while the new probe is PENDING). */
+  analyze_prev_outcome = MAPEK_PROBE_OUTCOME_NONE;
 
   probe_armed = true;
   probe_sent_ms = k_uptime_get_32();

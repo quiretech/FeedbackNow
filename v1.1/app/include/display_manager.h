@@ -19,11 +19,8 @@ enum display_screen_id {
   DISPLAY_SCREEN_THANKS,
   DISPLAY_SCREEN_CLEANING,
   DISPLAY_SCREEN_CONNECTING,
-  DISPLAY_SCREEN_DEVICE_INFO,
+  DISPLAY_SCREEN_DEVICE_STATUS,
   DISPLAY_SCREEN_DL_CUSTOM,
-#if EPD_INSTALL_INFO_SCREEN
-  DISPLAY_SCREEN_INSTALL_INFO,
-#endif
   DISPLAY_SCREEN_COUNT
 };
 
@@ -75,37 +72,23 @@ void display_show_cleaning_sync(void);
 /** Show connecting. */
 void display_show_connecting(void);
 
-/** Show device info (async; uses DISPLAY_WORK_DELAY_MS after uplink-prone paths). */
-void display_show_device_info(void);
+/**
+ * Device status screen (async): join state, link check snapshot, counters.
+ * Uses 0 ms queue delay when enqueued from display layer.
+ */
+void display_show_device_status(void);
 
 /**
- * Show device info with 0 ms queue delay and block until EPD SPI flush completes.
- * Use from SMF after LED/rail changes so staff combo → LED → panel stay ordered.
+ * Device status with 0 ms queue delay; blocks until EPD SPI flush completes.
+ * Staff combo and commission-boot dwell paths use this.
  */
-void display_show_device_info_sync(void);
+void display_show_device_status_sync(void);
 
 /**
  * Downlink 0x99: fullscreen message (Roboto 36, centered, ≤3 lines clipped).
  * hold_minutes == 0 ⇒ DL_CUSTOM_TEXT_DEFAULT_MINUTES from sys_config.h.
  */
 void display_show_dl_custom_message(const char *text, uint32_t hold_minutes);
-
-#if EPD_INSTALL_INFO_SCREEN
-/**
- * Show install / commissioning info (link quality, margin, gateways, unit id,
- * DevEUI, scannable QR code). Renders from current lora_link_stats snapshot;
- * if no LinkCheckAns has arrived, link quality falls back to WEAK and margin
- * is shown as "--". Async variant enqueues with 0 ms delay.
- */
-void display_show_install_info(void);
-
-/**
- * Same as display_show_install_info() but blocks until EPD flush completes.
- * Use from SMF after first-boot JOINED (or JOIN_CYCLE_FAILED) so LoRa/EEPROM
- * follow-ups run with clear SPI.
- */
-void display_show_install_info_sync(void);
-#endif
 
 /**
  * Set pending last cleaned epoch (from downlink 0x01). Applied when we next show

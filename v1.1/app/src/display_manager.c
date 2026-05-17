@@ -5,6 +5,7 @@
   #include "button_counter_store.h"
   #include "eui_keys.h"
   #include "last_cleaned_store.h"
+  #include "lora_app.h"
   #include "lora_link_stats.h"
   #include "rail_manager.h"
   #include "rtc.h"
@@ -55,11 +56,8 @@
     JOB_SHOW_THANKS,
     JOB_SHOW_CLEANING,
     JOB_SHOW_CONNECTING,
-    JOB_SHOW_DEVICE_INFO,
+    JOB_SHOW_DEVICE_STATUS,
     JOB_SHOW_DL_CUSTOM_MESSAGE,
-#if EPD_INSTALL_INFO_SCREEN
-    JOB_SHOW_INSTALL_INFO,
-#endif
     JOB_FULL_REFRESH,
   };
 
@@ -96,34 +94,31 @@
   static lv_obj_t *screen_thanks;
   static lv_obj_t *screen_cleaning;
   static lv_obj_t *screen_connecting;
-  static lv_obj_t *screen_device_info;
+  static lv_obj_t *screen_device_status;
   static lv_obj_t *screen_dl_custom;
   static lv_obj_t *dl_custom_msg_label;
-#if EPD_INSTALL_INFO_SCREEN
-  static lv_obj_t *screen_install_info;
-#endif
-  static lv_obj_t *last_cleaned_label; /* Label on screen_last_cleaned */
-  /* Device Info screen labels */
-  static lv_obj_t *dev_info_heading;
-  static lv_obj_t *dev_info_unit_value;
-  static lv_obj_t *dev_info_deveui;
-  static lv_obj_t *dev_info_fw;
-  static lv_obj_t *dev_info_counters;
-  static lv_obj_t *dev_info_footer;
-#if EPD_DEVICE_INFO_QR
-  static lv_obj_t *dev_info_qr;
-  /* flex-grow row: manufacturer (left) + QR (right), bottoms aligned */
-  static lv_obj_t *dev_info_qr_slot;
-#endif
-#if EPD_INSTALL_INFO_SCREEN
-  /* Install Info screen labels + QR code */
-  static lv_obj_t *install_link_label;   /* PREFIX + tier (sys_config macros) */
-  static lv_obj_t *install_margin_label; /* "margin  12 dB" */
-  static lv_obj_t *install_gateways_label; /* "gateways  3" */
-  static lv_obj_t *install_unit_label;   /* DEVICE_UNIT_ID_STRING */
-  static lv_obj_t *install_deveui_label; /* DevEUI hex */
-  static lv_obj_t *install_qr;           /* lv_qrcode */
-#endif
+  static lv_obj_t *last_cleaned_label;
+  /* Device status screen */
+  static lv_obj_t *ds_brand;
+  static lv_obj_t *ds_unit_la;
+  static lv_obj_t *ds_deveui_ra;
+  static lv_obj_t *ds_link_row;
+  static lv_obj_t *ds_link_la;
+  static lv_obj_t *ds_link_ra;
+  static lv_obj_t *ds_metrics_row;
+  static lv_obj_t *ds_metrics_la;
+  static lv_obj_t *ds_metrics_ra;
+  static lv_obj_t *ds_status_row;
+  static lv_obj_t *ds_status_la;
+  static lv_obj_t *ds_status_ra;
+  static lv_obj_t *ds_b0;
+  static lv_obj_t *ds_b1;
+  static lv_obj_t *ds_b2;
+  static lv_obj_t *ds_b3;
+  static lv_obj_t *ds_b4;
+  static lv_obj_t *ds_b5;
+  static lv_obj_t *ds_mfg;
+  static lv_obj_t *ds_fw;
 
   /* LVGL draw buffers (monochrome: +8 bytes for palette)
   * For DIRECT mode: need full screen buffer
@@ -209,13 +204,8 @@
   K_SEM_DEFINE(cleaning_done_sem, 0, 1);
   static atomic_t cleaning_sync_waiting = ATOMIC_INIT(0);
 
-  K_SEM_DEFINE(device_info_done_sem, 0, 1);
-  static atomic_t device_info_sync_waiting = ATOMIC_INIT(0);
-
-#if EPD_INSTALL_INFO_SCREEN
-  K_SEM_DEFINE(install_info_done_sem, 0, 1);
-  static atomic_t install_info_sync_waiting = ATOMIC_INIT(0);
-#endif
+  K_SEM_DEFINE(device_status_done_sem, 0, 1);
+  static atomic_t device_status_sync_waiting = ATOMIC_INIT(0);
 
   /* 1 while display_work_handler holds SPI for EPD (LoRa shares arduino_spi). */
   static atomic_t display_epd_spi_busy = ATOMIC_INIT(0);
@@ -253,6 +243,86 @@
     }
 
     lv_display_flush_ready(display);
+  }
+
+  #define EPD_STATUS_BODY_W 360
+
+  static void epd_strtolower(char *dst, const char *src, size_t dst_len) {
+    size_t i = 0;
+
+    if (dst == NULL || dst_len == 0) {
+      return;
+    }
+    if (src != NULL) {
+      while (src[i] != '\0' && i + 1U < dst_len) {
+        dst[i] = (char)tolower((unsigned char)src[i]);
+        ++i;
+      }
+    }
+    dst[i] = '\0';
+  }
+
+  static const char *epd_lora_region_str(void) {
+#if defined(CONFIG_LORAMAC_REGION_EU868)
+    return "eu868";
+#elif defined(CONFIG_LORAMAC_REGION_US915)
+    return "us915";
+#else
+    return "?";
+#endif
+  }
+
+  static lv_obj_t *epd_hline_create(lv_obj_t *parent) {
+    lv_obj_t *line = lv_obj_create(parent);
+
+    lv_obj_set_size(line, EPD_STATUS_BODY_W, 1);
+    lv_obj_set_style_bg_color(line, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(line, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(line, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(line, 0, LV_PART_MAIN);
+    lv_obj_set_style_margin_top(line, 2, LV_PART_MAIN);
+    lv_obj_set_style_margin_bottom(line, 2, LV_PART_MAIN);
+    return line;
+  }
+
+  static lv_obj_t *epd_status_lr_row_create(lv_obj_t *parent, lv_obj_t **la_out,
+                                            lv_obj_t **ra_out) {
+    lv_obj_t *row = lv_obj_create(parent);
+
+    lv_obj_set_width(row, EPD_STATUS_BODY_W);
+    lv_obj_set_height(row, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *la = lv_label_create(row);
+    lv_obj_t *ra = lv_label_create(row);
+    lv_obj_set_style_text_font(la, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ra, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(la, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(ra, lv_color_black(), LV_PART_MAIN);
+    if (la_out != NULL) {
+      *la_out = la;
+    }
+    if (ra_out != NULL) {
+      *ra_out = ra;
+    }
+    return row;
+  }
+
+  static lv_obj_t *epd_status_grid_label_create(lv_obj_t *grid,
+                                                lv_text_align_t align) {
+    lv_obj_t *lab = lv_label_create(grid);
+
+    lv_obj_set_width(lab, LV_PCT(100));
+    lv_obj_set_style_text_font(lab, &roboto_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(lab, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(lab, align, LV_PART_MAIN);
+    return lab;
   }
 
   /* Create LVGL screens for each display state */
@@ -412,586 +482,277 @@
 
     lv_obj_add_flag(screen_dl_custom, LV_OBJ_FLAG_HIDDEN);
 
-    /* DEVICE_INFO (400×300): title + rule; unit/DevEUI/counters/fw (left);
-     * flexible band with QR top-right in band; footer left.
-     */
+    /* DEVICE_STATUS (400×300): center-anchored column, lowercase copy. */
+    screen_device_status = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(screen_device_status, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(screen_device_status, LV_OPA_COVER, LV_PART_MAIN);
 
+    lv_obj_t *ds_root = lv_obj_create(screen_device_status);
+    lv_obj_set_size(ds_root, 400, 300);
+    lv_obj_center(ds_root);
+    lv_obj_set_style_bg_color(ds_root, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ds_root, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ds_root, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(ds_root, 20, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(ds_root, 20, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(ds_root, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(ds_root, 10, LV_PART_MAIN);
+    lv_obj_set_flex_flow(ds_root, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(ds_root, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(ds_root, 4, LV_PART_MAIN);
 
-    screen_device_info = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_device_info, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(screen_device_info, LV_OPA_COVER, LV_PART_MAIN);
+    ds_brand = lv_label_create(ds_root);
+    lv_obj_set_width(ds_brand, 360);
+    lv_label_set_text(ds_brand, EPD_TEXT_BRAND_TITLE);
+    lv_obj_set_style_text_font(ds_brand, &roboto_bold_42, LV_PART_MAIN);
+    lv_obj_set_style_text_color(ds_brand, lv_color_black(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(ds_brand, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
 
-    lv_obj_t *cont_devinfo = lv_obj_create(screen_device_info);
-    lv_obj_set_size(cont_devinfo, 400, 300);
-    lv_obj_align(cont_devinfo, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_obj_set_style_bg_color(cont_devinfo, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(cont_devinfo, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(cont_devinfo, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_left(cont_devinfo, 14, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(cont_devinfo, 14, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(cont_devinfo, 12, LV_PART_MAIN);
-    /* Slight lift: manufacturer sits in the QR row; keep a hair above panel edge. */
-    lv_obj_set_style_pad_bottom(cont_devinfo, 8, LV_PART_MAIN);
-    lv_obj_set_flex_flow(cont_devinfo, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(cont_devinfo, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
-                          LV_FLEX_ALIGN_START);
-    /* Tight row gap: panel is 300px tall — avoid clipping footer + QR bottom. */
-    lv_obj_set_style_pad_row(cont_devinfo, 4, LV_PART_MAIN);
+    (void)epd_hline_create(ds_root);
+
+    (void)epd_status_lr_row_create(ds_root, &ds_unit_la, &ds_deveui_ra);
+    lv_obj_set_style_text_font(ds_unit_la, &roboto_bold_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_deveui_ra, &roboto_bold_36, LV_PART_MAIN);
+    lv_label_set_text(ds_unit_la, "unit");
+    lv_label_set_text(ds_deveui_ra, "---");
+
+    (void)epd_hline_create(ds_root);
+
+    ds_link_row = epd_status_lr_row_create(ds_root, &ds_link_la, &ds_link_ra);
+    lv_label_set_text(ds_link_la, EPD_STATUS_LABEL_LINK);
+    lv_label_set_text(ds_link_ra, EPD_STATUS_VALUE_NONE);
+
+    ds_metrics_row = epd_status_lr_row_create(ds_root, &ds_metrics_la, &ds_metrics_ra);
+    lv_label_set_text(ds_metrics_la, EPD_STATUS_LABEL_GATEWAYS);
+    lv_label_set_text(ds_metrics_ra, EPD_STATUS_LABEL_MARGIN);
+
+    ds_status_row = epd_status_lr_row_create(ds_root, &ds_status_la, &ds_status_ra);
+    lv_label_set_text(ds_status_la, EPD_STATUS_LABEL_STATUS);
+    lv_label_set_text(ds_status_ra, EPD_STATUS_NOT_JOINED);
+    lv_obj_add_flag(ds_status_row, LV_OBJ_FLAG_HIDDEN);
+
+    (void)epd_hline_create(ds_root);
 
     {
+      /* Counter grid (3×2): b0 b2 b4 / b1 b3 b5 */
+      static const int32_t grid_col_dsc[] = {LV_GRID_FR(1), LV_GRID_FR(1),
+                                             LV_GRID_FR(1),
+                                             LV_GRID_TEMPLATE_LAST};
+      static const int32_t grid_row_dsc[] = {LV_GRID_CONTENT, LV_GRID_CONTENT,
+                                             LV_GRID_TEMPLATE_LAST};
 
-      const lv_coord_t dev_body_w = 372; /* 400 - 14px padding each side */
+      lv_obj_t *grid = lv_obj_create(ds_root);
+      lv_obj_set_width(grid, EPD_STATUS_BODY_W);
+      lv_obj_set_height(grid, LV_SIZE_CONTENT);
+      lv_obj_set_style_bg_opa(grid, LV_OPA_TRANSP, LV_PART_MAIN);
+      lv_obj_set_style_border_width(grid, 0, LV_PART_MAIN);
+      lv_obj_set_style_pad_all(grid, 0, LV_PART_MAIN);
+      lv_obj_set_style_pad_row(grid, 4, LV_PART_MAIN);
+      lv_obj_clear_flag(grid, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_set_layout(grid, LV_LAYOUT_GRID);
+      lv_obj_set_grid_dsc_array(grid, grid_col_dsc, grid_row_dsc);
 
-      dev_info_heading = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_heading, EPD_TEXT_BRAND_TITLE);
-      lv_obj_set_width(dev_info_heading, dev_body_w);
-      lv_label_set_long_mode(dev_info_heading, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_heading, &roboto_bold_36, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_heading, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_heading, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
+      ds_b0 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_LEFT);
+      lv_obj_set_grid_cell(ds_b0, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 0,
+                           1);
+      lv_label_set_text(ds_b0, "b0:0");
 
-      lv_obj_t *dev_info_rule = lv_obj_create(cont_devinfo);
-      lv_obj_set_size(dev_info_rule, dev_body_w, 1);
-      lv_obj_set_style_bg_color(dev_info_rule, lv_color_black(), LV_PART_MAIN);
-      lv_obj_set_style_bg_opa(dev_info_rule, LV_OPA_COVER, LV_PART_MAIN);
-      lv_obj_set_style_border_width(dev_info_rule, 0, LV_PART_MAIN);
-      lv_obj_set_style_pad_all(dev_info_rule, 0, LV_PART_MAIN);
-      lv_obj_set_style_margin_top(dev_info_rule, 2, LV_PART_MAIN);
-      lv_obj_set_style_margin_bottom(dev_info_rule, 4, LV_PART_MAIN);
+      ds_b2 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_CENTER);
+      lv_obj_set_grid_cell(ds_b2, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_START, 0,
+                           1);
+      lv_label_set_text(ds_b2, "b2:0");
 
-      dev_info_unit_value = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_unit_value, DEVICE_UNIT_ID_STRING);
-      lv_obj_set_width(dev_info_unit_value, dev_body_w);
-      lv_label_set_long_mode(dev_info_unit_value, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_unit_value, &roboto_28, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_unit_value, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_unit_value, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
+      ds_b4 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_RIGHT);
+      lv_obj_set_grid_cell(ds_b4, LV_GRID_ALIGN_END, 2, 1, LV_GRID_ALIGN_START, 0,
+                           1);
+      lv_label_set_text(ds_b4, "b4:0");
 
-      /* DevEUI + counters + fw: same body font (roboto_20) on 1bpp panel. */
+      ds_b1 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_LEFT);
+      lv_obj_set_grid_cell(ds_b1, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, 1,
+                           1);
+      lv_label_set_text(ds_b1, "b1:0");
 
-      dev_info_deveui = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_deveui, "00:00:00:00:00:00:00:00");
-      lv_obj_set_width(dev_info_deveui, dev_body_w);
-      lv_label_set_long_mode(dev_info_deveui, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_deveui, &roboto_20, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_deveui, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_deveui, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
+      ds_b3 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_CENTER);
+      lv_obj_set_grid_cell(ds_b3, LV_GRID_ALIGN_CENTER, 1, 1, LV_GRID_ALIGN_START, 1,
+                           1);
+      lv_label_set_text(ds_b3, "b3:0");
 
-      dev_info_counters = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_counters, "b0:0  b1:0  b2:0  b3:0  b4:0  b5:0");
-      lv_obj_set_width(dev_info_counters, dev_body_w);
-      lv_label_set_long_mode(dev_info_counters, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_counters, &roboto_20, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_counters, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_counters, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
-
-      dev_info_fw = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_fw, EPD_TEXT_FW_PREFIX FW_VERSION_STRING);
-      lv_obj_set_width(dev_info_fw, dev_body_w);
-      lv_label_set_long_mode(dev_info_fw, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_fw, &roboto_20, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_fw, lv_color_black(), LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_fw, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
-
-#if EPD_DEVICE_INFO_QR
-      dev_info_qr_slot = lv_obj_create(cont_devinfo);
-
-      lv_obj_set_width(dev_info_qr_slot, dev_body_w);
-      lv_obj_set_flex_grow(dev_info_qr_slot, 1);
-      /* Slightly taller floor so the QR can grow upward into the spacer. */
-      lv_obj_set_style_min_height(dev_info_qr_slot, 94, LV_PART_MAIN);
-      lv_obj_set_style_pad_all(dev_info_qr_slot, 0, LV_PART_MAIN);
-      lv_obj_set_style_border_width(dev_info_qr_slot, 0, LV_PART_MAIN);
-      lv_obj_set_style_bg_opa(dev_info_qr_slot, LV_OPA_TRANSP, LV_PART_MAIN);
-      lv_obj_clear_flag(dev_info_qr_slot, LV_OBJ_FLAG_SCROLLABLE);
-
-      lv_obj_set_flex_flow(dev_info_qr_slot, LV_FLEX_FLOW_ROW);
-      /* Footer left + QR right; CROSS=END aligns bottoms (no footer clipped under panel). */
-      lv_obj_set_flex_align(dev_info_qr_slot, LV_FLEX_ALIGN_START,
-                            LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_START);
-
-      dev_info_footer = lv_label_create(dev_info_qr_slot);
-      lv_label_set_text(dev_info_footer, EPD_TEXT_MANUFACTURER);
-      lv_label_set_long_mode(dev_info_footer, LV_LABEL_LONG_WRAP);
-      lv_obj_set_flex_grow(dev_info_footer, 1);
-      lv_obj_set_style_pad_right(dev_info_footer, 8, LV_PART_MAIN);
-      lv_obj_set_style_text_font(dev_info_footer, &roboto_20, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_footer, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_footer, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
-
-      dev_info_qr = lv_qrcode_create(dev_info_qr_slot);
-      lv_qrcode_set_size(dev_info_qr, 104);
-      lv_qrcode_set_dark_color(dev_info_qr, lv_color_black());
-      lv_qrcode_set_light_color(dev_info_qr, lv_color_white());
-      lv_obj_clear_flag(dev_info_qr, LV_OBJ_FLAG_SCROLLABLE);
-#else
-      // ADD THIS: spacer to push footer to bottom
-      lv_obj_t *dev_info_spacer = lv_obj_create(cont_devinfo);
-      lv_obj_set_width(dev_info_spacer, dev_body_w);
-      lv_obj_set_flex_grow(dev_info_spacer, 1);
-      lv_obj_set_style_bg_opa(dev_info_spacer, LV_OPA_TRANSP, LV_PART_MAIN);
-      lv_obj_set_style_border_width(dev_info_spacer, 0, LV_PART_MAIN);
-      lv_obj_set_style_pad_all(dev_info_spacer, 0, LV_PART_MAIN);
-      lv_obj_clear_flag(dev_info_spacer, LV_OBJ_FLAG_SCROLLABLE);
-
-      dev_info_footer = lv_label_create(cont_devinfo);
-      lv_label_set_text(dev_info_footer, EPD_TEXT_MANUFACTURER);
-
-      lv_obj_set_width(dev_info_footer, dev_body_w);
-      lv_label_set_long_mode(dev_info_footer, LV_LABEL_LONG_WRAP);
-      lv_obj_set_style_text_font(dev_info_footer, &roboto_20, LV_PART_MAIN);
-      lv_obj_set_style_text_color(dev_info_footer, lv_color_black(),
-                                  LV_PART_MAIN);
-      lv_obj_set_style_text_align(dev_info_footer, LV_TEXT_ALIGN_LEFT,
-                                  LV_PART_MAIN);
-#endif
+      ds_b5 = epd_status_grid_label_create(grid, LV_TEXT_ALIGN_RIGHT);
+      lv_obj_set_grid_cell(ds_b5, LV_GRID_ALIGN_END, 2, 1, LV_GRID_ALIGN_START, 1,
+                           1);
+      lv_label_set_text(ds_b5, "b5:0");
     }
 
-    lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t *ds_spacer = lv_obj_create(ds_root);
+    lv_obj_set_width(ds_spacer, 360);
+    lv_obj_set_flex_grow(ds_spacer, 1);
+    lv_obj_set_style_bg_opa(ds_spacer, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ds_spacer, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(ds_spacer, LV_OBJ_FLAG_SCROLLABLE);
 
-#if EPD_INSTALL_INFO_SCREEN
-    /* Screen: INSTALL_INFO (MVP) — 400x300.
-    *   y=  6..26   header : EPD_TEXT_BRAND_TITLE (left) | unit id (right) [roboto_20]
-    *   y= 44..86   link banner : PREFIX + tier (EPD_INSTALL_LINK_*)           [roboto_bold_42]
-    *   y= 96       divider line
-    *   y=104..132  metrics : EPD_INSTALL_GATEWAYS_FMT / margin fmt/strings   [roboto_28]
-    *   y=150..280  QR          : 130-px canvas, horizontally centered
-    * The QR payload carries full device identity (unit, DevEUI, FW, margin,
-    * gateways), so we don't reprint it alongside the QR — the header already
-    * gives a human-readable FW/HW cross-check for the installer.
-    */
-    screen_install_info = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(screen_install_info, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(screen_install_info, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(screen_install_info, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(screen_install_info, 0, LV_PART_MAIN);
+    (void)epd_status_lr_row_create(ds_root, &ds_mfg, &ds_fw);
+    lv_label_set_text(ds_mfg, EPD_TEXT_MANUFACTURER);
+    lv_label_set_text(ds_fw, EPD_STATUS_FW_PREFIX FW_VERSION_STRING);
 
-    /* Header row */
-    lv_obj_t *header = lv_obj_create(screen_install_info);
-    lv_obj_set_size(header, 400, 28);
-    lv_obj_set_pos(header, 0, 6);
-    lv_obj_set_style_bg_opa(header, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(header, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_left(header, 14, LV_PART_MAIN);
-    lv_obj_set_style_pad_right(header, 14, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(header, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(header, 0, LV_PART_MAIN);
-
-    lv_obj_t *install_title = lv_label_create(header);
-    lv_label_set_text(install_title, EPD_TEXT_BRAND_TITLE);
-    lv_obj_set_style_text_font(install_title, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(install_title, lv_color_black(), LV_PART_MAIN);
-    lv_obj_align(install_title, LV_ALIGN_LEFT_MID, 0, 0);
-
-    install_unit_label = lv_label_create(header);
-    lv_label_set_text(install_unit_label, DEVICE_UNIT_ID_STRING);
-    lv_obj_set_style_text_font(install_unit_label, &roboto_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(install_unit_label, lv_color_black(),
-                                LV_PART_MAIN);
-    lv_obj_align(install_unit_label, LV_ALIGN_RIGHT_MID, 0, 0);
-
-    /* --- Link quality banner (dominant glyph) --- */
-    install_link_label = lv_label_create(screen_install_info);
-    {
-      char pending_link[80];
-      (void)snprintf(pending_link, sizeof(pending_link), "%s%s",
-                    EPD_INSTALL_LINK_LABEL_PREFIX,
-                    EPD_INSTALL_LINK_PENDING_PLACEHOLDER);
-      lv_label_set_text(install_link_label, pending_link);
-    }
-    lv_obj_set_style_text_font(install_link_label, &roboto_bold_42, LV_PART_MAIN);
-    lv_obj_set_style_text_color(install_link_label, lv_color_black(),
-                                LV_PART_MAIN);
-    lv_obj_align(install_link_label, LV_ALIGN_TOP_MID, 0, 44);
-
-    /* --- Divider --- */
-    lv_obj_t *install_divider = lv_obj_create(screen_install_info);
-    lv_obj_set_size(install_divider, 360, 1);
-    lv_obj_set_pos(install_divider, 20, 96);
-    lv_obj_set_style_bg_color(install_divider, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(install_divider, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(install_divider, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(install_divider, 0, LV_PART_MAIN);
-
-    /* --- Metrics row: gateways left, margin right on the SAME line.
-    * Transparent container just to anchor both ends within a shared baseline
-    * without flex layout (keeps refresh behaviour deterministic). */
-    lv_obj_t *metrics_row = lv_obj_create(screen_install_info);
-    lv_obj_set_size(metrics_row, 360, 30);
-    lv_obj_set_pos(metrics_row, 20, 104);
-    lv_obj_set_style_bg_opa(metrics_row, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(metrics_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(metrics_row, 0, LV_PART_MAIN);
-    lv_obj_clear_flag(metrics_row, LV_OBJ_FLAG_SCROLLABLE);
-
-    install_gateways_label = lv_label_create(metrics_row);
-    {
-      char gw0[48];
-      (void)snprintf(gw0, sizeof(gw0), EPD_INSTALL_GATEWAYS_FMT, 0U);
-      lv_label_set_text(install_gateways_label, gw0);
-    }
-    lv_obj_set_style_text_font(install_gateways_label, &roboto_28, LV_PART_MAIN);
-    lv_obj_set_style_text_color(install_gateways_label, lv_color_black(),
-                                LV_PART_MAIN);
-    lv_obj_align(install_gateways_label, LV_ALIGN_LEFT_MID, 0, 0);
-
-    install_margin_label = lv_label_create(metrics_row);
-    lv_label_set_text(install_margin_label, EPD_INSTALL_MARGIN_TEXT_EMPTY);
-    lv_obj_set_style_text_font(install_margin_label, &roboto_28, LV_PART_MAIN);
-    lv_obj_set_style_text_color(install_margin_label, lv_color_black(),
-                                LV_PART_MAIN);
-    lv_obj_align(install_margin_label, LV_ALIGN_RIGHT_MID, 0, 0);
-
-    /* --- QR code: 130 px, horizontally centered under the metrics row. Size
-    * set here allocates the canvas; refresh_install_info_dynamic() calls
-    * lv_qrcode_update() to re-encode in place without reallocating. */
-    install_qr = lv_qrcode_create(screen_install_info);
-    lv_qrcode_set_size(install_qr, 130);
-    lv_qrcode_set_dark_color(install_qr, lv_color_black());
-    lv_qrcode_set_light_color(install_qr, lv_color_white());
-    lv_obj_align(install_qr, LV_ALIGN_TOP_MID, 0, 150);
-
-    /* MVP: DevEUI lives only in the QR payload (unit id is now in the header).
-    * Leaving this pointer NULL tells refresh_install_info_dynamic() to skip
-    * the DevEUI label write. */
-    install_deveui_label = NULL;
-
-    lv_obj_add_flag(screen_install_info, LV_OBJ_FLAG_HIDDEN);
-#endif
+    lv_obj_add_flag(screen_device_status, LV_OBJ_FLAG_HIDDEN);
   }
 
-#if EPD_INSTALL_INFO_SCREEN
-  /**
-  * Map best demod margin to a 4-tier install label. When we haven't received
-  * any LinkCheckAns (samples == 0), return WEAK with a "no-data" hint so the
-  * installer knows the gateway didn't answer — which is the conservative
-  * reading of the situation.
-  */
-  static const char *install_link_label_build(
-      const lora_link_stats_snapshot_t *ls) {
-    static char link_buf[96];
-    /* No LinkCheckAns: same label shape as weakest tier so installer sees one
-    * predictable string across locales (words from sys_config.h). */
+  static const char *device_status_link_tier(const lora_link_stats_snapshot_t *ls) {
     if (ls->samples == 0 || ls->best_demod_margin == LORA_LINK_STATS_MARGIN_NONE) {
-      (void)snprintf(link_buf, sizeof(link_buf), "%s%s",
-                    EPD_INSTALL_LINK_LABEL_PREFIX,
-                    EPD_INSTALL_LINK_QUALITY_WEAK);
-      return link_buf;
+      return EPD_STATUS_LINK_NO_RESPONSE;
     }
     int16_t m = ls->best_demod_margin;
-    const char *tier = EPD_INSTALL_LINK_QUALITY_WEAK;
-    if (m >= INSTALL_LINK_MARGIN_EXCELLENT_DB) {
-      tier = EPD_INSTALL_LINK_QUALITY_EXCELLENT;
-    } else if (m >= INSTALL_LINK_MARGIN_GOOD_DB) {
-      tier = EPD_INSTALL_LINK_QUALITY_GOOD;
-    } else if (m >= INSTALL_LINK_MARGIN_FAIR_DB) {
-      tier = EPD_INSTALL_LINK_QUALITY_FAIR;
+    if (m >= EPD_LINK_MARGIN_EXCELLENT_DB) {
+      return EPD_STATUS_LINK_EXCELLENT;
     }
-    (void)snprintf(link_buf, sizeof(link_buf), "%s%s",
-                  EPD_INSTALL_LINK_LABEL_PREFIX, tier);
-    return link_buf;
+    if (m >= EPD_LINK_MARGIN_GOOD_DB) {
+      return EPD_STATUS_LINK_GOOD;
+    }
+    if (m >= EPD_LINK_MARGIN_FAIR_DB) {
+      return EPD_STATUS_LINK_FAIR;
+    }
+    return EPD_STATUS_LINK_WEAK;
   }
 
-  /**
-  * Refresh install-info labels + re-encode the QR from current stats.
-  *
-  * QR payload format (pipe-delimited; installer app parses by splitting on '|'
-  * and then '=' within each field):
-  *   FBN|v=1|uid=<unit>|dev=<deveui_hex>|fw=<x.y.z>|m=<margin_db>|g=<nb_gw>
-  *
-  * When no LinkCheckAns has landed yet, m and g are -1/0; app still gets a
-  * valid, scannable QR with device identity for commissioning logging.
-  */
-  static void refresh_install_info_dynamic(void) {
-    if (screen_install_info == NULL) {
+  static void device_status_counter_label_set(lv_obj_t *label, uint8_t id,
+                                              uint32_t val) {
+    char buf[24];
+
+    (void)snprintf(buf, sizeof(buf), "b%u:%lu", (unsigned)id,
+                   (unsigned long)val);
+    epd_strtolower(buf, buf, sizeof(buf));
+    lv_label_set_text(label, buf);
+  }
+
+  static void refresh_device_status_dynamic(void) {
+    if (screen_device_status == NULL) {
       return;
     }
 
-    lora_link_stats_snapshot_t ls;
-    memset(&ls, 0, sizeof(ls));
-    ls.last_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
-    ls.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
-    (void)lora_link_stats_get(&ls);
-
-    /* Link quality headline */
-    if (install_link_label) {
-      lv_label_set_text(install_link_label, install_link_label_build(&ls));
-    }
-
-    /* Metrics — show best margin / best gateway count (installers care about
-    * peak capability of this location, not a single noisy sample). */
-    if (install_margin_label) {
-      char buf[48];
-      if (ls.samples > 0 &&
-          ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE) {
-        (void)snprintf(buf, sizeof(buf), EPD_INSTALL_MARGIN_FMT_WITH_VALUE,
-                      (int)ls.best_demod_margin);
-      } else {
-        (void)snprintf(buf, sizeof(buf), "%s", EPD_INSTALL_MARGIN_TEXT_EMPTY);
-      }
-      lv_label_set_text(install_margin_label, buf);
-    }
-    if (install_gateways_label) {
-      char buf[48];
-      (void)snprintf(buf, sizeof(buf), EPD_INSTALL_GATEWAYS_FMT,
-                    (unsigned)ls.best_nb_gateways);
-      lv_label_set_text(install_gateways_label, buf);
-    }
-
-    /* DevEUI hex (no colons — saves QR chars). Unit id comes straight from
-    * sys_config.h (kept in sync with eui_registry by gen_euis.py). */
     static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
-    char deveui_colon[32];
-    char deveui_nocolon[20];
-    (void)snprintf(deveui_colon, sizeof(deveui_colon),
-                  "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0],
-                  dev_eui[1], dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5],
-                  dev_eui[6], dev_eui[7]);
-    (void)snprintf(deveui_nocolon, sizeof(deveui_nocolon),
-                  "%02x%02x%02x%02x%02x%02x%02x%02x", dev_eui[0], dev_eui[1],
-                  dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5], dev_eui[6],
-                  dev_eui[7]);
+    char brand_lower[32];
+    char unit_lower[48];
+    char deveui_tail[8];
+    char fwbuf[32];
+    char mfg_lower[40];
+    char status_ra[48];
+    char metrics_la[32];
+    char metrics_ra[32];
 
-    if (install_unit_label) {
-      lv_label_set_text(install_unit_label, DEVICE_UNIT_ID_STRING);
+    epd_strtolower(brand_lower, EPD_TEXT_BRAND_TITLE, sizeof(brand_lower));
+    epd_strtolower(unit_lower, DEVICE_UNIT_ID_STRING, sizeof(unit_lower));
+    epd_strtolower(mfg_lower, EPD_TEXT_MANUFACTURER, sizeof(mfg_lower));
+    (void)snprintf(deveui_tail, sizeof(deveui_tail), "%02x%02x%02x",
+                   dev_eui[5], dev_eui[6], dev_eui[7]);
+    (void)snprintf(fwbuf, sizeof(fwbuf), "%s%s", EPD_STATUS_FW_PREFIX,
+                   FW_VERSION_STRING);
+    epd_strtolower(fwbuf, fwbuf, sizeof(fwbuf));
+
+    if (ds_brand != NULL) {
+      lv_label_set_text(ds_brand, brand_lower);
     }
-    if (install_deveui_label) {
-      lv_label_set_text(install_deveui_label, deveui_colon);
+    if (ds_unit_la != NULL) {
+      lv_label_set_text(ds_unit_la, unit_lower);
     }
-
-    /* QR payload. Keep short: QR version scales with length, and a bigger
-    * version means coarser modules on the 130 px canvas (harder to scan). */
-    if (install_qr) {
-      char payload[128];
-      int margin_for_qr = (ls.samples > 0 &&
-                          ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE)
-                              ? (int)ls.best_demod_margin
-                              : -1;
-      int n = snprintf(payload, sizeof(payload),
-                      "FBN|v=1|uid=%s|dev=%s|fw=%s|m=%d|g=%u",
-                      DEVICE_UNIT_ID_STRING, deveui_nocolon, FW_VERSION_STRING,
-                      margin_for_qr, (unsigned)ls.best_nb_gateways);
-      if (n < 0 || n >= (int)sizeof(payload)) {
-        LOG_WRN("install QR payload truncated (len=%d)", n);
-        n = (int)sizeof(payload) - 1;
-      }
-      lv_result_t qr_res = lv_qrcode_update(install_qr, payload, (uint32_t)n);
-      if (qr_res != LV_RESULT_OK) {
-        LOG_WRN("lv_qrcode_update failed (res=%d len=%d)", (int)qr_res, n);
-      } else {
-        LOG_DBG("install QR: %s", payload);
-      }
+    if (ds_deveui_ra != NULL) {
+      lv_label_set_text(ds_deveui_ra, deveui_tail);
     }
-
-    LOG_INF("epd install_info %s m=%d gw=%u n=%u",
-            install_link_label_build(&ls), (int)ls.best_demod_margin,
-            (unsigned)ls.best_nb_gateways, (unsigned)ls.samples);
-  }
-#endif
-
-#if EPD_DEVICE_INFO_QR
-  /** Largest square QR in the slot row: height-limited but not wider than space
-   * remaining beside the footer label (two passes so flex footer width settles). */
-  static void device_info_qr_fit_in_slot(void) {
-    if (dev_info_qr == NULL || dev_info_qr_slot == NULL) {
-
-      return;
-
+    if (ds_mfg != NULL) {
+      lv_label_set_text(ds_mfg, mfg_lower);
     }
-    lv_obj_t *col = lv_obj_get_parent(dev_info_qr_slot);
-
-    for (int pass = 0; pass < 2; pass++) {
-
-      if (col != NULL) {
-
-        lv_obj_update_layout(col);
-
-      }
-
-      lv_coord_t cw = lv_obj_get_content_width(dev_info_qr_slot);
-
-      lv_coord_t ch = lv_obj_get_content_height(dev_info_qr_slot);
-
-      if (cw < 24 || ch < 24) {
-
-        return;
-
-      }
-      lv_coord_t gap = 8;
-      lv_coord_t footer_w = 0;
-
-      if (dev_info_footer != NULL) {
-
-        footer_w = lv_obj_get_width(dev_info_footer);
-
-      }
-
-      if (pass == 0 && footer_w < 64) {
-
-        /* First layout pass: footer flex width not settled yet ~ reserve text room. */
-
-        footer_w = 148;
-
-      }
-      lv_coord_t avail_w = cw - footer_w - gap;
-
-      if (avail_w < 48) {
-
-        avail_w = 48;
-
-      }
-      /* Height-limited square; inset from slot content height. */
-
-      lv_coord_t z = ch - 2;
-
-      if (z > avail_w) {
-
-        z = avail_w;
-
-      }
-
-      if (z < 48) {
-
-        z = 48;
-
-      }
-
-      if (z > 152) {
-
-        z = 152;
-
-      }
-
-      lv_qrcode_set_size(dev_info_qr, (uint32_t)z);
-
+    if (ds_fw != NULL) {
+      lv_label_set_text(ds_fw, fwbuf);
     }
-
-  }
-#endif
-
-  /* Refresh unit id, DevEUI, button counters, fw line; optional Device Info QR.
-  *
-  * When EPD_DEVICE_INFO_QR: QR payload (pipe-separated):
-  *   FBN|v=2|brand=...|uid=...|dev=...|cnt=...|fw=...|mfg=...
-  * mfg=. are sent as _ so phone QR apps do not treat domains as URLs.
-  */
-  static void refresh_device_info_dynamic(void) {
-    static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
-    char deveui_colon[40];
-#if EPD_DEVICE_INFO_QR
-    char deveui_nocolon[20];
-#endif
-
-    (void)snprintf(
-        deveui_colon, sizeof(deveui_colon),
-        "%02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x", dev_eui[0], dev_eui[1],
-        dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5], dev_eui[6], dev_eui[7]);
-#if EPD_DEVICE_INFO_QR
-    (void)snprintf(deveui_nocolon, sizeof(deveui_nocolon),
-                  "%02x%02x%02x%02x%02x%02x%02x%02x", dev_eui[0], dev_eui[1],
-                  dev_eui[2], dev_eui[3], dev_eui[4], dev_eui[5], dev_eui[6],
-                  dev_eui[7]);
-#endif
 
     uint32_t cnt[NUM_BUTTONS];
     for (uint8_t i = 0; i < NUM_BUTTONS; i++) {
       (void)button_counter_store_get(i, &cnt[i]);
     }
+    device_status_counter_label_set(ds_b0, 0, cnt[0]);
+    device_status_counter_label_set(ds_b1, 1, cnt[1]);
+    device_status_counter_label_set(ds_b2, 2, cnt[2]);
+    device_status_counter_label_set(ds_b3, 3, cnt[3]);
+    device_status_counter_label_set(ds_b4, 4, cnt[4]);
+    device_status_counter_label_set(ds_b5, 5, cnt[5]);
 
-    char counters_str[64];
-    int pos = snprintf(counters_str, sizeof(counters_str), "b0:%lx",
-                      (unsigned long)cnt[0]);
-    for (uint8_t i = 1;
-        i < NUM_BUTTONS && pos < (int)(sizeof(counters_str) - 10); i++) {
-      pos += snprintf(counters_str + pos, sizeof(counters_str) - pos,
-                      "  b%u:%lx", (unsigned)i, (unsigned long)cnt[i]);
-    }
+    const bool joined = lora_is_joined();
 
-#if EPD_DEVICE_INFO_QR
-    char counters_qr[80];
-    int qp = snprintf(counters_qr, sizeof(counters_qr), "b0:%lx",
-                     (unsigned long)cnt[0]);
-    for (uint8_t i = 1;
-        i < NUM_BUTTONS && qp < (int)(sizeof(counters_qr) - 12); i++) {
-      qp += snprintf(counters_qr + qp, sizeof(counters_qr) - qp, "_b%u:%lx",
-                    (unsigned)i, (unsigned long)cnt[i]);
-    }
-
-#endif
-
-    if (dev_info_unit_value) {
-      char uid_lower[64];
-      const char *uid = DEVICE_UNIT_ID_STRING;
-      size_t i = 0;
-      while (uid[i] != '\0' && i + 1U < sizeof(uid_lower)) {
-        uid_lower[i] = (char)tolower((unsigned char)uid[i]);
-        ++i;
+    if (!joined) {
+      if (ds_link_row != NULL) {
+        lv_obj_add_flag(ds_link_row, LV_OBJ_FLAG_HIDDEN);
       }
-      uid_lower[i] = '\0';
-      lv_label_set_text(dev_info_unit_value, uid_lower);
-    }
-    if (dev_info_deveui) {
-      lv_label_set_text(dev_info_deveui, deveui_colon);
-    }
-    if (dev_info_counters) {
-      lv_label_set_text(dev_info_counters, counters_str);
-    }
-    if (dev_info_fw) {
-      char fwbuf[48];
-      int n = snprintf(fwbuf, sizeof(fwbuf), "%s%s", EPD_TEXT_FW_PREFIX,
-                        FW_VERSION_STRING);
-      if (n > 0 && n < (int)sizeof(fwbuf)) {
-        for (int j = 0; fwbuf[j] != '\0'; j++) {
-          fwbuf[j] = (char)tolower((unsigned char)fwbuf[j]);
-        }
+      if (ds_metrics_row != NULL) {
+        lv_obj_add_flag(ds_metrics_row, LV_OBJ_FLAG_HIDDEN);
       }
-      lv_label_set_text(dev_info_fw, fwbuf);
+      if (ds_status_row != NULL) {
+        lv_obj_clear_flag(ds_status_row, LV_OBJ_FLAG_HIDDEN);
+      }
+      if (ds_status_la != NULL) {
+        lv_label_set_text(ds_status_la, EPD_STATUS_LABEL_STATUS);
+      }
+      if (ds_status_ra != NULL) {
+        lv_label_set_text(ds_status_ra, EPD_STATUS_NOT_JOINED);
+      }
+      LOG_INF("epd device_status not_joined");
+      return;
     }
 
-#if EPD_DEVICE_INFO_QR
-    if (dev_info_qr) {
-      char mfg_qr[40];
-      const char *src = EPD_TEXT_MANUFACTURER;
-      size_t k = 0;
+    if (ds_link_row != NULL) {
+      lv_obj_clear_flag(ds_link_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (ds_metrics_row != NULL) {
+      lv_obj_clear_flag(ds_metrics_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (ds_status_row != NULL) {
+      lv_obj_clear_flag(ds_status_row, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (ds_status_la != NULL) {
+      lv_label_set_text(ds_status_la, EPD_STATUS_LABEL_STATUS);
+    }
+    if (ds_status_ra != NULL) {
+      (void)snprintf(status_ra, sizeof(status_ra), "%s/%s", EPD_STATUS_JOINED,
+                     epd_lora_region_str());
+      lv_label_set_text(ds_status_ra, status_ra);
+    }
 
-      while (src[k] != '\0' && k + 1U < sizeof(mfg_qr)) {
-        char c = src[k];
-        mfg_qr[k] = (c == '.') ? '_' : c;
-        k++;
-      }
+    lora_link_stats_snapshot_t ls;
+    memset(&ls, 0, sizeof(ls));
+    ls.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
+    (void)lora_link_stats_get(&ls);
 
-      mfg_qr[k] = '\0';
-      char payload[192];
-      int n = snprintf(payload, sizeof(payload),
-                      "FBN|v=2|brand=%s|uid=%s|dev=%s|cnt=%s|fw=%s|mfg=%s",
-                      EPD_TEXT_BRAND_TITLE, DEVICE_UNIT_ID_STRING,
-                      deveui_nocolon, counters_qr, FW_VERSION_STRING,
-                      mfg_qr);
-      if (n < 0 || n >= (int)sizeof(payload)) {
-        LOG_WRN("device_info QR payload truncated or error (len=%d)", n);
-      }
-      device_info_qr_fit_in_slot();
-      uint32_t qr_len = (uint32_t)strlen(payload);
-      lv_result_t qr_res = lv_qrcode_update(dev_info_qr, payload, qr_len);
-      if (qr_res != LV_RESULT_OK) {
-        LOG_WRN("device_info lv_qrcode_update failed (res=%u len=%u)",
-                (unsigned)qr_res, (unsigned)qr_len);
+    if (ds_link_la != NULL) {
+      lv_label_set_text(ds_link_la, EPD_STATUS_LABEL_LINK);
+    }
+    if (ds_link_ra != NULL) {
+      lv_label_set_text(ds_link_ra, device_status_link_tier(&ls));
+    }
+    if (ds_metrics_la != NULL) {
+      if (ls.samples > 0) {
+        (void)snprintf(metrics_la, sizeof(metrics_la), "%s %u",
+                       EPD_STATUS_LABEL_GATEWAYS, (unsigned)ls.best_nb_gateways);
       } else {
-        LOG_DBG("device_info QR: %s", payload);
+        (void)snprintf(metrics_la, sizeof(metrics_la), "%s %s",
+                       EPD_STATUS_LABEL_GATEWAYS, EPD_STATUS_VALUE_NONE);
       }
+      lv_label_set_text(ds_metrics_la, metrics_la);
     }
-#endif
+    if (ds_metrics_ra != NULL) {
+      if (ls.samples > 0 &&
+          ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE) {
+        (void)snprintf(metrics_ra, sizeof(metrics_ra), "%s %d%s",
+                       EPD_STATUS_LABEL_MARGIN, (int)ls.best_demod_margin,
+                       EPD_STATUS_MARGIN_SUFFIX);
+      } else {
+        (void)snprintf(metrics_ra, sizeof(metrics_ra), "%s %s",
+                       EPD_STATUS_LABEL_MARGIN, EPD_STATUS_VALUE_NONE);
+      }
+      lv_label_set_text(ds_metrics_ra, metrics_ra);
+    }
 
+    LOG_INF("epd device_status %s %s m=%d gw=%u n=%u", device_status_link_tier(&ls),
+            status_ra, (int)ls.best_demod_margin, (unsigned)ls.best_nb_gateways,
+            (unsigned)ls.samples);
   }
 
   /* Format epoch as yyyy/mm/dd hh:mm (UTC). Buffer at least 17 bytes. */
@@ -1067,14 +828,9 @@
     if (screen_connecting) {
       lv_obj_add_flag(screen_connecting, LV_OBJ_FLAG_HIDDEN);
     }
-    if (screen_device_info) {
-      lv_obj_add_flag(screen_device_info, LV_OBJ_FLAG_HIDDEN);
+    if (screen_device_status) {
+      lv_obj_add_flag(screen_device_status, LV_OBJ_FLAG_HIDDEN);
     }
-#if EPD_INSTALL_INFO_SCREEN
-    if (screen_install_info) {
-      lv_obj_add_flag(screen_install_info, LV_OBJ_FLAG_HIDDEN);
-    }
-#endif
     if (screen_dl_custom) {
       lv_obj_add_flag(screen_dl_custom, LV_OBJ_FLAG_HIDDEN);
     }
@@ -1116,9 +872,9 @@
       LOG_INF("epd show CONNECTING");
       scr_to_show = screen_connecting;
       break;
-    case JOB_SHOW_DEVICE_INFO:
-      LOG_INF("epd show DEVICE_INFO");
-      scr_to_show = screen_device_info;
+    case JOB_SHOW_DEVICE_STATUS:
+      LOG_INF("epd show DEVICE_STATUS");
+      scr_to_show = screen_device_status;
       break;
     case JOB_SHOW_DL_CUSTOM_MESSAGE:
       LOG_INF("epd show DL_CUSTOM");
@@ -1132,12 +888,6 @@
 
       break;
 
-#if EPD_INSTALL_INFO_SCREEN
-    case JOB_SHOW_INSTALL_INFO:
-      LOG_INF("epd show INSTALL_INFO");
-      scr_to_show = screen_install_info;
-      break;
-#endif
     case JOB_FULL_REFRESH:
       LOG_DBG("epd full_refresh");
       /* Show current screen again to force refresh */
@@ -1157,17 +907,12 @@
       case DISPLAY_SCREEN_CONNECTING:
         scr_to_show = screen_connecting;
         break;
-      case DISPLAY_SCREEN_DEVICE_INFO:
-        scr_to_show = screen_device_info;
+      case DISPLAY_SCREEN_DEVICE_STATUS:
+        scr_to_show = screen_device_status;
         break;
       case DISPLAY_SCREEN_DL_CUSTOM:
         scr_to_show = screen_dl_custom;
         break;
-#if EPD_INSTALL_INFO_SCREEN
-      case DISPLAY_SCREEN_INSTALL_INFO:
-        scr_to_show = screen_install_info;
-        break;
-#endif
       default:
         break;
       }
@@ -1176,12 +921,8 @@
       break;
     }
 
-    if (scr_to_show == screen_device_info) {
-      refresh_device_info_dynamic();
-#if EPD_INSTALL_INFO_SCREEN
-    } else if (scr_to_show == screen_install_info) {
-      refresh_install_info_dynamic();
-#endif
+    if (scr_to_show == screen_device_status) {
+      refresh_device_status_dynamic();
     }
 
     if (scr_to_show) {
@@ -1221,20 +962,12 @@
         k_sem_give(&cleaning_done_sem);
       }
       break;
-    case JOB_SHOW_DEVICE_INFO:
-      if (atomic_get(&device_info_sync_waiting) != 0) {
-        atomic_set(&device_info_sync_waiting, 0);
-        k_sem_give(&device_info_done_sem);
+    case JOB_SHOW_DEVICE_STATUS:
+      if (atomic_get(&device_status_sync_waiting) != 0) {
+        atomic_set(&device_status_sync_waiting, 0);
+        k_sem_give(&device_status_done_sem);
       }
       break;
-#if EPD_INSTALL_INFO_SCREEN
-    case JOB_SHOW_INSTALL_INFO:
-      if (atomic_get(&install_info_sync_waiting) != 0) {
-        atomic_set(&install_info_sync_waiting, 0);
-        k_sem_give(&install_info_done_sem);
-      }
-      break;
-#endif
     default:
       break;
     }
@@ -1342,11 +1075,6 @@
       current_screen = DISPLAY_SCREEN_CONNECTING;
       do_render(display, JOB_SHOW_CONNECTING, 0);
       break;
-    case JOB_SHOW_DEVICE_INFO:
-      k_timer_stop(&dl_custom_revert_timer);
-      current_screen = DISPLAY_SCREEN_DEVICE_INFO;
-      do_render(display, JOB_SHOW_DEVICE_INFO, 0);
-      break;
     case JOB_SHOW_DL_CUSTOM_MESSAGE: {
       k_timer_stop(&dl_custom_revert_timer);
 
@@ -1376,26 +1104,22 @@
 
     }
 
-#if EPD_INSTALL_INFO_SCREEN
-    case JOB_SHOW_INSTALL_INFO: {
+    case JOB_SHOW_DEVICE_STATUS: {
+      /* Commission boot: full refresh when coming from logo/connecting. */
       k_timer_stop(&dl_custom_revert_timer);
-      /* Coming from LOGO / CONNECTING: fast-update ghosts badly against the
-      * dense install layout (QR blocks, large fonts). Do one full refresh so
-      * the installer sees crisp contrast. Restored after render below. */
       bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
                                 current_screen == DISPLAY_SCREEN_CONNECTING ||
                                 current_screen == DISPLAY_SCREEN_DL_CUSTOM);
       if (need_full_refresh) {
         ssd1683_set_fast_update(display, false);
       }
-      current_screen = DISPLAY_SCREEN_INSTALL_INFO;
-      do_render(display, JOB_SHOW_INSTALL_INFO, 0);
+      current_screen = DISPLAY_SCREEN_DEVICE_STATUS;
+      do_render(display, JOB_SHOW_DEVICE_STATUS, 0);
       if (need_full_refresh) {
         ssd1683_set_fast_update(display, true);
       }
       break;
     }
-#endif
     case JOB_FULL_REFRESH:
       ssd1683_set_fast_update(display, false);
       do_render(display, JOB_FULL_REFRESH, 0);
@@ -1447,18 +1171,11 @@
       atomic_set(&cleaning_sync_waiting, 0);
       k_sem_give(&cleaning_done_sem);
     }
-    if (job.type == JOB_SHOW_DEVICE_INFO &&
-        atomic_get(&device_info_sync_waiting)) {
-      atomic_set(&device_info_sync_waiting, 0);
-      k_sem_give(&device_info_done_sem);
+    if (job.type == JOB_SHOW_DEVICE_STATUS &&
+        atomic_get(&device_status_sync_waiting)) {
+      atomic_set(&device_status_sync_waiting, 0);
+      k_sem_give(&device_status_done_sem);
     }
-#if EPD_INSTALL_INFO_SCREEN
-    if (job.type == JOB_SHOW_INSTALL_INFO &&
-        atomic_get(&install_info_sync_waiting)) {
-      atomic_set(&install_info_sync_waiting, 0);
-      k_sem_give(&install_info_done_sem);
-    }
-#endif
 
     atomic_set(&display_epd_spi_busy, 0);
 
@@ -1488,16 +1205,12 @@
     * already passed its tail-check, force a short reschedule.
     *
     * EPD and LoRa share SPI. Defer EPD until past LoRa RX windows to avoid
-    * missing downlinks. LOGO, CONNECTING, DEVICE_INFO: 0 delay (boot/join/staff
+    * missing downlinks. LOGO, CONNECTING, DEVICE_STATUS: 0 delay (boot/join/staff
     * UI; no fresh uplink on that path). THANKS: DISPLAY_THANKS_DELAY_MS (button
     * triggers uplink). Others: DISPLAY_WORK_DELAY_MS. */
     uint32_t delay_ms;
     if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
-        type == JOB_SHOW_DEVICE_INFO
-#if EPD_INSTALL_INFO_SCREEN
-        || type == JOB_SHOW_INSTALL_INFO
-#endif
-        ) {
+        type == JOB_SHOW_DEVICE_STATUS) {
       delay_ms = 0U;
     } else {
       /* THANKS from button uses display_show_thanks_sync (0 delay, blocks).
@@ -1715,25 +1428,25 @@
   #endif
   }
 
-  void display_show_device_info(void) {
+  void display_show_device_status(void) {
   #if EPD_ENABLED
-    enqueue_job(JOB_SHOW_DEVICE_INFO, 0);
+    enqueue_job(JOB_SHOW_DEVICE_STATUS, 0);
   #endif
   }
 
-  void display_show_device_info_sync(void) {
+  void display_show_device_status_sync(void) {
   #if EPD_ENABLED
-    struct display_job job = {.type = JOB_SHOW_DEVICE_INFO, .epoch = 0};
+    struct display_job job = {.type = JOB_SHOW_DEVICE_STATUS, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("device_info sync: job queue full");
+      LOG_WRN("device_status sync: job queue full");
       return;
     }
-    atomic_set(&device_info_sync_waiting, 1);
+    atomic_set(&device_status_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
-    if (k_sem_take(&device_info_done_sem, K_MSEC(10000)) != 0) {
-      LOG_WRN("device_info sync timeout");
+    if (k_sem_take(&device_status_done_sem, K_MSEC(30000)) != 0) {
+      LOG_WRN("device_status sync timeout");
     }
-    atomic_set(&device_info_sync_waiting, 0);
+    atomic_set(&device_status_sync_waiting, 0);
   #endif
   }
 
@@ -1752,26 +1465,6 @@
     ARG_UNUSED(hold_minutes);
   #endif
   }
-
-#if EPD_ENABLED && EPD_INSTALL_INFO_SCREEN
-  void display_show_install_info(void) { enqueue_job(JOB_SHOW_INSTALL_INFO, 0); }
-
-  void display_show_install_info_sync(void) {
-    struct display_job job = {.type = JOB_SHOW_INSTALL_INFO, .epoch = 0};
-    if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-      LOG_WRN("install_info sync: job queue full");
-      return;
-    }
-    atomic_set(&install_info_sync_waiting, 1);
-    (void)k_work_schedule(&display_work, K_MSEC(0));
-    /* Full refresh + QR encode can take several seconds on SSD1683; give a
-    * generous timeout. Mirrors logo_sync's 30s cap for boot-class screens. */
-    if (k_sem_take(&install_info_done_sem, K_MSEC(30000)) != 0) {
-      LOG_WRN("install_info sync timeout");
-    }
-    atomic_set(&install_info_sync_waiting, 0);
-  }
-#endif
 
   void display_set_pending_last_cleaned(uint32_t epoch) {
   #if EPD_ENABLED

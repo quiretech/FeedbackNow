@@ -1,8 +1,8 @@
 /**
  * Boot info: one-shot capture of the hardware reset cause so later code can
  * decide whether this boot is a "commissioning-class" event that deserves
- * installer UI (e.g. the install / link-quality screen when
- * EPD_INSTALL_INFO_SCREEN is enabled in sys_config.h) vs. an in-field fault
+ * installer UI (device status screen after join on commission boot) vs. an
+ * in-field fault
  * reboot that should stay silent.
  *
  * We read CONFIG_HWINFO reset cause once, very early in main(), and clear it

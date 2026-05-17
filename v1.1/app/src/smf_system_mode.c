@@ -129,56 +129,34 @@ static void smf_join_failed_ui_work_handler(struct k_work *work) {
   display_request_full_refresh();
 }
 
-#if EPD_INSTALL_INFO_SCREEN
-/**
- * One-shot: true after we've rendered the install screen once on this boot.
- * Non-commissioning boots (watchdog/brownout) and later JOIN events (runtime
- * backoff rejoin) are silent by construction. Read/written only by SMF thread.
- */
-static bool install_info_shown_this_boot;
+#if EPD_ENABLED
+static bool device_status_shown_this_boot;
 
-/**
- * Render the install screen and hold it for EPD_INSTALL_INFO_DISPLAY_MS,
- * measured from render start so overlapping work (counter sync uplinks)
- * counts toward the dwell. Caller owns the 3.3A rail.
- *
- * @param overlap_work  Optional fn to run while the install screen is visible
- *                      (e.g. counter_sync_run). May be NULL for the JOIN_FAILED
- *                      path where we have no post-join work to schedule.
- */
-static void smf_show_install_info_with_dwell(void (*overlap_work)(void)) {
+static void smf_show_device_status_with_dwell(void (*overlap_work)(void)) {
   int64_t t0 = k_uptime_get();
-  display_show_install_info_sync();
+  display_show_device_status_sync();
   if (overlap_work != NULL) {
-    /* Install screen is up, EPD SPI is idle — safe to run LoRa uplinks here.
-     * Counter sync is the big one (up to ~6 uplinks * interval). */
     overlap_work();
   }
   int64_t elapsed = k_uptime_get() - t0;
-  if (elapsed < (int64_t)EPD_INSTALL_INFO_DISPLAY_MS) {
-    uint32_t remaining = (uint32_t)((int64_t)EPD_INSTALL_INFO_DISPLAY_MS - elapsed);
-    LOG_DBG("install dwell: %u ms remaining after overlap (%lld ms used)",
+  if (elapsed < (int64_t)EPD_DEVICE_STATUS_COMMISSION_MS) {
+    uint32_t remaining =
+        (uint32_t)((int64_t)EPD_DEVICE_STATUS_COMMISSION_MS - elapsed);
+    LOG_DBG("device_status dwell: %u ms remaining (%lld ms used)",
             (unsigned)remaining, (long long)elapsed);
     k_msleep((int32_t)remaining);
   } else {
-    LOG_DBG("install dwell: overlap %lld ms >= dwell %u ms; no extra sleep",
-            (long long)elapsed, (unsigned)EPD_INSTALL_INFO_DISPLAY_MS);
+    LOG_DBG("device_status dwell: overlap %lld ms >= %u ms",
+            (long long)elapsed, (unsigned)EPD_DEVICE_STATUS_COMMISSION_MS);
   }
 }
-#endif
 
-#if EPD_INSTALL_INFO_SCREEN
-/* Wrapper for smf_show_install_info_with_dwell overlap — runs the same
- * post-join sequence the non-install path does. */
 static void smf_joined_overlap_work(void) {
-
   counter_sync_run(LORA_COUNTER_SYNC_CONFIRMED);
   downlink_queue_housekeeping_state_snapshot();
-
   lora_schedule_time_sync_after_counter_burst(LORA_BURST_TAIL_JOIN_POST);
-
 }
-#endif
+#endif /* EPD_ENABLED */
 
 K_TIMER_DEFINE(mode_timeout_timer, mode_timeout_expiry, NULL);
 K_TIMER_DEFINE(reboot_timer, reboot_expiry, NULL);
@@ -349,13 +327,11 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
         }
 
-#if EPD_INSTALL_INFO_SCREEN
-        if (!install_info_shown_this_boot && boot_info_is_commission_boot()) {
-          /* Commissioning-class boot: show install screen first, run counter
-           * sync etc. while it dwells, then transition to last cleaned. */
-          install_info_shown_this_boot = true;
-          LOG_INF("smf install_scr cause=%s", boot_info_cause_str());
-          smf_show_install_info_with_dwell(smf_joined_overlap_work);
+#if EPD_ENABLED
+        if (!device_status_shown_this_boot && boot_info_is_commission_boot()) {
+          device_status_shown_this_boot = true;
+          LOG_INF("smf device_status cause=%s", boot_info_cause_str());
+          smf_show_device_status_with_dwell(smf_joined_overlap_work);
           display_show_last_cleaned_sync();
         } else
 #endif
@@ -374,16 +350,13 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         (void)k_work_submit(&smf_join_started_ui_work);
         LOG_DBG("LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
-#if EPD_INSTALL_INFO_SCREEN
-        if (!install_info_shown_this_boot && boot_info_is_commission_boot()) {
-          /* Commissioning boot, join failed: show install screen with WEAK
-           * link + the QR so the installer can still log the unit. Run on
-           * SMF thread (display sync API blocks on system workqueue). */
-          install_info_shown_this_boot = true;
-          LOG_INF("smf install_scr join_fail cause=%s",
+#if EPD_ENABLED
+        if (!device_status_shown_this_boot && boot_info_is_commission_boot()) {
+          device_status_shown_this_boot = true;
+          LOG_INF("smf device_status join_fail cause=%s",
                   boot_info_cause_str());
           rail_manager_request_3v3a();
-          smf_show_install_info_with_dwell(NULL);
+          smf_show_device_status_with_dwell(NULL);
           display_show_last_cleaned_sync();
           display_request_full_refresh();
           rail_manager_release_3v3a();
@@ -443,7 +416,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
         /* EPD immediately after LED/rail (sync flush; async used 5s RX delay). */
-        display_show_device_info_sync();
+        display_show_device_status_sync();
         LOG_INF("smf Staff->DevInfo t_ms=%u", DEVICE_INFO_TIMEOUT_MS);
         atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),
