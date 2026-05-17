@@ -129,7 +129,7 @@ static void smf_join_failed_ui_work_handler(struct k_work *work) {
   display_request_full_refresh();
 }
 
-#if EPD_ENABLED
+#if EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT
 static bool device_status_shown_this_boot;
 
 static void smf_show_device_status_with_dwell(void (*overlap_work)(void)) {
@@ -156,7 +156,7 @@ static void smf_joined_overlap_work(void) {
   downlink_queue_housekeeping_state_snapshot();
   lora_schedule_time_sync_after_counter_burst(LORA_BURST_TAIL_JOIN_POST);
 }
-#endif /* EPD_ENABLED */
+#endif /* EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT */
 
 K_TIMER_DEFINE(mode_timeout_timer, mode_timeout_expiry, NULL);
 K_TIMER_DEFINE(reboot_timer, reboot_expiry, NULL);
@@ -327,7 +327,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
         }
 
-#if EPD_ENABLED
+#if EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT
         if (!device_status_shown_this_boot && boot_info_is_commission_boot()) {
           device_status_shown_this_boot = true;
           LOG_INF("smf device_status cause=%s", boot_info_cause_str());
@@ -350,7 +350,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         (void)k_work_submit(&smf_join_started_ui_work);
         LOG_DBG("LoRa join started (orchestration visibility)");
       } else if (msg.ev_type == SMF_EVT_JOIN_CYCLE_FAILED) {
-#if EPD_ENABLED
+#if EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT
         if (!device_status_shown_this_boot && boot_info_is_commission_boot()) {
           device_status_shown_this_boot = true;
           LOG_INF("smf device_status join_fail cause=%s",

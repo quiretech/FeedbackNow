@@ -606,23 +606,35 @@
 #endif /* EPD_ENABLED */
 
 /* =============================================================================
- * Device status screen — join + link check + counters (staff + commission boot)
+ * Device status screen — join + link check + counters
  * =============================================================================
- * Shown after first JOIN / JOIN_FAIL on commissioning-class boots for
- * EPD_DEVICE_STATUS_COMMISSION_MS, and on staff 0+1+5 combo (DEVICE_INFO_TIMEOUT_MS).
- * Link tiers use post-join LinkCheckAns in lora_link_stats (no on-screen re-probe).
+ * Staff 0+1+5 always uses display_show_device_status_sync() when EPD_ENABLED.
+ *
+ * Commission boot auto-show (first JOIN / JOIN_FAIL on power-on / reset pin /
+ * deliberate reboot): set EPD_DEVICE_STATUS_COMMISSION_BOOT to 1. When 0, SMF
+ * goes straight to last-cleaned + counter sync (same as watchdog/brownout boot).
  */
+#ifndef EPD_DEVICE_STATUS_COMMISSION_BOOT
+#define EPD_DEVICE_STATUS_COMMISSION_BOOT 1
+#endif
+
+#if EPD_DEVICE_STATUS_COMMISSION_BOOT
 #define EPD_DEVICE_STATUS_COMMISSION_MS 15000
+#endif
+
+/* Link tiers use post-join LinkCheckAns in lora_link_stats (no on-screen re-probe). */
 /** Demod margin (dB) thresholds for 4-tier link label (lowercase on EPD). */
 #define EPD_LINK_MARGIN_EXCELLENT_DB 20
 #define EPD_LINK_MARGIN_GOOD_DB 10
 #define EPD_LINK_MARGIN_FAIR_DB 3
 /* Below FAIR threshold => weak */
 
-#define EPD_STATUS_LABEL_LINK "link"
-#define EPD_STATUS_LABEL_GATEWAYS "gateways"
-#define EPD_STATUS_LABEL_MARGIN "margin"
-#define EPD_STATUS_LABEL_STATUS "status"
+#define EPD_STATUS_LABEL_LINK "link:"
+#define EPD_STATUS_LABEL_GATEWAYS "gateway(s):"
+#define EPD_STATUS_LABEL_MARGIN "margin:"
+#define EPD_STATUS_GATEWAYS_EMPTY "gateway(s): --"
+#define EPD_STATUS_MARGIN_EMPTY "margin: --"
+#define EPD_STATUS_LABEL_STATUS "status:"
 #define EPD_STATUS_LINK_EXCELLENT "excellent"
 #define EPD_STATUS_LINK_GOOD "good"
 #define EPD_STATUS_LINK_FAIR "fair"

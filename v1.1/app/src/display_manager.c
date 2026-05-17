@@ -524,8 +524,8 @@
     lv_label_set_text(ds_link_ra, EPD_STATUS_VALUE_NONE);
 
     ds_metrics_row = epd_status_lr_row_create(ds_root, &ds_metrics_la, &ds_metrics_ra);
-    lv_label_set_text(ds_metrics_la, EPD_STATUS_LABEL_GATEWAYS);
-    lv_label_set_text(ds_metrics_ra, EPD_STATUS_LABEL_MARGIN);
+    lv_label_set_text(ds_metrics_la, EPD_STATUS_GATEWAYS_EMPTY);
+    lv_label_set_text(ds_metrics_ra, EPD_STATUS_MARGIN_EMPTY);
 
     ds_status_row = epd_status_lr_row_create(ds_root, &ds_status_la, &ds_status_ra);
     lv_label_set_text(ds_status_la, EPD_STATUS_LABEL_STATUS);
@@ -731,11 +731,10 @@
       if (ls.samples > 0) {
         (void)snprintf(metrics_la, sizeof(metrics_la), "%s %u",
                        EPD_STATUS_LABEL_GATEWAYS, (unsigned)ls.best_nb_gateways);
+        lv_label_set_text(ds_metrics_la, metrics_la);
       } else {
-        (void)snprintf(metrics_la, sizeof(metrics_la), "%s %s",
-                       EPD_STATUS_LABEL_GATEWAYS, EPD_STATUS_VALUE_NONE);
+        lv_label_set_text(ds_metrics_la, EPD_STATUS_GATEWAYS_EMPTY);
       }
-      lv_label_set_text(ds_metrics_la, metrics_la);
     }
     if (ds_metrics_ra != NULL) {
       if (ls.samples > 0 &&
@@ -743,11 +742,10 @@
         (void)snprintf(metrics_ra, sizeof(metrics_ra), "%s %d%s",
                        EPD_STATUS_LABEL_MARGIN, (int)ls.best_demod_margin,
                        EPD_STATUS_MARGIN_SUFFIX);
+        lv_label_set_text(ds_metrics_ra, metrics_ra);
       } else {
-        (void)snprintf(metrics_ra, sizeof(metrics_ra), "%s %s",
-                       EPD_STATUS_LABEL_MARGIN, EPD_STATUS_VALUE_NONE);
+        lv_label_set_text(ds_metrics_ra, EPD_STATUS_MARGIN_EMPTY);
       }
-      lv_label_set_text(ds_metrics_ra, metrics_ra);
     }
 
     LOG_INF("epd device_status %s %s m=%d gw=%u n=%u", device_status_link_tier(&ls),
