@@ -27,7 +27,12 @@ target_sources(app PRIVATE
   src/boot_info.c
   src/lora_app.c
   src/lora_link_stats.c
-  src/mapek_link.c
+  src/mapek/mapek_knowledge.c
+  src/mapek/mapek_mon.c
+  src/mapek/mapek_analyze.c
+  src/mapek/mapek_plan.c
+  src/mapek/mapek_execute.c
+  src/mapek/mapek_coordinator.c
   src/lora_thread.c
   src/devnonce_store.c
   src/join_state_store.c

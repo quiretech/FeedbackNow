@@ -93,6 +93,7 @@ static bool test_rtc(void);
 static bool test_button(void);
 static bool test_lora(void);
 static void print_test_summary(void);
+static void epd_show_button_test_prompt(void);
 static void epd_render_final_summary(void);
 static void led_blink_pattern(int count, int on_ms, int off_ms);
 static void shutdown_external_power(void);
@@ -481,14 +482,53 @@ static bool test_rtc(void) {
 #endif
 }
 
-/* Button Test: Track multiple button presses within a 10s window */
+/* QA button step: timing tuned for operator + debounced GPIO (BUTTON_DEBOUNCE_MS). */
+#define QA_BTN_COUNT 6
+#define QA_BTN_TIMEOUT_MS 15000
+#define QA_BTN_READY_BLINKS 2
+#define QA_BTN_READY_ON_MS 120
+#define QA_BTN_READY_OFF_MS 120
+#define QA_BTN_SETTLE_MS 350
+#define QA_BTN_ACK_ON_MS 160
+#define QA_BTN_EVENT_WAIT_MS 20
+
+static void qa_btn_drain_events(void) {
+  button_event_t evt;
+
+  while (buttons_get_event(&evt, K_NO_WAIT)) {
+  }
+}
+
+static void qa_btn_led_ack_poll(int64_t *ack_off_at) {
+  if (*ack_off_at != 0 && k_uptime_get() >= *ack_off_at) {
+    led_set(0, false);
+    *ack_off_at = 0;
+  }
+}
+
+static void qa_btn_led_ack_start(int64_t *ack_off_at) {
+  led_set(0, true);
+  *ack_off_at = k_uptime_get() + QA_BTN_ACK_ON_MS;
+}
+
+static void qa_btn_ready_blinks(void) {
+  for (int i = 0; i < QA_BTN_READY_BLINKS; i++) {
+    led_set(0, true);
+    k_msleep(QA_BTN_READY_ON_MS);
+    led_set(0, false);
+    if (i < QA_BTN_READY_BLINKS - 1) {
+      k_msleep(QA_BTN_READY_OFF_MS);
+    }
+  }
+}
+
+/* Button test: debounced press events, ready blinks, non-blocking ack LED. */
 static bool test_button(void) {
   LOG_INF(ANSI_BLUE "[TEST] Starting Multi-Button test..." ANSI_RESET);
 
-/* Define how many buttons you expect to be tested (e.g., 2 buttons) */
-#define EXPECTED_BUTTON_COUNT 6
   uint32_t buttons_pressed_mask = 0;
   int unique_buttons_found = 0;
+  int64_t ack_off_at = 0;
 
   int ret = buttons_init();
   if (ret != 0) {
@@ -505,81 +545,87 @@ static bool test_button(void) {
     return false;
   }
 
+  qa_btn_drain_events();
+
   LOG_INF(ANSI_YELLOW
-          "[TEST] Button: Tap each of buttons 0..%d once (any order), "
-          "15s max — LEDs blink on new button." ANSI_RESET,
-          EXPECTED_BUTTON_COUNT - 1);
+          "[TEST] Button: Two LED blinks = ready. Then tap 0..%d once each "
+          "(%d s)." ANSI_RESET,
+          QA_BTN_COUNT - 1, QA_BTN_TIMEOUT_MS / 1000);
+
+  qa_btn_ready_blinks();
+  k_msleep(QA_BTN_SETTLE_MS);
+  qa_btn_drain_events();
 
   int64_t start_time = k_uptime_get();
-  const int64_t timeout_ms = 15000;
-  uint32_t prev_mask = 0;
 
-  while (k_uptime_get() - start_time < timeout_ms) {
-    uint32_t held = buttons_get_held_mask();
-    uint32_t newly = held & ~prev_mask;
-    prev_mask = held;
+  while (k_uptime_get() - start_time < QA_BTN_TIMEOUT_MS) {
+    button_event_t evt;
+    qa_btn_led_ack_poll(&ack_off_at);
 
-    for (int b = 0; b < EXPECTED_BUTTON_COUNT; b++) {
-      if ((newly & BIT(b)) && !(buttons_pressed_mask & BIT(b))) {
-        buttons_pressed_mask |= BIT(b);
-        unique_buttons_found++;
-        LOG_INF("[TEST] Button: %d seen (%d/%d)", b, unique_buttons_found,
-                EXPECTED_BUTTON_COUNT);
-        led_set(0, true);
-        k_msleep(80);
-        led_set(0, false);
-      }
+    if (!buttons_get_event(&evt, K_MSEC(QA_BTN_EVENT_WAIT_MS))) {
+      continue;
+    }
+    if (evt.type != BUTTON_EVENT_PRESS || evt.button_id >= QA_BTN_COUNT) {
+      continue;
+    }
+    if (buttons_pressed_mask & BIT(evt.button_id)) {
+      continue;
     }
 
-    if (unique_buttons_found >= EXPECTED_BUTTON_COUNT) {
+    buttons_pressed_mask |= BIT(evt.button_id);
+    unique_buttons_found++;
+    LOG_INF("[TEST] Button: %u seen (%d/%d)", evt.button_id,
+            unique_buttons_found, QA_BTN_COUNT);
+    qa_btn_led_ack_start(&ack_off_at);
+
+    if (unique_buttons_found >= QA_BTN_COUNT) {
       break;
     }
-    k_msleep(25);
   }
 
-  if (unique_buttons_found >= EXPECTED_BUTTON_COUNT) {
-    /* Store button detail as X/Y count */
+  qa_btn_led_ack_poll(&ack_off_at);
+  led_set(0, false);
+
+  if (unique_buttons_found >= QA_BTN_COUNT) {
     snprintf(test_results[TEST_BUTTON].detail,
              sizeof(test_results[TEST_BUTTON].detail), "%d/%d",
-             unique_buttons_found, EXPECTED_BUTTON_COUNT);
+             unique_buttons_found, QA_BTN_COUNT);
 
     LOG_INF(ANSI_GREEN
             "[TEST] Button: ✓ PASS - All %d buttons verified" ANSI_RESET,
-            EXPECTED_BUTTON_COUNT);
+            QA_BTN_COUNT);
     return true;
-  } else {
-    /* Build list of missing button IDs for EPD summary detail */
-    char missing[16] = {0};
-    bool first = true;
-
-    for (int i = 0; i < EXPECTED_BUTTON_COUNT; i++) {
-      if (!(buttons_pressed_mask & BIT(i))) {
-        int written = snprintf(&missing[strlen(missing)],
-                               sizeof(missing) - strlen(missing),
-                               first ? "%d" : ",%d", i);
-        if (written <= 0 ||
-            (size_t)written >= sizeof(missing) - strlen(missing)) {
-          break;
-        }
-        first = false;
-      }
-    }
-
-    if (missing[0] != '\0') {
-      snprintf(test_results[TEST_BUTTON].detail,
-               sizeof(test_results[TEST_BUTTON].detail), "%d/%d X:%s",
-               unique_buttons_found, EXPECTED_BUTTON_COUNT, missing);
-    } else {
-      snprintf(test_results[TEST_BUTTON].detail,
-               sizeof(test_results[TEST_BUTTON].detail), "%d/%d",
-               unique_buttons_found, EXPECTED_BUTTON_COUNT);
-    }
-
-    LOG_ERR(ANSI_RED
-            "[TEST] Button: ✗ FAIL - Only %d/%d buttons pressed" ANSI_RESET,
-            unique_buttons_found, EXPECTED_BUTTON_COUNT);
-    return false;
   }
+
+  char missing[16] = {0};
+  bool first = true;
+
+  for (int i = 0; i < QA_BTN_COUNT; i++) {
+    if (!(buttons_pressed_mask & BIT(i))) {
+      int written = snprintf(&missing[strlen(missing)],
+                             sizeof(missing) - strlen(missing),
+                             first ? "%d" : ",%d", i);
+      if (written <= 0 || (size_t)written >= sizeof(missing) - strlen(missing)) {
+        break;
+      }
+      first = false;
+    }
+  }
+
+  if (missing[0] != '\0') {
+    snprintf(test_results[TEST_BUTTON].detail,
+             sizeof(test_results[TEST_BUTTON].detail), "%d/%d X:%s",
+             unique_buttons_found, QA_BTN_COUNT, missing);
+  } else {
+    snprintf(test_results[TEST_BUTTON].detail,
+             sizeof(test_results[TEST_BUTTON].detail), "%d/%d",
+             unique_buttons_found, QA_BTN_COUNT);
+  }
+
+  LOG_ERR(ANSI_RED
+          "[TEST] Button: ✗ FAIL - Only %d/%d buttons pressed" ANSI_RESET,
+          unique_buttons_found, QA_BTN_COUNT);
+  return false;
 }
 
 /* LoRa QA test against beacon
@@ -793,6 +839,50 @@ static void epd_summary_style_rule(lv_obj_t *o) {
   lv_obj_clear_flag(o, LV_OBJ_FLAG_SCROLLABLE);
 }
 #endif
+
+static void epd_show_button_test_prompt(void) {
+#if EPD_ENABLED
+  if (lv_display_get_default() == NULL) {
+    return;
+  }
+
+  lv_obj_t *screen = lv_obj_create(NULL);
+  lv_obj_set_style_bg_color(screen, lv_color_white(), LV_PART_MAIN);
+  lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, LV_PART_MAIN);
+  lv_obj_set_style_pad_all(screen, 0, LV_PART_MAIN);
+
+  lv_obj_t *title = lv_label_create(screen);
+  lv_label_set_text(title, "Button test");
+  lv_obj_set_style_text_font(title, &roboto_36, LV_PART_MAIN);
+  lv_obj_set_style_text_color(title, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, -36);
+
+  lv_obj_t *prompt = lv_label_create(screen);
+  lv_label_set_text(prompt, "Test buttons now");
+  lv_obj_set_style_text_font(prompt, &roboto_28, LV_PART_MAIN);
+  lv_obj_set_style_text_color(prompt, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(prompt, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_align_to(prompt, title, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
+
+  lv_obj_t *hint = lv_label_create(screen);
+  lv_label_set_text(hint, "Wait for 2 LED blinks,\nthen tap 0..5 once");
+  lv_obj_set_style_text_font(hint, &roboto_20, LV_PART_MAIN);
+  lv_obj_set_style_text_color(hint, lv_color_black(), LV_PART_MAIN);
+  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_align_to(hint, prompt, LV_ALIGN_OUT_BOTTOM_MID, 0, 14);
+
+  lv_screen_load(screen);
+  lv_obj_update_layout(screen);
+
+  for (int i = 0; i < 24; i++) {
+    lv_task_handler();
+    k_msleep(40);
+  }
+
+  LOG_INF("EPD: button test prompt shown");
+#endif
+}
 
 static void epd_render_final_summary(void) {
 #if EPD_ENABLED
@@ -1170,8 +1260,7 @@ int main(void) {
   LOG_INF("");
   k_msleep(100);
 
-  /* LED cue before interactive button test */
-  led_blink_pattern(3, 100, 100);
+  epd_show_button_test_prompt();
 
   qa_step_banner(step++, "Buttons 0..5 (tap each once)");
   test_results[TEST_BUTTON].passed = test_button();

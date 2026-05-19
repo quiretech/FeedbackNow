@@ -512,8 +512,8 @@
     (void)epd_hline_create(ds_root);
 
     (void)epd_status_lr_row_create(ds_root, &ds_unit_la, &ds_deveui_ra);
-    lv_obj_set_style_text_font(ds_unit_la, &roboto_bold_36, LV_PART_MAIN);
-    lv_obj_set_style_text_font(ds_deveui_ra, &roboto_bold_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_unit_la, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_deveui_ra, &roboto_36, LV_PART_MAIN);
     lv_label_set_text(ds_unit_la, "unit");
     lv_label_set_text(ds_deveui_ra, "---");
 

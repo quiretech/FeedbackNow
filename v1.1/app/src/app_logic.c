@@ -6,6 +6,7 @@
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
+#include "mapek_coordinator.h"
 #include "payload_gen.h"
 #include "rtc.h"
 #include "sys_config.h"
@@ -76,8 +77,8 @@ void app_logic_public_vote(uint8_t button_id) {
   msg.len = PAYLOAD_LEN_BYTES;
   memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
 
-  /* Local UX + counter already done; only queue uplink when joined. */
-  if (lora_is_joined()) {
+  /* EEPROM counter already incremented in payload_gen; gate live uplink on MAPE-K. */
+  if (lora_is_joined() && mapek_uplink_allowed()) {
     ret = lora_put_event(&msg, K_NO_WAIT);
     if (ret != 0) {
       LOG_ERR("Queue button uplink failed: %d", ret);

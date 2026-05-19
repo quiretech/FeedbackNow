@@ -23,15 +23,15 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0044"
+#define DEVICE_UNIT_ID_STRING "UNIT-0045"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
  * or full run). rtc.c uses DEVICE_PROVISION_UNIX_UTC when != 0 to program the RTC on
  * boot (see RTC_SET_TIME_ON_BOOT). If 0, RTC falls back to RTC_SET_YEAR/... below. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1778982738ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-17T01:52:18Z"
+#define DEVICE_PROVISION_UNIX_UTC 1779046838ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-05-17T19:40:38Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -50,7 +50,7 @@
 /** Desk test: fast MAPE-K stale/probe/session-lost + 1 min rejoin backoff.
  * Set to 1, build, flash, run MAPE-K tests. Production release: must be 0. */
 #ifndef MAPEK_LAB_FAST_TEST
-#define MAPEK_LAB_FAST_TEST 0
+#define MAPEK_LAB_FAST_TEST 1
 #endif
 
 #define LORA_MAX_PAYLOAD_SIZE 11
@@ -116,63 +116,12 @@
  *  real airtime burst. */
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
 #define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
-/** MAPE-K link Monitor: EWMA update uses ewma += ((sample<<8)-ewma)>>MAPEK_LINK_EWMA_SHIFT
- * (approx. alpha = 1/2^shift). 3 => ~1/8 per sample; increase for slower smoothing. */
+/** MAPE-K Monitor: DL RSSI/SNR EWMA — ewma += ((sample<<8)-ewma)>>MAPEK_LINK_EWMA_SHIFT.
+ * Timeouts, HB cadence, hysteresis, urgency: app/include/mapek/mapek_config.h */
 #ifndef MAPEK_LINK_EWMA_SHIFT
 #define MAPEK_LINK_EWMA_SHIFT 3U
 #endif
-#if MAPEK_LAB_FAST_TEST
-/** MAPE-K lab profile (~8–10 min Test A: STALE → 3 Plan LC → session lost → rejoin). */
-#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 0U
-#define MAPEK_PROBE_ANS_TIMEOUT_MS (30U * 1000U)
-#define MAPEK_LNS_HEARD_STALE_MS (2U * 60U * 1000U)
-#define MAPEK_PLAN_PROBE_COOLDOWN_MS (45U * 1000U)
-#define MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS (90U * 1000U)
-#define MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN 3U
-#define MAPEK_SESSION_LOST_ENABLE 1
-#define MAPEK_SESSION_LOST_PROBE_FAILS 3U
-#define MAPEK_PLAN_LINKCHECK_PERIOD_MS 0U
-#else
-/** Unused: MAPE-K logs one event line only (no periodic timer). */
-#ifndef MAPEK_LINK_MONITOR_LOG_INTERVAL_MS
-#define MAPEK_LINK_MONITOR_LOG_INTERVAL_MS 0U
-#endif
-/** Analyze: after probe TX, wait this long for heard advance before NO_ANSWER. */
-#ifndef MAPEK_PROBE_ANS_TIMEOUT_MS
-#define MAPEK_PROBE_ANS_TIMEOUT_MS (2U * 60U * 1000U)
-#endif
-/** Analyze/Plan: no DL/LinkCheckAns refresh → STALE; Plan queues LinkCheck. */
-#ifndef MAPEK_LNS_HEARD_STALE_MS
-#define MAPEK_LNS_HEARD_STALE_MS (6U * 60U * 60U * 1000U)
-#endif
-/** Plan: min ms between Plan-driven LinkCheck probes (healthy / low fail count). */
-#ifndef MAPEK_PLAN_PROBE_COOLDOWN_MS
-#define MAPEK_PLAN_PROBE_COOLDOWN_MS (30U * 60U * 1000U)
-#endif
-/** Plan: cooldown after MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN probe failures. */
-#ifndef MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS
-#define MAPEK_PLAN_PROBE_COOLDOWN_FAIL_MS (2U * 60U * 60U * 1000U)
-#endif
-/** Plan: use long cooldown when probe_fail_count >= this. */
-#ifndef MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN
-#define MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN 3U
-#endif
-/** Execute: after this many Plan probe failures while STALE/DEGRADED, request
- * LoRa session lost (OTAA rejoin after LORA_JOIN_BACKOFF_HOURS). */
-#ifndef MAPEK_SESSION_LOST_ENABLE
-#define MAPEK_SESSION_LOST_ENABLE 1
-#endif
-#ifndef MAPEK_SESSION_LOST_PROBE_FAILS
-#define MAPEK_SESSION_LOST_PROBE_FAILS MAPEK_PLAN_FAIL_COUNT_LONG_COOLDOWN
-#endif
-#ifndef MAPEK_PLAN_LINKCHECK_PERIOD_MS
-#define MAPEK_PLAN_LINKCHECK_PERIOD_MS 0U
-#endif
-#endif /* MAPEK_LAB_FAST_TEST */
-/** MAPE-K Analyze: EWMA on degradation score 0=best 255=worst (separate from Monitor path EWMA). */
-#ifndef MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT
-#define MAPEK_ANALYZE_SCORE_SMOOTH_SHIFT 4U
-#endif
+/** LinkCheckAns margin tiers (install UI / stats; not used by MAPE-K analyze). */
 #ifndef MAPEK_RF_MARGIN_EXCELLENT_MIN
 #define MAPEK_RF_MARGIN_EXCELLENT_MIN 22U
 #endif

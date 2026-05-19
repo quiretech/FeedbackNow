@@ -6,7 +6,8 @@
 #include "battery_adc.h"
 #include "lora_app.h"
 #include "lora_link_stats.h"
-#include "mapek_link.h"
+#include "eui_keys.h"
+#include "mapek_coordinator.h"
 #include "smf_system_mode.h"
 #include "time_sync.h"
 
@@ -180,7 +181,7 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
     if (time_upd) {
       mf |= MAPEK_DL_FEED_LORAWAN_TIME_UPD;
     }
-    mapek_link_feed_dl(rssi, snr, mf);
+    mapek_feed_dl(rssi, snr, mf);
     /* MAC-only Rx (dwell / join): very frequent unless pending or clock sync */
     if (pend != 0 || time_upd) {
       LOG_INF("DL MAC p=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port, pend,
@@ -205,7 +206,7 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
   if (time_upd) {
     mf |= MAPEK_DL_FEED_LORAWAN_TIME_UPD;
   }
-  mapek_link_feed_dl(rssi, snr, mf);
+  mapek_feed_dl(rssi, snr, mf);
 
   /* Post to SMF for command dispatch */
   if (smf_post_downlink(port, len, frmpayload) != 0) {
@@ -230,7 +231,9 @@ void lora_app_dr_changed(enum lorawan_datarate dr) {
 int lora_app_init(void) {
   int ret;
 
-  mapek_link_init();
+  static const uint8_t mapek_dev_eui[] = LORAWAN_DEV_EUI;
+  mapek_init(mapek_dev_eui);
+  mapek_start();
 
   const struct device *lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
   if (!device_is_ready(lora_dev)) {

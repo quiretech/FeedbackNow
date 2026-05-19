@@ -5,7 +5,7 @@
 #include "log_fmt.h"
 #include "lora_app.h"
 #include "lora_link_stats.h"
-#include "mapek_link.h"
+#include "mapek_coordinator.h"
 #include "rail_manager.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
@@ -92,7 +92,7 @@ static void lora_session_lost_teardown(const char *reason) {
   }
   LOG_WRN("LoRa session lost (%s)", reason);
   atomic_set(&lora_joined_flag, 0);
-  mapek_link_feed_join(false);
+  mapek_feed_join(false);
   time_sync_abort_on_link_lost();
   lora_reset_dr_time_sync_retry();
   (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
@@ -196,9 +196,8 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
  */
 static bool lora_mac_probe_after_join(void) {
   for (int i = 0; i < LORA_POST_JOIN_MAC_PROBE_RETRIES; i++) {
-    mapek_link_feed_probe_begin((uint8_t)MAPEK_PROBE_SOURCE_JOIN);
     int sret = lorawan_request_link_check(true);
-    mapek_link_feed_probe_tx(sret);
+    mapek_feed_heartbeat_tx(sret);
     if (sret == 0) {
       last_uplink_ms = (uint32_t)k_uptime_get();
       LOG_DBG("post-join probe OK (attempt %d)", i + 1);
@@ -305,7 +304,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       LOG_INF("LoRaWAN joined");
       k_timer_stop(&join_after_backoff_timer);
       atomic_set(&lora_joined_flag, 1);
-      mapek_link_feed_join(true);
+      mapek_feed_join(true);
       lora_on_join_success();
       k_sem_give(&lora_join_sem);
 
@@ -475,16 +474,13 @@ static void lora_thread_fn(void *a, void *b, void *c) {
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
           lora_pace_uplink_spacing();
           bool force = (cmd == LORA_CMD_LINK_CHECK_FORCE);
-          mapek_link_feed_probe_begin((uint8_t)MAPEK_PROBE_SOURCE_OTHER);
           int lc_ret = lorawan_request_link_check(force);
-          mapek_link_feed_probe_tx(lc_ret);
+          mapek_feed_heartbeat_tx(lc_ret);
         }
       }
       k_poll_event_init(ev_cmdq, K_POLL_TYPE_MSGQ_DATA_AVAILABLE,
                         K_POLL_MODE_NOTIFY_ONLY, &lora_cmdq);
     }
-
-    mapek_link_step();
   }
 }
 
