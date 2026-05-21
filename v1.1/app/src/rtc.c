@@ -5,6 +5,7 @@
  * If no RTC exists, rtc_app_init()/rtc_get_epoch_seconds() return -ENODEV.
  */
 
+#include "onboarding_config.h"
 #include "rtc.h"
 #include "sys_config.h"
 
@@ -114,31 +115,25 @@ int rtc_app_init(void) {
 #if RTC_SET_TIME_ON_BOOT
   struct rtc_time cur = {0};
   int ret = rtc_get_time(rtc_dev, &cur);
-  if (RTC_FORCE_SET_TIME_ON_BOOT) {
-    LOG_WRN("RTC_FORCE_SET_TIME_ON_BOOT=1; overwriting RTC time from config");
-    ret = rtc_set_time_from_config();
-    if (ret != 0) {
-      LOG_ERR("Failed to set RTC time: %d", ret);
-      return ret;
-    }
-  } else if (ret != 0) {
-    LOG_WRN("RTC read failed (%d); setting time from config", ret);
-    ret = rtc_set_time_from_config();
-    if (ret != 0) {
-      LOG_ERR("Failed to set RTC time: %d", ret);
-      return ret;
-    }
-  } else if (rtc_should_set_time(&cur)) {
-    LOG_WRN("RTC time looks uninitialized; setting time from config");
-    ret = rtc_set_time_from_config();
-    if (ret != 0) {
-      LOG_ERR("Failed to set RTC time: %d", ret);
-      return ret;
-    }
-  } else {
-    LOG_INF("RTC already initialized (%04d-%02d-%02d %02d:%02d:%02d)",
+  const bool rtc_valid = (ret == 0) && !rtc_should_set_time(&cur);
+
+  if (RTC_PRESERVE_EXISTING_ON_BOOT && rtc_valid) {
+    LOG_INF("RTC preserved (%04d-%02d-%02d %02d:%02d:%02d)",
             cur.tm_year + 1900, cur.tm_mon + 1, cur.tm_mday, cur.tm_hour,
             cur.tm_min, cur.tm_sec);
+  } else {
+    if (ret != 0) {
+      LOG_WRN("RTC read failed (%d); applying provision time", ret);
+    } else if (rtc_should_set_time(&cur)) {
+      LOG_WRN("RTC uninitialized; applying provision time");
+    } else {
+      LOG_INF("Applying provision time from sys_config");
+    }
+    ret = rtc_set_time_from_config();
+    if (ret != 0) {
+      LOG_ERR("Failed to set RTC time: %d", ret);
+      return ret;
+    }
   }
 #endif
 

@@ -16,18 +16,21 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 
-#include <zephyr/device.h>
-#include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(nfc_svc, CONFIG_LOG_DEFAULT_LEVEL);
+
+#if NFC_ENABLED
+
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
 #include <zephyr/sys/atomic.h>
 
 #include "pn5180.h"
 
-LOG_MODULE_REGISTER(nfc_svc, CONFIG_LOG_DEFAULT_LEVEL);
-
 #if !DT_NODE_EXISTS(DT_NODELABEL(pn5180))
-#error "pn5180 node not defined in devicetree"
+#error "pn5180 node not defined in devicetree (FLEXBOX_PLUS / NFC_ENABLED builds)"
 #endif
 
 #define NFC_WORKER_PRIORITY 7
@@ -255,3 +258,39 @@ void nfc_scan_start(uint8_t intent, uint8_t button_id) {
 void nfc_scan_cancel(void) {
   atomic_set(&cancel_requested_atomic, 1);
 }
+
+#else /* !NFC_ENABLED — FLEXBOX: no PN5180 on board */
+
+static K_SEM_DEFINE(nfc_ready_sem, 1, 1);
+
+int nfc_service_init(void) {
+  LOG_INF("NFC disabled (DEVICE_HW_VARIANT FLEXBOX)");
+  return 0;
+}
+
+int nfc_service_wait_until_ready(k_timeout_t timeout) {
+  ARG_UNUSED(timeout);
+  return 0;
+}
+
+void nfc_scan_start(uint8_t intent, uint8_t button_id) {
+  ARG_UNUSED(intent);
+  ARG_UNUSED(button_id);
+}
+
+void nfc_scan_cancel(void) {
+}
+
+static void nfc_worker_disabled(void *a, void *b, void *c) {
+  ARG_UNUSED(a);
+  ARG_UNUSED(b);
+  ARG_UNUSED(c);
+  for (;;) {
+    k_sleep(K_FOREVER);
+  }
+}
+
+K_THREAD_DEFINE(nfc_worker_id, 256, nfc_worker_disabled, NULL, NULL, NULL, 7, 0,
+                -1);
+
+#endif /* NFC_ENABLED */

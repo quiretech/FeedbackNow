@@ -182,9 +182,13 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
       uint32_t epoch =
           ((uint32_t)frmpayload[1] << 24) | ((uint32_t)frmpayload[2] << 16) |
           ((uint32_t)frmpayload[3] << 8) | (uint32_t)frmpayload[4];
+      if (last_cleaned_store_set(epoch) != 0) {
+        LOG_WRN("cmd 0x%02X last_cleaned EEPROM write failed epoch=%u",
+                (unsigned)cmd, (unsigned)epoch);
+      }
       display_set_pending_last_cleaned_and_apply(epoch);
-      LOG_INF("cmd 0x%02X EPD update epoch=%u", (unsigned)cmd,
-              (unsigned)epoch);
+      LOG_INF("cmd 0x%02X EPD update epoch=%u (EEPROM + display)",
+              (unsigned)cmd, (unsigned)epoch);
     } else {
       LOG_WRN("cmd 0x%02X EPD update: len %u < 5", (unsigned)cmd,
               (unsigned)len);

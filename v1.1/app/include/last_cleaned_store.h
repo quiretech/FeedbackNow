@@ -1,8 +1,9 @@
 /**
  * Last cleaned display store (EEPROM).
  * Holds the epoch timestamp shown on the EPD "last cleaned" screen.
- * Written by: NFC check-out (RTC value), downlink 0x01 when applied.
- * RTC remains the gold standard for uplinks; this store is display-only.
+ * Written by: NFC check-out (RTC value), downlink 0x01 (immediate + EPD job).
+ * RTC remains the gold standard for uplinks; this store backs EPD and uplink
+ * snapshot 0x13 last_cleaned field (replaces backend-only NFC time updates).
  */
 #ifndef LAST_CLEANED_STORE_H
 #define LAST_CLEANED_STORE_H

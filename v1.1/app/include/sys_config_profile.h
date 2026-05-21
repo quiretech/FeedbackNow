@@ -1,0 +1,52 @@
+#ifndef SYS_CONFIG_PROFILE_H
+#define SYS_CONFIG_PROFILE_H
+
+/*
+ * Operational profile — change SYS_CONFIG_PROFILE to switch coupled behavior.
+ *
+ * PRODUCTION : field units (preserve RTC, daily HK jitter, 1 h join backoff).
+ * DESK       : bench flash / provision (overwrite RTC from onboarding stamp).
+ * LAB        : MAPE-K desk tests (fast HK, 1 min join backoff, overwrite RTC).
+ *
+ * Before release: SYS_CONFIG_PROFILE_PRODUCTION and MAPEK_LAB_FAST_TEST path off.
+ */
+
+#define SYS_CONFIG_PROFILE_PRODUCTION 0
+#define SYS_CONFIG_PROFILE_DESK       1
+#define SYS_CONFIG_PROFILE_LAB        2
+
+/** Active profile — set exactly one of the SYS_CONFIG_PROFILE_* values above. */
+#ifndef SYS_CONFIG_PROFILE
+#define SYS_CONFIG_PROFILE SYS_CONFIG_PROFILE_DESK
+#endif
+
+#if SYS_CONFIG_PROFILE == SYS_CONFIG_PROFILE_PRODUCTION
+
+#define MAPEK_LAB_FAST_TEST 1
+#define RTC_PRESERVE_EXISTING_ON_BOOT 0
+#define SYS_CONFIG_EEPROM_PROBE_LOG 0
+#define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT 0
+
+#elif SYS_CONFIG_PROFILE == SYS_CONFIG_PROFILE_DESK
+
+#define MAPEK_LAB_FAST_TEST 0
+#define RTC_PRESERVE_EXISTING_ON_BOOT 0
+#define SYS_CONFIG_EEPROM_PROBE_LOG 0
+#define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT 0
+
+#else /* SYS_CONFIG_PROFILE_PRODUCTION */
+
+#define MAPEK_LAB_FAST_TEST 0
+#define RTC_PRESERVE_EXISTING_ON_BOOT 1
+#define SYS_CONFIG_EEPROM_PROBE_LOG 0
+#define EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT 0
+#define EEPROM_JOIN_STATE_CLEAR_ON_BOOT 0
+
+#endif
+
+#endif /* SYS_CONFIG_PROFILE_H */

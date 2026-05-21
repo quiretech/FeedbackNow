@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT-0
 #
 # Repurposed to read onboarding/flexbox_euis/eui_registry.csv (asset_id, dev_eui, join_eui, app_key,
-# optional name_prefix / tag_client / tag_location / hw_profile for AWS naming and tags) and register all devices
+# optional name_prefix / tag_client / decal_type / hw_profile for AWS naming and tags) and register all devices
 # with AWS IoT Core for LoRaWAN.
 #
 # Usage:
@@ -29,7 +29,7 @@ EU868_CSV = _REGISTRY_DIR / "eui_registry_EU868.csv"
 
 # AWS IoT Wireless resource tag: stable key; CSV column `hw_profile` supplies value.
 _FLEXBOX_HW_PROFILE_TAG_KEY = "Variant"
-# Values written by gen_euis.py from EPD_ENABLED; edit CSV only if correcting legacy rows.
+# Values written by gen_euis.py from DEVICE_HW_VARIANT in onboarding_config.h.
 _VALID_HW_PROFILES = frozenset({"FLEXBOX_PLUS", "FLEXBOX"})
 # Older gen_euis rows before product rename
 _LEGACY_HW_PROFILE_ALIASES = {"EPD_NFC": "FLEXBOX_PLUS", "NFC_BUTTONS": "FLEXBOX"}
@@ -82,7 +82,7 @@ def wireless_device_tags(row: dict) -> list[dict[str, str]]:
     AWS CreateWirelessDevice Tags (list of {Key, Value} dicts).
 
     Always includes Variant from CSV `hw_profile` (gen_euis: FLEXBOX_PLUS | FLEXBOX).
-    Optionally Client / Location from tag_client / tag_location when non-blank.
+    Optionally Client / Decal from tag_client / decal_type when non-blank.
     """
     tags: list[dict[str, str]] = []
     prof = (row.get("hw_profile") or "").strip()
@@ -118,12 +118,12 @@ def wireless_device_tags(row: dict) -> list[dict[str, str]]:
                 "Value": _truncate(client, _AWS_TAG_VALUE_MAX),
             }
         )
-    loc = (row.get("tag_location") or "").strip()
-    if loc:
+    decal = (row.get("decal_type") or row.get("tag_location") or "").strip()
+    if decal:
         tags.append(
             {
-                "Key": _truncate("Location", _AWS_TAG_KEY_MAX),
-                "Value": _truncate(loc, _AWS_TAG_VALUE_MAX),
+                "Key": _truncate("Decal", _AWS_TAG_KEY_MAX),
+                "Value": _truncate(decal, _AWS_TAG_VALUE_MAX),
             }
         )
     return tags
@@ -149,7 +149,9 @@ def load_eui_registry(csv_path: Path) -> list[dict]:
                         "app_key": app_key,
                         "name_prefix": (r.get("name_prefix") or "").strip(),
                         "tag_client": (r.get("tag_client") or "").strip(),
-                        "tag_location": (r.get("tag_location") or "").strip(),
+                        "decal_type": (
+                            (r.get("decal_type") or r.get("tag_location") or "").strip()
+                        ),
                         "hw_profile": (r.get("hw_profile") or "").strip(),
                     })
                 except Exception as e:
@@ -219,7 +221,7 @@ def register_wireless_device(
     app_key: str,
     name_prefix: str,
     tag_client: str,
-    tag_location: str,
+    decal_type: str,
     hw_profile: str,
     device_profile_id: str,
     service_profile_id: str,
@@ -229,7 +231,7 @@ def register_wireless_device(
     row = {
         "asset_id": asset_id,
         "tag_client": tag_client,
-        "tag_location": tag_location,
+        "decal_type": decal_type,
         "hw_profile": hw_profile,
     }
     display_name = wireless_device_name(asset_id, dev_eui, name_prefix, tag_client)
@@ -271,7 +273,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Register all devices from eui_registry.csv with AWS IoT Core for LoRaWAN. "
-            "Optional CSV: tag_client / tag_location (tags; client also controls device Name). "
+            "Optional CSV: tag_client / decal_type (AWS tags Client / Decal; client also controls device Name). "
             "Name = asset_id if name_prefix and tag_client are both empty; else (name_prefix or tag_client)-asset_id "
             "(hyphen before unit; name_prefix wins when both set). "
             "hw_profile (FLEXBOX_PLUS | FLEXBOX from gen_euis — always tag Variant)."
@@ -349,7 +351,7 @@ def main() -> int:
             app_key=r["app_key"],
             name_prefix=r.get("name_prefix") or "",
             tag_client=r.get("tag_client") or "",
-            tag_location=r.get("tag_location") or "",
+            decal_type=r.get("decal_type") or "",
             hw_profile=r.get("hw_profile") or "",
             device_profile_id=args.device_profile_id.strip(),
             service_profile_id=args.service_profile_id.strip(),

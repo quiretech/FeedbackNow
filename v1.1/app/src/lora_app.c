@@ -9,12 +9,13 @@
 #include "eui_keys.h"
 #include "mapek_coordinator.h"
 #include "smf_system_mode.h"
+#include "sys_config.h"
 #include "time_sync.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 
-// Ensure proper alignment for the message queue
-K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE, 4);
+K_MSGQ_DEFINE(lora_msgq, sizeof(lora_uplink_msg_t), LORA_MSGQ_SIZE,
+              LORA_MESSAGE_ALIGNMENT);
 
 /* Command queue: SMF (or bootstrap) posts JOIN/TIME_SYNC; LoRa thread consumes
  * only. */

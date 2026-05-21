@@ -1,7 +1,7 @@
 /**
- * NFC service: PN5180 ISO15693 scan for Staff check-in/out/vote.
- * SMF requests scan via nfc_scan_start(); worker runs in dedicated thread,
- * posts one SMF_EVT_NFC_RESULT (ok or timeout). SMF owns rail request/release.
+ * NFC service: PN5180 ISO15693 scan for Staff check-in/out/vote (FLEXBOX_PLUS only).
+ * When NFC_ENABLED=0 (DEVICE_HW_VARIANT FLEXBOX), all APIs are no-ops.
+ * SMF requests scan via nfc_scan_start(); worker posts SMF_EVT_NFC_RESULT.
  */
 #ifndef NFC_SERVICE_H
 #define NFC_SERVICE_H

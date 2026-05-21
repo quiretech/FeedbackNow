@@ -2,7 +2,7 @@
 
 ## Layout
 
-- **Headers:** `include/` (single place for `.h` and `sys_config.h`)
+- **Headers:** `include/` — `sys_config.h` (firmware tunables), `onboarding_config.h` (unit/registry, gen_euis.py), `sys_config_profile.h` (PRODUCTION/DESK/LAB)
 - **Sources:** `src/` (`.c` only)
 
 ## Build and flash
@@ -20,20 +20,20 @@ Serial console: 115200 8N1.
 
 - **Path:** Real buttons only. Input → SMF → app logic; no demo/pseudo simulation.
 - **Logging:** Default log level is INFO. Mode transitions (e.g. Normal → Staff, Staff → Normal) and errors are at INFO; per-event and combo details are at DBG.
-- **EEPROM probe:** At boot, one line "EEPROM probe OK" unless `SYS_CONFIG_EEPROM_PROBE_LOG=1` in `include/sys_config.h` (then hex dump is logged).
+- **EEPROM probe:** At boot, one line "EEPROM probe OK" unless `SYS_CONFIG_EEPROM_PROBE_LOG=1` (set in `sys_config_profile.h` for LAB/DESK/PRODUCTION).
 
 ## Bring-up / debug
 
 - **Verbose Input and SMF:** In `prj.conf` set `CONFIG_LOG_DEFAULT_LEVEL_DBG=4` (or use module-level override) to see all `[Input]` and `[SMF]` traces.
-- **EEPROM hex at boot:** Set `SYS_CONFIG_EEPROM_PROBE_LOG 1` in `include/sys_config.h`.
+- **EEPROM hex at boot:** Set `SYS_CONFIG_EEPROM_PROBE_LOG 1` in `sys_config_profile.h` (or override in a profile block).
 
-## Compile-time flags (sys_config.h)
+## Config headers
 
-| Flag | Effect |
-|------|--------|
-| `EEPROM_COUNTERS_FACTORY_RESET_ON_BOOT` | 1 = wipe button counters on next boot, then reboot (one-shot). |
-| `EEPROM_DEVNONCE_FACTORY_RESET_ON_BOOT` | 1 = reinit DevNonce store on next boot, then reboot (one-shot). |
-| `EEPROM_JOIN_STATE_CLEAR_ON_BOOT` | 1 = behave as first boot (no auto-join; wait for Staff+0+1+2). Use for testing. |
-| `SYS_CONFIG_EEPROM_PROBE_LOG` | 1 = log EEPROM probe hex dump at boot. |
+| File | Purpose |
+|------|---------|
+| `sys_config_profile.h` | **One knob:** `SYS_CONFIG_PROFILE` → PRODUCTION, DESK, or LAB (RTC preserve, MAPE-K fast test, EEPROM test flags). |
+| `onboarding_config.h` | Unit id, provision UTC, `DEVICE_HW_VARIANT` (→ `EPD_ENABLED`), registry strings. |
+| `sys_config.h` | LoRa, buttons, LED, NFC, RTC, thread sizes, versions. |
+| `eeprom_layout.h` | Fixed EEPROM offsets (do not change in the field). |
 
-All other tunables (timeouts, combo holds, LED timings, etc.) are in `include/sys_config.h` with section comments.
+Factory-reset-on-boot flags are coupled in `sys_config_profile.h` per profile (default 0 for all profiles today).

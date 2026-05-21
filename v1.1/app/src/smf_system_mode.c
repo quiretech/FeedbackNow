@@ -284,10 +284,12 @@ static void smf_thread_fn(void *a, void *b, void *c) {
     if (msg.ev_type == SMF_EVT_DL_REBOOT) {
       k_timer_stop(&mode_timeout_timer);
       if (mode == MODE_NFC_SCAN) {
+#if NFC_ENABLED
         nfc_scan_cancel();
         rail_manager_release_3v6();
         rail_manager_release_3v3a(); /* NFC ref */
         rail_manager_release_3v3a(); /* Staff ref (entered NFC from Staff) */
+#endif
       } else if (mode == MODE_STAFF) {
         rail_manager_release_3v3a(); /* paired with request on enter Staff */
       }
@@ -426,6 +428,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                 "Staff)");
       } else if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
                  msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5) {
+#if NFC_ENABLED
         uint8_t bid = (uint8_t)(msg.ev_type - SMF_EVT_BUTTON_SINGLE_0);
         uint8_t intent;
         if (bid == 0) {
@@ -445,6 +448,10 @@ static void smf_thread_fn(void *a, void *b, void *c) {
                       K_NO_WAIT);
         nfc_scan_start(intent, bid);
         LOG_INF("smf Staff->NFC btn=%u intent=%u", bid, intent);
+#else
+        LOG_DBG("Staff btn %u ignored (NFC disabled on FLEXBOX)",
+                (unsigned)(msg.ev_type - SMF_EVT_BUTTON_SINGLE_0));
+#endif
       } else {
         LOG_DBG("Staff mode: event %s ignored",
                 smf_ev_type_str(msg.ev_type));
@@ -466,6 +473,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
       /* Reboot timer will fire; ignore other events */
       break;
 
+#if NFC_ENABLED
     case MODE_NFC_SCAN:
       if (msg.ev_type == SMF_EVT_NFC_TIMEOUT) {
         nfc_scan_cancel();
@@ -554,6 +562,7 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         LOG_INF("smf NFC->Norm ok=%u", ok);
       }
       break;
+#endif /* NFC_ENABLED */
 
     case MODE_PROCESS_ACTION:
       LOG_DBG("state=%s (stub), ev=%s", smf_mode_str(mode),

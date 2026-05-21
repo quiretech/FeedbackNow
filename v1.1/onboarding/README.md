@@ -48,7 +48,7 @@ python onboarding/chirpstack/chirpstack_delete_devices_grpc.py [--dry-run]
 python onboarding/chirpstack/chirpstack_downlink_all.py --payload 0102
 python onboarding/chirpstack/chirpstack_downlink_all.py --payload "01 02 03" --f-port 11 --dry-run
 
-# Provision new unit: EUIs/keys, eui_keys.h, sys_config.h unit id, registry CSV,
+# Provision new unit: EUIs/keys, eui_keys.h, onboarding_config.h unit id, registry CSV,
 # plus app/prj.conf LoRaWAN region and board overlay (US915+LR62E vs EU868+Seeed WIO)
 python onboarding/gen_euis.py
 python onboarding/gen_euis.py --region eu868   # same registry family as --EU
@@ -69,11 +69,11 @@ python onboarding/aws/eui_collision_check.py
 | Path | Purpose |
 |------|---------|
 | `api_key` | ChirpStack API token (paste and save; should be gitignored locally) |
-| `flexbox_euis/eui_registry*.csv` | US915 / EU868 registries (`gen_euis.py`). Columns include `hw_profile` (`FLEXBOX_PLUS` / `FLEXBOX` for AWS tag `FlexBoxHardwareProfile`), optional `name_prefix`, `tag_client`, `tag_location`. |
+| `flexbox_euis/eui_registry*.csv` | US915 / EU868 registries (`gen_euis.py`). Columns include `hw_profile` (`FLEXBOX_PLUS` / `FLEXBOX` from `DEVICE_HW_VARIANT` in onboarding_config.h), optional `name_prefix`, `tag_client`, `decal_type`. |
 | `aws/batch_register_lorawan_devices.py` | Register devices from CSV with AWS IoT Core for LoRaWAN |
 | `chirpstack/chirpstack_delete_devices_grpc.py` | Delete all devices in the app |
 | `chirpstack/chirpstack_downlink_all.py` | Enqueue one downlink to every device in the app |
 | `aws/upload_euis.sh` | Zip `flexbox_euis/` → `flexbox_euis.zip`, upload to S3, print presigned URL (same logic as `upload_flexbox_euis_s3.sh`) |
 | `aws/upload_flexbox_euis_s3.sh` | Same as `upload_euis.sh` if the latter is not writable in your clone |
 | `aws/eui_collision_check.py` | Validate registries for duplicate EUIs / keys |
-| `gen_euis.py` | Provision credentials (`eui_keys.h`, `sys_config.h`), append CSV, sync region in `prj.conf` + board overlay |
+| `gen_euis.py` | Provision credentials (`eui_keys.h`, `onboarding_config.h`), append CSV, sync region in `prj.conf` + board overlay |

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate per-device LoRaWAN identifiers/keys and write them into app/include/eui_keys.h,
-update app/include/sys_config.h (unit id + PROVISION_UTC timestamps between markers),
-append to onboarding/flexbox_euis/eui_registry*.csv (keys + provision UTC + FW/HW + EPD + hw_profile + name_prefix from sys_config when set),
+update app/include/onboarding_config.h (unit id + PROVISION_UTC between markers),
+append to onboarding/flexbox_euis/eui_registry*.csv (keys + provision UTC + FW/HW + hw_profile + name_prefix + tag_client + decal_type from sys_config when set),
 and align app/prj.conf + app/boards overlay with the
 selected region (US915 + LR62E vs EU868 + Seeed WIO).
 
@@ -15,6 +15,9 @@ Usage (from repo root v1.1):
 
 Recommended flashing flow:
   python onboarding/gen_euis.py && cd app && west flash --runner nrfjprog
+
+  gen_euis.py stamps DEVICE_PROVISION_UNIX_UTC in onboarding_config.h; on boot
+  rtc.c applies it per SYS_CONFIG_PROFILE (DESK/LAB overwrite; PRODUCTION preserves).
 
 Notes:
 - DevEUI / JoinEUI are generated as locally-administered EUI-64 values:
@@ -40,6 +43,7 @@ from pathlib import Path
 ONBOARDING_DIR = Path(__file__).resolve().parent
 REPO_ROOT = ONBOARDING_DIR.parent
 EUI_KEYS_H = REPO_ROOT / "app" / "include" / "eui_keys.h"
+ONBOARDING_CONFIG_H = REPO_ROOT / "app" / "include" / "onboarding_config.h"
 SYS_CONFIG_H = REPO_ROOT / "app" / "include" / "sys_config.h"
 PRJ_CONF = REPO_ROOT / "app" / "prj.conf"
 BOARD_OVERLAY = REPO_ROOT / "app" / "boards" / "nrf52840dk_nrf52840.overlay"
@@ -109,22 +113,28 @@ REGISTRY_FIELDS = [
     "provision_utc",  # ISO8601 UTC (aligned with DEVICE_PROVISION_ISO8601_UTC written this run)
     "fw_version",  # FW_VERSION_STRING from sys_config.h at provisioning time
     "hw_version",  # HW_VERSION_STRING from sys_config.h at provisioning time
-    "epd",  # "0" or "1" — see _parse_epd_registry_variant()
-    "hw_profile",  # product name for AWS tag FlexBoxHardwareProfile: FLEXBOX_PLUS vs FLEXBOX (see _hardware_profile_code)
+    "hw_profile",  # FLEXBOX_PLUS vs FLEXBOX from DEVICE_HW_VARIANT + prj.conf (see _hardware_profile_code)
     # Optional onboarding metadata (fill before AWS batch_register); new rows start empty.
-    "name_prefix",  # optional; from DEVICE_REGISTRY_NAME_PREFIX_STRING in sys_config.h when set
-    "tag_client",  # optional → AWS tag Client
-    "tag_location",  # optional → AWS tag Location
+    "name_prefix",  # from DEVICE_REGISTRY_NAME_PREFIX_STRING in onboarding_config.h when set
+    "tag_client",  # AWS tag Client; from DEVICE_REGISTRY_CLIENT_NAME in onboarding_config.h
+    "decal_type",  # AWS tag Decal; from DEVICE_REGISTRY_DECAL_TYPE in onboarding_config.h
 ]
 
 FW_VERSION_STRING_RE = re.compile(r'#define\s+FW_VERSION_STRING\s+"([^"]*)"')
 HW_VERSION_STRING_RE = re.compile(r'#define\s+HW_VERSION_STRING\s+"([^"]*)"')
-EPD_ENABLED_RE = re.compile(r"#define\s+EPD_ENABLED\s+(\d+)")
-EPD_LOCALE_FR_BITMAPS_RE = re.compile(r"#define\s+EPD_LOCALE_FR_BITMAPS\s+(\d+)")
-# NFC reader enabled in Zephyr build (app/prj.conf) — paired with EPD for FLEXBOX_PLUS.
+DEVICE_HW_VARIANT_RE = re.compile(
+    r"#define\s+DEVICE_HW_VARIANT\s+(FLEXBOX_PLUS|FLEXBOX)\b"
+)
+# NFC reader in prj.conf — FLEXBOX_PLUS registry row requires this for hw_profile.
 CONFIG_PN5180_Y_RE = re.compile(r"(?m)^CONFIG_PN5180=y\s*$")
 REGISTRY_NAME_PREFIX_STRING_RE = re.compile(
     r"#define\s+DEVICE_REGISTRY_NAME_PREFIX_STRING\s+\"([^\"]*)\""
+)
+REGISTRY_CLIENT_NAME_RE = re.compile(
+    r"#define\s+DEVICE_REGISTRY_CLIENT_NAME\s+\"([^\"]*)\""
+)
+REGISTRY_DECAL_TYPE_RE = re.compile(
+    r"#define\s+DEVICE_REGISTRY_DECAL_TYPE\s+\"([^\"]*)\""
 )
 
 
@@ -139,45 +149,38 @@ def _parse_fw_hw_versions(sys_config_text: str) -> tuple[str, str]:
     return fm.group(1).strip(), hm.group(1).strip()
 
 
-def _parse_epd_registry_variant(sys_config_text: str) -> str:
-    """
-    Single 0/1 for CSV: EPD off => 0; EPD on => EPD_LOCALE_FR_BITMAPS (0 EN, 1 FR).
-    Matches sys_config.h: non-EPD builds vs EPD locale asset variant.
-    """
-    em = EPD_ENABLED_RE.search(sys_config_text)
-    if not em:
+def _parse_device_hw_variant(onboarding_text: str) -> str:
+    """FLEXBOX_PLUS or FLEXBOX from DEVICE_HW_VARIANT in onboarding_config.h."""
+    m = DEVICE_HW_VARIANT_RE.search(onboarding_text)
+    if not m:
         raise RuntimeError(
-            f"Could not parse EPD_ENABLED in {SYS_CONFIG_H} (expected #define EPD_ENABLED 0|1)"
+            f"Could not parse DEVICE_HW_VARIANT in {ONBOARDING_CONFIG_H} "
+            '(expected #define DEVICE_HW_VARIANT FLEXBOX_PLUS or FLEXBOX)'
         )
-    if int(em.group(1), 10) == 0:
-        return "0"
-    lm = EPD_LOCALE_FR_BITMAPS_RE.search(sys_config_text)
-    if not lm:
-        return "0"
-    return "1" if int(lm.group(1), 10) != 0 else "0"
+    return m.group(1)
 
 
-def _hardware_profile_code(sys_config_text: str, prj_text: str) -> str:
+def _hardware_profile_code(onboarding_text: str, prj_text: str) -> str:
     """
-    Product name for CSV / AWS tag FlexBoxHardwareProfile:
-    FLEXBOX_PLUS — EPD enabled and PN5180 NFC enabled in prj.conf.
-    FLEXBOX — otherwise (no EPD and/or no NFC in this build).
+    CSV / AWS tag Variant from DEVICE_HW_VARIANT.
+    FLEXBOX_PLUS only when variant is PLUS and CONFIG_PN5180=y in prj.conf.
     """
-    em = EPD_ENABLED_RE.search(sys_config_text)
-    if not em:
-        raise RuntimeError(
-            f"Could not parse EPD_ENABLED in {SYS_CONFIG_H} (expected #define EPD_ENABLED 0|1)"
-        )
-    epd_on = int(em.group(1), 10) != 0
+    variant = _parse_device_hw_variant(onboarding_text)
     nfc_on = bool(CONFIG_PN5180_Y_RE.search(prj_text))
-    if epd_on and nfc_on:
+    if variant == "FLEXBOX_PLUS" and nfc_on:
         return "FLEXBOX_PLUS"
+    if variant == "FLEXBOX_PLUS" and not nfc_on:
+        print(
+            "WARNING: DEVICE_HW_VARIANT FLEXBOX_PLUS but CONFIG_PN5180 is not "
+            "enabled in prj.conf — registry hw_profile will be FLEXBOX",
+            file=sys.stderr,
+        )
     return "FLEXBOX"
 
 
 def _parse_registry_name_prefix(sys_config_text: str) -> str:
     """
-    Optional CSV name_prefix from DEVICE_REGISTRY_NAME_PREFIX_STRING in sys_config.h.
+    Optional CSV name_prefix from DEVICE_REGISTRY_NAME_PREFIX_STRING in onboarding_config.h.
     Empty macro => no prefix. Allowed: ASCII letters, digits, . _ -
     """
     m = REGISTRY_NAME_PREFIX_STRING_RE.search(sys_config_text)
@@ -192,6 +195,36 @@ def _parse_registry_name_prefix(sys_config_text: str) -> str:
             f"ASCII letters/digits/._- only (no spaces); got {s!r}"
         )
     return s
+
+
+def _parse_registry_client_name(sys_config_text: str) -> str:
+    """
+    Optional CSV tag_client from DEVICE_REGISTRY_CLIENT_NAME in onboarding_config.h.
+    Empty macro or missing define => no tag_client.
+    """
+    m = REGISTRY_CLIENT_NAME_RE.search(sys_config_text)
+    if not m:
+        return ""
+    return m.group(1).strip()
+
+
+def _parse_registry_decal_type(sys_config_text: str) -> str:
+    """
+    CSV decal_type from DEVICE_REGISTRY_DECAL_TYPE in onboarding_config.h (AWS tag Decal).
+    Empty macro or missing define => no decal_type.
+    """
+    m = REGISTRY_DECAL_TYPE_RE.search(sys_config_text)
+    if not m:
+        return ""
+    return m.group(1).strip()
+
+
+def _registry_row_value(row: dict[str, str], new_key: str, legacy_key: str | None = None) -> str:
+    """Read a registry column, with optional legacy CSV header alias."""
+    v = (row.get(new_key) or "").strip()
+    if v or not legacy_key:
+        return v
+    return (row.get(legacy_key) or "").strip()
 
 
 def _fmt_c_array_hex(bytes_: bytes) -> str:
@@ -300,11 +333,11 @@ def _replace_between_markers(contents: str, begin_marker: str, end_marker: str, 
     return contents[:start_inner] + new_inner + contents[ei:]
 
 
-def _replace_sys_config_unit_id(contents: str, asset_id: str) -> str:
-    """Sync DEVICE_UNIT_ID_STRING in sys_config.h (markers must exist)."""
+def _replace_onboarding_unit_id(contents: str, asset_id: str) -> str:
+    """Sync DEVICE_UNIT_ID_STRING in onboarding_config.h (markers must exist)."""
     if UNIT_ID_SYS_BEGIN not in contents or UNIT_ID_SYS_END not in contents:
         raise RuntimeError(
-            f"Missing unit-id markers in {SYS_CONFIG_H}. "
+            f"Missing unit-id markers in {ONBOARDING_CONFIG_H}. "
             f"Expected:\n  {UNIT_ID_SYS_BEGIN}\n  {UNIT_ID_SYS_END}"
         )
     if not re.fullmatch(r"[A-Za-z0-9._-]+", asset_id or ""):
@@ -324,13 +357,13 @@ def _replace_sys_config_unit_id(contents: str, asset_id: str) -> str:
     return before + block + after
 
 
-def _replace_sys_config_provision_utc(
+def _replace_onboarding_provision_utc(
     contents: str, unix_ts: int, iso8601_z: str
 ) -> str:
-    """Sync DEVICE_PROVISION_* macros (markers must exist)."""
+    """Sync DEVICE_PROVISION_* macros in onboarding_config.h (markers must exist)."""
     if PROVISION_UTC_BEGIN not in contents or PROVISION_UTC_END not in contents:
         raise RuntimeError(
-            f"Missing PROVISION_UTC markers in {SYS_CONFIG_H}. "
+            f"Missing PROVISION_UTC markers in {ONBOARDING_CONFIG_H}. "
             f"Expected:\n  {PROVISION_UTC_BEGIN}\n  {PROVISION_UTC_END}"
         )
     if unix_ts < 0:
@@ -378,7 +411,7 @@ def _replace_generated_section(contents: str, generated_block: str) -> str:
 def _normalize_registry_csv(path: Path) -> None:
     """
     Ensure registry CSV header matches REGISTRY_FIELDS (order + columns).
-    Drops legacy 'timestamp_utc'. Fills missing columns with empty strings for older rows.
+    Drops legacy columns (e.g. timestamp_utc, epd, tag_location). Fills missing columns with empty strings for older rows.
     """
     if not path.exists() or path.stat().st_size == 0:
         return
@@ -401,7 +434,10 @@ def _normalize_registry_csv(path: Path) -> None:
         writer = csv.DictWriter(f, fieldnames=REGISTRY_FIELDS)
         writer.writeheader()
         for r in rows:
-            out = {k: (r.get(k) or "").strip() for k in REGISTRY_FIELDS}
+            out = {
+                k: _registry_row_value(r, k, legacy_key="tag_location" if k == "decal_type" else None)
+                for k in REGISTRY_FIELDS
+            }
             writer.writerow(out)
 
     tmp.replace(path)
@@ -477,7 +513,7 @@ def main() -> int:
         action="store_true",
         dest="stamp_provision_only",
         help="Only set DEVICE_PROVISION_UNIX_UTC / DEVICE_PROVISION_ISO8601_UTC in "
-        "sys_config.h from current UTC; does not touch keys, CSV, unit id, or build profile.",
+        "onboarding_config.h from current UTC; does not touch keys, CSV, unit id, or build profile.",
     )
     args = parser.parse_args()
 
@@ -494,16 +530,18 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 2
-        if not SYS_CONFIG_H.exists():
-            print(f"ERROR: {SYS_CONFIG_H} not found", file=sys.stderr)
+        if not ONBOARDING_CONFIG_H.exists():
+            print(f"ERROR: {ONBOARDING_CONFIG_H} not found", file=sys.stderr)
             return 2
         prov_now = datetime.now(timezone.utc)
         provision_unix = int(prov_now.timestamp())
         provision_iso = prov_now.strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
-            sc_text = SYS_CONFIG_H.read_text(encoding="utf-8")
-            sc_text = _replace_sys_config_provision_utc(sc_text, provision_unix, provision_iso)
-            _atomic_write(SYS_CONFIG_H, sc_text)
+            onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
+            onb_text = _replace_onboarding_provision_utc(
+                onb_text, provision_unix, provision_iso
+            )
+            _atomic_write(ONBOARDING_CONFIG_H, onb_text)
         except (RuntimeError, ValueError) as e:
             print(f"ERROR: {e}", file=sys.stderr)
             return 2
@@ -511,7 +549,7 @@ def main() -> int:
         print("=== Provision stamp only (no EUI/key/CSV/prj/overlay changes) ===")
         print(f"DEVICE_PROVISION_UNIX_UTC      = {provision_unix}ULL")
         print(f'DEVICE_PROVISION_ISO8601_UTC    = "{provision_iso}"')
-        print(f"Updated: {SYS_CONFIG_H}")
+        print(f"Updated: {ONBOARDING_CONFIG_H}")
         print("")
         print("Rebuild/flash to pick this up:")
         print("  cd app && west build ... && west flash ...")
@@ -542,6 +580,9 @@ def main() -> int:
 
     if not EUI_KEYS_H.exists():
         print(f"ERROR: {EUI_KEYS_H} not found", file=sys.stderr)
+        return 2
+    if not ONBOARDING_CONFIG_H.exists():
+        print(f"ERROR: {ONBOARDING_CONFIG_H} not found", file=sys.stderr)
         return 2
     if not SYS_CONFIG_H.exists():
         print(f"ERROR: {SYS_CONFIG_H} not found", file=sys.stderr)
@@ -599,12 +640,15 @@ def main() -> int:
     # Next registry id (same string written to headers and CSV)
     asset_id = _next_asset_id(existing_rows)
 
+    onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
     sc_text = SYS_CONFIG_H.read_text(encoding="utf-8")
     prj_text = PRJ_CONF.read_text(encoding="utf-8")
     fw_ver, hw_ver = _parse_fw_hw_versions(sc_text)
-    epd = _parse_epd_registry_variant(sc_text)
-    hw_profile = _hardware_profile_code(sc_text, prj_text)
-    name_prefix_csv = _parse_registry_name_prefix(sc_text)
+    hw_profile = _hardware_profile_code(onb_text, prj_text)
+    hw_variant = _parse_device_hw_variant(onb_text)
+    name_prefix_csv = _parse_registry_name_prefix(onb_text)
+    tag_client_csv = _parse_registry_client_name(onb_text)
+    decal_type_csv = _parse_registry_decal_type(onb_text)
 
     prov_now = datetime.now(timezone.utc)
     provision_unix = int(prov_now.timestamp())
@@ -628,12 +672,12 @@ def main() -> int:
     tmp.write_text(contents, encoding="utf-8")
     tmp.replace(EUI_KEYS_H)
 
-    # sys_config.h: unit id + provision UTC (matches CSV provision_utc and flash-time stamp)
-    sc_text = _replace_sys_config_unit_id(sc_text, asset_id)
-    sc_text = _replace_sys_config_provision_utc(sc_text, provision_unix, provision_iso)
-    sc_tmp = SYS_CONFIG_H.with_suffix(".h.tmp")
-    sc_tmp.write_text(sc_text, encoding="utf-8")
-    sc_tmp.replace(SYS_CONFIG_H)
+    # onboarding_config.h: unit id + provision UTC (matches CSV + flash-time RTC stamp)
+    onb_text = _replace_onboarding_unit_id(onb_text, asset_id)
+    onb_text = _replace_onboarding_provision_utc(onb_text, provision_unix, provision_iso)
+    onb_tmp = ONBOARDING_CONFIG_H.with_suffix(".h.tmp")
+    onb_tmp.write_text(onb_text, encoding="utf-8")
+    onb_tmp.replace(ONBOARDING_CONFIG_H)
 
     # Append to registry
     new_row = {
@@ -645,11 +689,10 @@ def main() -> int:
         "provision_utc": provision_iso,
         "fw_version": fw_ver,
         "hw_version": hw_ver,
-        "epd": epd,
         "hw_profile": hw_profile,
         "name_prefix": name_prefix_csv,
-        "tag_client": "",
-        "tag_location": "",
+        "tag_client": tag_client_csv,
+        "decal_type": decal_type_csv,
     }
 
     registry_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -684,13 +727,17 @@ def main() -> int:
     print(f"provision_utc : {provision_iso}")
     print(f"fw_version    : {fw_ver}")
     print(f"hw_version    : {hw_ver}")
-    print(f"epd           : {epd} (0=non-EPD or EPD+EN, 1=EPD+FR assets)")
-    print(f"hw_profile    : {hw_profile} (FLEXBOX_PLUS=EPD+NFC build, FLEXBOX=otherwise → AWS FlexBoxHardwareProfile)")
+    print(f"DEVICE_HW_VARIANT : {hw_variant} (EPD_ENABLED derived in sys_config.h)")
+    print(f"hw_profile        : {hw_profile} (AWS tag Variant)")
     if name_prefix_csv:
-        print(f"name_prefix   : {name_prefix_csv} (from DEVICE_REGISTRY_NAME_PREFIX_STRING in sys_config.h)")
+        print(f"name_prefix   : {name_prefix_csv} (from onboarding_config.h)")
+    if tag_client_csv:
+        print(f"tag_client    : {tag_client_csv} (from onboarding_config.h)")
+    if decal_type_csv:
+        print(f"decal_type    : {decal_type_csv} (from onboarding_config.h → AWS tag Decal)")
     print("")
     print(f"Updated: {EUI_KEYS_H}")
-    print(f"Updated: {SYS_CONFIG_H} (unit id + DEVICE_PROVISION_* UTC)")
+    print(f"Updated: {ONBOARDING_CONFIG_H} (unit id + DEVICE_PROVISION_* UTC)")
     print(f"Updated: {PRJ_CONF} + {BOARD_OVERLAY} (region={region})")
     print(f"Appended registry row: {registry_csv}")
     print("")

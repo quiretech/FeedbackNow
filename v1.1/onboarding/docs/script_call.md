@@ -81,3 +81,50 @@ QUIRETECH_ENG_TEST_UNIT,6B1B0DE124A39277,1E8D358985805A36,090275A0301B62A0247BF9
     0xa1, 0x49, 0x0a, 0x62, 0x07, 0xca, 0x06, 0xb0,    \
         0x89, 0xc4, 0x42, 0x37, 0xe9, 0xd8, 0xbf, 0x79                                                 \
   }
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////
+FBN PROD - EU UNITS AWS COMMAND TO CALL UPLOAD DEVICE
+
+
+
+
+
+python3 onboarding/gen_euis.py --EU && 
+
+
+
+python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --EU \
+  --region us-east-1 \
+  --device-profile-id 30a6011a-2d0a-471f-8d81-19d7a294afb8 \
+  --service-profile-id 75c24d9c-3898-4b36-ad3b-eef0b63c7c3b \
+  --destination-name capture \
+  --last-only
+
+
+
+// FBN-PROD-EU
+
+python3 onboarding/gen_euis.py --EU && \
+(cd app && west flash --runner jlink) && \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --EU \
+  --region us-east-1 \
+  --device-profile-id 30a6011a-2d0a-471f-8d81-19d7a294afb8 \
+  --service-profile-id 75c24d9c-3898-4b36-ad3b-eef0b63c7c3b \
+  --destination-name capture \
+  --last-only
+
+
+  // FBN-ADMIN-US
+
+python3 onboarding/gen_euis.py && \
+(cd app && west flash --runner jlink) && \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --region us-east-1 \
+  --device-profile-id a50e599b-d37d-41f1-a19b-aac66d93fdfa \
+  --service-profile-id 71da2f46-8470-492a-a757-fcec760095cd \
+  --destination-name destination \
+  --last-only

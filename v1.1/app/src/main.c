@@ -119,10 +119,12 @@ static int system_init(void) {
             ret);
   }
 
+#if NFC_ENABLED
   ret = nfc_service_init();
   if (ret != 0) {
     LOG_WRN("nfc_service_init failed (%d); Staff NFC disabled", ret);
   }
+#endif
 
   (void)display_manager_init();
 
@@ -157,7 +159,9 @@ int main(void) {
   power_ctrl_set(POWER_EN_1V8, true);
   power_ctrl_set(POWER_EN_3V3A, true);
   rtc_notify_3v3a_enabled();
+#if NFC_ENABLED
   power_ctrl_set(POWER_EN_3V6, true);
+#endif
 
   k_sleep(K_SECONDS(1));
 
@@ -191,8 +195,10 @@ int main(void) {
   /* Centralized thread start (single block for ordering and priorities). */
   k_thread_start(led_ui_thread_id);
   (void)led_manager_wait_until_ready(K_SECONDS(1));
+#if NFC_ENABLED
   k_thread_start(nfc_worker_id);
   (void)nfc_service_wait_until_ready(K_SECONDS(1));
+#endif
 #if EPD_ENABLED
   /* Logo uses long EPD SPI; finish before LoRa thread joins (same SPI bus). */
   display_show_logo_sync();
