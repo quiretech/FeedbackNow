@@ -41,7 +41,6 @@ enum lora_cmd_type {
   LORA_CMD_TIME_SYNC_RETRY, /* Retry DeviceTimeReq in active sync cycle */
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
   LORA_CMD_LINK_CHECK_FORCE, /* Send empty frame now for LinkCheckReq */
-  LORA_CMD_ENABLE_ADR,       /* lorawan_enable_adr(true); idempotent */
   LORA_CMD_SESSION_LOST,     /* MAPE-K: clear joined, backoff, silent rejoin */
   LORA_CMD_COUNT
 };
@@ -53,7 +52,7 @@ typedef struct {
   uint8_t data[LORA_MAX_PAYLOAD_SIZE]; // Moved to end for better alignment
 } lora_uplink_msg_t;
 
-/** Which uplink burst just finished enqueueing — selects DeviceTime defer. */
+/** Which uplink burst just finished enqueueing — selects post-burst MAC defer. */
 enum lora_burst_tail_profile {
   /** Post-join: NUM_BUTTONS counter UL + housekeeping snapshot UL. */
 
@@ -96,21 +95,19 @@ void lora_request_join(void);
 void lora_request_time_sync(void);
 
 /**
- * After counter-sync (+ HK/snapshot burst) enqueue, wait for approximate drain
- * then queue DeviceTimeReq. Cancels any prior deferral before scheduling.
+ * After counter-sync (+ HK/snapshot burst) enqueue, wait for approximate drain,
+ * then queue LinkCheckReq (force), then DeviceTimeReq. Cancels prior deferral.
  */
 void lora_schedule_time_sync_after_counter_burst(
     enum lora_burst_tail_profile profile);
 
-/** Cancel deferral queued by lora_schedule_time_sync_after_counter_burst. */
-
+/** Cancel deferred LinkCheck + DeviceTime scheduled after a counter burst. */
 void lora_cancel_scheduled_burst_time_sync(void);
 
 /**
- * Request LoRa thread to re-enable ADR. Idempotent — ADR is already enabled
- * after successful join; remains so after DeviceTime completes.
+ * After an immediate LinkCheckReq (e.g. MAPE-K heartbeat), defer DeviceTimeReq.
  */
-void lora_request_enable_adr(void);
+void lora_schedule_time_sync_after_link_check(void);
 
 /**
  * Request LoRa thread to send LinkCheckReq MAC command. LoRa thread calls
@@ -118,6 +115,14 @@ void lora_request_enable_adr(void);
  * immediately; false appends to next uplink.
  */
 void lora_request_link_check(bool force_request);
+
+/**
+ * If joined, queue a forced LinkCheckReq and block until LinkCheckAns or
+ * @a timeout_ms. Caller must run from a thread that may sleep (e.g. SMF).
+ * @return true if a new Ans arrived within the timeout; false if not joined,
+ * cmd queue full, or RX timed out.
+ */
+bool lora_probe_link_check_sync(uint32_t timeout_ms);
 
 /**
  * Request session teardown and join backoff (MAPE-K Execute). LoRa thread clears

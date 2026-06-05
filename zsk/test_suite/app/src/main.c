@@ -856,21 +856,7 @@ static void epd_show_button_test_prompt(void) {
   lv_obj_set_style_text_font(title, &roboto_36, LV_PART_MAIN);
   lv_obj_set_style_text_color(title, lv_color_black(), LV_PART_MAIN);
   lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-  lv_obj_align(title, LV_ALIGN_CENTER, 0, -36);
-
-  lv_obj_t *prompt = lv_label_create(screen);
-  lv_label_set_text(prompt, "Test buttons now");
-  lv_obj_set_style_text_font(prompt, &roboto_28, LV_PART_MAIN);
-  lv_obj_set_style_text_color(prompt, lv_color_black(), LV_PART_MAIN);
-  lv_obj_set_style_text_align(prompt, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-  lv_obj_align_to(prompt, title, LV_ALIGN_OUT_BOTTOM_MID, 0, 16);
-
-  lv_obj_t *hint = lv_label_create(screen);
-  lv_label_set_text(hint, "Wait for 2 LED blinks,\nthen tap 0..5 once");
-  lv_obj_set_style_text_font(hint, &roboto_20, LV_PART_MAIN);
-  lv_obj_set_style_text_color(hint, lv_color_black(), LV_PART_MAIN);
-  lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-  lv_obj_align_to(hint, prompt, LV_ALIGN_OUT_BOTTOM_MID, 0, 14);
+  lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
 
   lv_screen_load(screen);
   lv_obj_update_layout(screen);

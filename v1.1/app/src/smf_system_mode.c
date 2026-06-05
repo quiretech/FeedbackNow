@@ -417,8 +417,8 @@ static void smf_thread_fn(void *a, void *b, void *c) {
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
-        /* EPD immediately after LED/rail (sync flush; async used 5s RX delay). */
-        display_show_device_status_sync();
+        /* Joined: forced LinkCheck then latest link stats; RX timeout → no response. */
+        display_show_device_status_for_user_sync();
         LOG_INF("smf Staff->DevInfo t_ms=%u", DEVICE_INFO_TIMEOUT_MS);
         atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),

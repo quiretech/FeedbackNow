@@ -206,6 +206,8 @@
 
   K_SEM_DEFINE(device_status_done_sem, 0, 1);
   static atomic_t device_status_sync_waiting = ATOMIC_INIT(0);
+  /** 0=best since boot; 1=latest Ans (user probe); 2=RX timeout (user). */
+  static atomic_t device_status_link_mode = ATOMIC_INIT(0);
 
   /* 1 while display_work_handler holds SPI for EPD (LoRa shares arduino_spi). */
   static atomic_t display_epd_spi_busy = ATOMIC_INIT(0);
@@ -598,18 +600,17 @@
     lv_obj_add_flag(screen_device_status, LV_OBJ_FLAG_HIDDEN);
   }
 
-  static const char *device_status_link_tier(const lora_link_stats_snapshot_t *ls) {
-    if (ls->samples == 0 || ls->best_demod_margin == LORA_LINK_STATS_MARGIN_NONE) {
+  static const char *device_status_link_tier_margin(int16_t margin) {
+    if (margin == LORA_LINK_STATS_MARGIN_NONE) {
       return EPD_STATUS_LINK_NO_RESPONSE;
     }
-    int16_t m = ls->best_demod_margin;
-    if (m >= EPD_LINK_MARGIN_EXCELLENT_DB) {
+    if (margin >= EPD_LINK_MARGIN_EXCELLENT_DB) {
       return EPD_STATUS_LINK_EXCELLENT;
     }
-    if (m >= EPD_LINK_MARGIN_GOOD_DB) {
+    if (margin >= EPD_LINK_MARGIN_GOOD_DB) {
       return EPD_STATUS_LINK_GOOD;
     }
-    if (m >= EPD_LINK_MARGIN_FAIR_DB) {
+    if (margin >= EPD_LINK_MARGIN_FAIR_DB) {
       return EPD_STATUS_LINK_FAIR;
     }
     return EPD_STATUS_LINK_WEAK;
@@ -721,26 +722,45 @@
     ls.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
     (void)lora_link_stats_get(&ls);
 
+    const int link_mode = atomic_get(&device_status_link_mode);
+    const bool rx_timeout = (link_mode == 2);
+    int16_t margin = LORA_LINK_STATS_MARGIN_NONE;
+    uint8_t gw = 0;
+
+    if (!rx_timeout) {
+      if (link_mode == 1) {
+        margin = ls.last_demod_margin;
+        gw = ls.last_nb_gateways;
+      } else {
+        margin = ls.best_demod_margin;
+        gw = ls.best_nb_gateways;
+      }
+      if (ls.samples == 0) {
+        margin = LORA_LINK_STATS_MARGIN_NONE;
+        gw = 0;
+      }
+    }
+
     if (ds_link_la != NULL) {
       lv_label_set_text(ds_link_la, EPD_STATUS_LABEL_LINK);
     }
     if (ds_link_ra != NULL) {
-      lv_label_set_text(ds_link_ra, device_status_link_tier(&ls));
+      lv_label_set_text(ds_link_ra, device_status_link_tier_margin(margin));
     }
     if (ds_metrics_la != NULL) {
-      if (ls.samples > 0) {
+      if (!rx_timeout && ls.samples > 0) {
         (void)snprintf(metrics_la, sizeof(metrics_la), "%s %u",
-                       EPD_STATUS_LABEL_GATEWAYS, (unsigned)ls.best_nb_gateways);
+                       EPD_STATUS_LABEL_GATEWAYS, (unsigned)gw);
         lv_label_set_text(ds_metrics_la, metrics_la);
       } else {
         lv_label_set_text(ds_metrics_la, EPD_STATUS_GATEWAYS_EMPTY);
       }
     }
     if (ds_metrics_ra != NULL) {
-      if (ls.samples > 0 &&
-          ls.best_demod_margin != LORA_LINK_STATS_MARGIN_NONE) {
+      if (!rx_timeout && ls.samples > 0 &&
+          margin != LORA_LINK_STATS_MARGIN_NONE) {
         (void)snprintf(metrics_ra, sizeof(metrics_ra), "%s %d%s",
-                       EPD_STATUS_LABEL_MARGIN, (int)ls.best_demod_margin,
+                       EPD_STATUS_LABEL_MARGIN, (int)margin,
                        EPD_STATUS_MARGIN_SUFFIX);
         lv_label_set_text(ds_metrics_ra, metrics_ra);
       } else {
@@ -748,9 +768,9 @@
       }
     }
 
-    LOG_INF("epd device_status %s %s m=%d gw=%u n=%u", device_status_link_tier(&ls),
-            status_ra, (int)ls.best_demod_margin, (unsigned)ls.best_nb_gateways,
-            (unsigned)ls.samples);
+    LOG_INF("epd device_status %s %s m=%d gw=%u n=%u mode=%d",
+            device_status_link_tier_margin(margin), status_ra, (int)margin,
+            (unsigned)gw, (unsigned)ls.samples, link_mode);
   }
 
   /* Format epoch as yyyy/mm/dd hh:mm (UTC). Buffer at least 17 bytes. */
@@ -1445,6 +1465,21 @@
       LOG_WRN("device_status sync timeout");
     }
     atomic_set(&device_status_sync_waiting, 0);
+  #endif
+  }
+
+  void display_show_device_status_for_user_sync(void) {
+  #if EPD_ENABLED
+    int link_mode = 0;
+
+    if (lora_is_joined()) {
+      link_mode = lora_probe_link_check_sync(DEVICE_INFO_LINK_PROBE_TIMEOUT_MS)
+                      ? 1
+                      : 2;
+    }
+    atomic_set(&device_status_link_mode, link_mode);
+    display_show_device_status_sync();
+    atomic_set(&device_status_link_mode, 0);
   #endif
   }
 

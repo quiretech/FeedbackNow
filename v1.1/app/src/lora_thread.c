@@ -286,7 +286,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
 
       lorawan_enable_adr(true);
 
-      LOG_DBG("ADR on (post-join); DeviceTimeReq deferred");
+      LOG_DBG("ADR on (post-join); LinkCheck then DeviceTime deferred");
 
 #if LORA_POST_JOIN_MAC_PROBE_RETRIES > 0
       LOG_DBG("post-join MAC probe");
@@ -467,9 +467,6 @@ static void lora_thread_fn(void *a, void *b, void *c) {
         } else if (cmd == LORA_CMD_TIME_SYNC_RETRY) {
           lora_pace_uplink_spacing();
           time_sync_retry_request();
-        } else if (cmd == LORA_CMD_ENABLE_ADR) {
-          lorawan_enable_adr(true);
-          LOG_INF("ADR re-enabled (time sync done)");
         } else if (cmd == LORA_CMD_LINK_CHECK ||
                    cmd == LORA_CMD_LINK_CHECK_FORCE) {
           lora_pace_uplink_spacing();

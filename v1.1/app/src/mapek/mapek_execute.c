@@ -17,8 +17,8 @@ void mapek_execute_run(const plan_out_t *plan, const analyze_out_t *ana,
     kb->last_hb_fired_ms = now;
     kb->hb_result = HB_PENDING;
     mapek_knowledge_update(kb);
-    lora_request_time_sync();
-    lora_request_link_check(false);
+    lora_request_link_check(true);
+    lora_schedule_time_sync_after_link_check();
     break;
 
   case INTENT_REJOIN:

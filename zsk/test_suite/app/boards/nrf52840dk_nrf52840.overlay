@@ -154,7 +154,7 @@ enables {
 	// dio2-tx-enable;
 	// tcxo-power-startup-delay-ms = <5>;
 
-	// SEEED WIO
+	// // SEEED WIO
 	lora_semtech_sx1262mb2das: sx1262@0 {
     compatible = "semtech,sx1262";
     reg = <0>;

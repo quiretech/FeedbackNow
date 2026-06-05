@@ -80,9 +80,15 @@ void display_show_device_status(void);
 
 /**
  * Device status with 0 ms queue delay; blocks until EPD SPI flush completes.
- * Staff combo and commission-boot dwell paths use this.
+ * Commission-boot dwell uses this (link stats from post-join probe).
  */
 void display_show_device_status_sync(void);
+
+/**
+ * User device-info combo (Staff): if joined, forced LinkCheck then EPD with
+ * latest Ans; on RX timeout shows link "no response" and empty metrics.
+ */
+void display_show_device_status_for_user_sync(void);
 
 /**
  * Downlink 0x99: fullscreen message (Roboto 36, centered, ≤3 lines clipped).

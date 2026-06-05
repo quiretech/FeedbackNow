@@ -113,6 +113,9 @@
   (((uint32_t)LORA_BURST_HK_TAIL_UPLINKS * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +   \
    (uint32_t)LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS +                                    \
    (uint32_t)LORA_BURST_COUNTER_JITTER_BUDGET_MS)
+/** Gap between deferred LinkCheckReq and DeviceTimeReq (after burst uplinks). */
+#define LORA_POST_BURST_LINK_TO_TIME_GAP_MS                                        \
+  ((uint32_t)LORA_UPLINK_MIN_INTERVAL_MS + (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
 
 #define BUTTON_QUEUE_SIZE 16
 #define BUTTON_QUEUE_ALIGNMENT 4
@@ -132,6 +135,10 @@
 #define COMBO_REBOOT_HOLD_MS 5000
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS 20000
+/** Max wait for LinkCheckAns after user opens device info (joined). Covers
+ * lora_pace_uplink_spacing (up to LORA_UPLINK_MIN_INTERVAL_MS) plus RX windows. */
+#define DEVICE_INFO_LINK_PROBE_TIMEOUT_MS                                        \
+  (LORA_UPLINK_MIN_INTERVAL_MS + LORA_POST_JOIN_ANS_SETTLE_MS + 500U)
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
@@ -164,9 +171,9 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420)
-#define TZ_OFFSET_MIN_MINUTES (-1440)
-#define TZ_OFFSET_MAX_MINUTES (1440)
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h
+#define TZ_OFFSET_MIN_MINUTES           (-1440)
+#define TZ_OFFSET_MAX_MINUTES           (1440)
 
 /* =============================================================================
  * RTC / time sync

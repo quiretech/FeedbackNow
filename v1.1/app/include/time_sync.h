@@ -15,7 +15,7 @@ void time_sync_retry_request(void);
 
 /** Call when the link is torn down (stack not joined). Cancels in-flight
  * DeviceTimeReq timeout/apply work and notifies SMF so housekeeping does not
- * hold rails; does not re-enable ADR.
+ * hold rails.
  */
 void time_sync_abort_on_link_lost(void);
 

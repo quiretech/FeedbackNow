@@ -46,44 +46,102 @@ void lora_request_join(void) { (void)lora_cmd_put(LORA_CMD_JOIN); }
 
 void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
 
+static void lora_burst_tail_link_check_fn(struct k_work *work);
 static void lora_burst_tail_time_sync_fn(struct k_work *work);
 
+K_WORK_DELAYABLE_DEFINE(lora_burst_tail_link_check_w, lora_burst_tail_link_check_fn);
 K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w, lora_burst_tail_time_sync_fn);
+
+static void lora_burst_tail_link_check_fn(struct k_work *work) {
+  ARG_UNUSED(work);
+
+  LOG_DBG("post-burst: LinkCheckReq (force)");
+  (void)lora_cmd_put(LORA_CMD_LINK_CHECK_FORCE);
+}
 
 static void lora_burst_tail_time_sync_fn(struct k_work *work) {
   ARG_UNUSED(work);
 
-  LOG_DBG("counter-sync burst done; schedule DeviceTimeReq");
-
+  LOG_DBG("post-burst: DeviceTimeReq");
   (void)lora_cmd_put(LORA_CMD_TIME_SYNC);
+}
+
+static void lora_cancel_scheduled_post_burst_mac(void) {
+  (void)k_work_cancel_delayable(&lora_burst_tail_link_check_w);
+  (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
 }
 
 void lora_schedule_time_sync_after_counter_burst(
     enum lora_burst_tail_profile profile) {
 
-  uint32_t delay_ms = (profile == LORA_BURST_TAIL_HOUSEKEEPING)
-                          ? LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS
-                          : LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS;
+  const uint32_t link_delay_ms =
+      (profile == LORA_BURST_TAIL_HOUSEKEEPING)
+          ? LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS
+          : LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS;
+  const uint32_t time_delay_ms =
+      link_delay_ms + LORA_POST_BURST_LINK_TO_TIME_GAP_MS;
 
-  (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
+  lora_cancel_scheduled_post_burst_mac();
 
-  LOG_DBG("DeviceTimeReq deferred %u ms (profile=%d)", (unsigned)delay_ms,
-          (int)profile);
+  LOG_DBG("post-burst MAC: LinkCheck @%u ms DeviceTime @%u ms (profile=%d)",
+          (unsigned)link_delay_ms, (unsigned)time_delay_ms, (int)profile);
 
-  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
+  (void)k_work_schedule(&lora_burst_tail_link_check_w, K_MSEC(link_delay_ms));
+  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(time_delay_ms));
+}
+
+void lora_schedule_time_sync_after_link_check(void) {
+  lora_cancel_scheduled_post_burst_mac();
+  LOG_DBG("DeviceTimeReq deferred %u ms (after LinkCheck)",
+          (unsigned)LORA_POST_BURST_LINK_TO_TIME_GAP_MS);
+  (void)k_work_schedule(&lora_burst_tail_time_sync_w,
+                        K_MSEC(LORA_POST_BURST_LINK_TO_TIME_GAP_MS));
 }
 
 void lora_cancel_scheduled_burst_time_sync(void) {
-  (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
-}
-
-void lora_request_enable_adr(void) {
-  (void)lora_cmd_put(LORA_CMD_ENABLE_ADR);
+  lora_cancel_scheduled_post_burst_mac();
 }
 
 void lora_request_link_check(bool force_request) {
   (void)lora_cmd_put(force_request ? LORA_CMD_LINK_CHECK_FORCE
                                    : LORA_CMD_LINK_CHECK);
+}
+
+bool lora_probe_link_check_sync(uint32_t timeout_ms) {
+  if (!lora_is_joined()) {
+    return false;
+  }
+
+  lora_link_stats_snapshot_t before;
+  memset(&before, 0, sizeof(before));
+  before.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
+  (void)lora_link_stats_get(&before);
+  const uint16_t samples_before = before.samples;
+  const uint32_t ans_ms_before = before.last_ans_uptime_ms;
+
+  if (lora_cmd_put(LORA_CMD_LINK_CHECK_FORCE) != 0) {
+    LOG_WRN("link probe: cmd queue full");
+    return false;
+  }
+
+  const int64_t deadline = k_uptime_get() + (int64_t)timeout_ms;
+  while (k_uptime_get() < deadline) {
+    lora_link_stats_snapshot_t now;
+    memset(&now, 0, sizeof(now));
+    now.best_demod_margin = LORA_LINK_STATS_MARGIN_NONE;
+    (void)lora_link_stats_get(&now);
+    if (now.samples > samples_before ||
+        (now.last_ans_uptime_ms != 0U &&
+         now.last_ans_uptime_ms != ans_ms_before)) {
+      LOG_INF("link probe: Ans margin=%d gw=%u",
+              (int)now.last_demod_margin, (unsigned)now.last_nb_gateways);
+      return true;
+    }
+    k_msleep(50);
+  }
+
+  LOG_INF("link probe: RX timeout (%u ms)", (unsigned)timeout_ms);
+  return false;
 }
 
 void lora_request_session_lost(void) {
@@ -280,10 +338,7 @@ int lora_app_init(void) {
   lora_link_stats_init();
   lora_link_stats_register();
 
-  /* ADR off until OTAA succeeds; enabled in run_join_cycle so LinkADRReq can
-   * steer DR during the post-join / HK uplink bursts before DeviceTimeReq. */
-
-  lorawan_enable_adr(false);
+  lorawan_enable_adr(true);
 
 #if defined(CONFIG_LORAMAC_REGION_EU868) && defined(CONFIG_LORAMAC_REGION_US915)
   const char *region = "EU868+US915";
@@ -294,7 +349,6 @@ int lora_app_init(void) {
 #else
   const char *region = "?";
 #endif
-  LOG_INF("LoRaWAN ok %s region=%s adr=off-until-join", lora_dev->name,
-          region);
+  LOG_INF("LoRaWAN ok %s region=%s adr=on", lora_dev->name, region);
   return 0;
 }

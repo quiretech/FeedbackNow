@@ -89,22 +89,6 @@ FBN PROD - EU UNITS AWS COMMAND TO CALL UPLOAD DEVICE
 
 
 
-
-
-python3 onboarding/gen_euis.py --EU && 
-
-
-
-python3 onboarding/aws/batch_register_lorawan_devices.py \
-  --EU \
-  --region us-east-1 \
-  --device-profile-id 30a6011a-2d0a-471f-8d81-19d7a294afb8 \
-  --service-profile-id 75c24d9c-3898-4b36-ad3b-eef0b63c7c3b \
-  --destination-name capture \
-  --last-only
-
-
-
 // FBN-PROD-EU
 
 python3 onboarding/gen_euis.py --EU && \
@@ -118,7 +102,21 @@ python3 onboarding/aws/batch_register_lorawan_devices.py \
   --last-only
 
 
-  // FBN-ADMIN-US
+// FBN-PROD-US
+
+python3 onboarding/gen_euis.py && \
+(cd app && west flash --runner jlink) && \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --region us-east-1 \
+  --device-profile-id a7381c2f-3751-41fa-afb1-5aa0328f09f9 \
+  --service-profile-id 75c24d9c-3898-4b36-ad3b-eef0b63c7c3b \
+  --destination-name capture \
+  --last-only
+
+
+
+
+// FBN-ADMIN-US
 
 python3 onboarding/gen_euis.py && \
 (cd app && west flash --runner jlink) && \
@@ -128,3 +126,49 @@ python3 onboarding/aws/batch_register_lorawan_devices.py \
   --service-profile-id 71da2f46-8470-492a-a757-fcec760095cd \
   --destination-name destination \
   --last-only
+
+
+
+
+
+
+
+
+
+
+// Quire-tech US
+python3 onboarding/gen_euis.py && \
+  python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --region us-east-1 \
+  --device-profile-id 9ca0d988-eb68-485a-ab92-a210e134ab82 \
+  --service-profile-id 9a8d999b-81d6-4071-8282-755b51d65d2e \
+  --destination-name TestDeviceDestination \
+  --last-only
+
+
+// Quire-tech Eu
+
+python3 onboarding/gen_euis.py --EU && \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
+  --EU \
+  --region us-east-1 \
+  --device-profile-id cf8adeae-ce9d-4a26-bcf2-c9805c2ef571 \
+  --service-profile-id 9a8d999b-81d6-4071-8282-755b51d65d2e \
+  --destination-name TestDeviceDestination \
+  --last-only
+
+
+aws configure list-profiles
+
+default
+339683755525_iot-config-access
+fbn-admin
+quiretech
+fbnow-admin
+fbn-prod-eu
+
+
+
+aws sts get-caller-identity
+aws sso login --profile my-profile
+export AWS_PROFILE=your-profile-name

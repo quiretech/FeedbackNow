@@ -111,7 +111,7 @@
  * =============================================================================
  */
 #define RTC_SET_TIME_ON_BOOT 1
-#define RTC_FORCE_SET_TIME_ON_BOOT 0
+#define RTC_FORCE_SET_TIME_ON_BOOT 1
 #define RTC_SET_YEAR 2026
 #define RTC_SET_MONTH 1
 #define RTC_SET_DAY 1

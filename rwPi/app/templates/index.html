@@ -16,7 +16,6 @@
          --success: #10b981;
          --error: #ef4444;
          --radius: 14px;
-         --shadow: 0 8px 32px rgba(0,0,0,0.35);
          }
          * { box-sizing: border-box; }
          body {
@@ -34,34 +33,6 @@
          justify-content: center;
          align-items: center;
          padding: 2rem 1rem;
-         position: relative;
-         overflow-x: hidden;
-         }
-         .blur-band {
-         width: 100%;
-         max-width: 600px;
-         padding: 2rem;
-         margin: 0 auto;
-         border-radius: var(--radius);
-         backdrop-filter: blur(20px);
-         -webkit-backdrop-filter: blur(20px);
-         background: rgba(13, 13, 16, 0.25);
-         }
-         .blur-band .card {
-         margin: 0;
-         }
-         .brand-logos {
-         display: flex;
-         align-items: center;
-         justify-content: center;
-         gap: 0.75rem; 
-         margin-top: 1rem;
-         padding: 0.25rem 0;
-         }
-         .brand-logos img {
-         width: 48px;
-         object-fit: contain;
-         opacity: 0.85;
          }
          .page {
          position: relative;
@@ -77,83 +48,53 @@
          h1 {
          font-size: 1.85rem;
          font-weight: 700;
-         margin: 0 0 1.5rem;
+         margin: 0 0 1.25rem;
          letter-spacing: -0.03em;
          }
-.card {
-    background: linear-gradient(
-        135deg,
-        rgba(255, 255, 255, 0.12),
-        rgba(255, 255, 255, 0.04)
-    );
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: var(--radius);
-    padding: 1.5rem 1.75rem;
-    width: 100%;
-    box-shadow:
-        0 12px 32px rgba(0, 0, 0, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    position: relative;
-    
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start; 
-    gap: 1rem;
-    
-    min-height: auto;
-    max-width: 95%;
-}
-         .card-wrapper {
+         .card {
+         background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+         border: 1px solid rgba(255,255,255,0.18);
+         border-radius: var(--radius);
+         padding: 1.5rem 1.75rem;
          width: 100%;
-         max-width: 900px;
+         max-width: 95%;
+         box-shadow: 0 12px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.15);
+         backdrop-filter: blur(20px) saturate(180%);
          }
-.card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(
-        180deg,
-        rgba(255,255,255,0.2),
-        rgba(255,255,255,0.02)
-    );
-    opacity: 0.3;
-}
-         .field {
-         margin-bottom: 1.5rem;
+         .section-label {
+         font-size: 0.7rem;
+         font-weight: 700;
+         letter-spacing: 0.08em;
+         text-transform: uppercase;
+         color: var(--text-muted);
+         margin: 0 0 0.75rem;
          }
+         .field { margin-bottom: 1rem; }
          .field label {
          display: block;
          font-size: 0.875rem;
          font-weight: 500;
          color: var(--text-muted);
-         margin-bottom: 0.45rem;
+         margin-bottom: 0.4rem;
          }
          .field input {
          width: 100%;
          padding: 0.7rem 0.9rem;
-         font-size: 1rem;
+         font-size: 1.05rem;
          background: rgba(15, 15, 18, 0.8);
          border: 1px solid var(--border);
          border-radius: 10px;
          color: var(--text);
          }
-         .field input::placeholder { color: var(--text-muted); }
-         .field input:focus {
-         outline: none;
-         border-color: var(--accent);
-         }
-         .field-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem; }
-         .row {
+         .field input:focus { outline: none; border-color: var(--accent); }
+         .field-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; }
+         .load-row {
          display: flex;
-         gap: 0.75rem;
-         margin-top: 1.75rem;
+         gap: 0.6rem;
+         align-items: end;
          }
+         .load-row .field { flex: 1; margin-bottom: 0; }
          .btn {
-         flex: 1;
          padding: 0.8rem 1rem;
          font-size: 1rem;
          font-weight: 600;
@@ -162,108 +103,154 @@
          cursor: pointer;
          transition: background 0.15s, transform 0.1s;
          }
-         .btn:hover { transform: scale(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-         .btn:active { transform: scale(0.98); }
-         .btn-read {
+         .btn:hover:not(:disabled) { transform: scale(1.01); }
+         .btn:active:not(:disabled) { transform: scale(0.99); }
+         .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+         .btn-load {
+         flex: 0 0 auto;
+         min-width: 100px;
+         background: #2b2b35;
+         color: var(--text);
+         }
+         .btn-load:hover:not(:disabled) { background: #3a3a47; }
+         .next-tag-panel {
+         margin: 1.25rem 0;
+         padding: 1.1rem 1.25rem;
+         border-radius: 12px;
+         border: 1px solid var(--border);
+         background: rgba(15, 15, 18, 0.6);
+         text-align: center;
+         }
+         .next-tag-panel.idle { opacity: 0.55; }
+         .next-tag-panel.ready { border-color: rgba(99, 102, 241, 0.45); }
+         .next-tag-label {
+         font-size: 0.8rem;
+         color: var(--text-muted);
+         margin-bottom: 0.35rem;
+         }
+         .next-tag-id {
+         font-size: 2rem;
+         font-weight: 700;
+         letter-spacing: 0.02em;
+         line-height: 1.2;
+         font-variant-numeric: tabular-nums;
+         }
+         .next-tag-hex {
+         margin-top: 0.5rem;
+         font-family: ui-monospace, monospace;
+         font-size: 1rem;
+         color: var(--text-muted);
+         }
+         .btn-program {
+         width: 100%;
+         padding: 1.1rem 1rem;
+         font-size: 1.2rem;
+         background: var(--accent);
+         color: white;
+         box-shadow: 0 0 20px rgba(99, 102, 241, 0.35);
+         margin-bottom: 0.65rem;
+         }
+         .btn-program:hover:not(:disabled) { background: var(--accent-hover); }
+         .btn-secondary-row {
+         display: flex;
+         gap: 0.6rem;
+         }
+         .btn-secondary-row .btn {
+         flex: 1;
          background: var(--border);
          color: var(--text);
          }
-         .btn-read:hover { background: #3d3d4a; }
+         .btn-secondary-row .btn:hover:not(:disabled) { background: #3d3d4a; }
+         .flow-steps {
+         font-size: 0.8rem;
+         color: var(--text-muted);
+         line-height: 1.5;
+         margin: 0 0 1rem;
+         padding-left: 1.1rem;
+         }
+         .manual-section {
+         margin-top: 1.5rem;
+         border-top: 1px solid var(--border);
+         padding-top: 0.25rem;
+         }
+         .manual-section summary {
+         cursor: pointer;
+         font-size: 0.9rem;
+         font-weight: 600;
+         color: var(--text-muted);
+         padding: 0.75rem 0;
+         list-style: none;
+         }
+         .manual-section summary::-webkit-details-marker { display: none; }
+         .manual-section summary::after {
+         content: " ▾";
+         font-size: 0.75rem;
+         }
+         .manual-section[open] summary::after { content: " ▴"; }
+         .manual-inner { padding-top: 0.25rem; }
+         .row { display: flex; gap: 0.6rem; margin-top: 1rem; }
          .btn-flash {
+         flex: 1;
          background: var(--accent);
          color: white;
          }
-         .btn-flash:hover { background: var(--accent-hover); }
-         .btn-flash:disabled, .btn-scan:disabled {
-         opacity: 0.6;
-         cursor: not-allowed;
+         .btn-flash:hover:not(:disabled) { background: var(--accent-hover); }
+         .status { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.65rem; min-height: 1.25rem; }
+         .result-box {
+         display: flex;
+         flex-direction: column;
+         gap: 0.5rem;
+         min-height: 4rem;
+         padding: 1.25rem;
+         margin-top: 1.25rem;
+         border-radius: 12px;
+         background: rgba(15, 15, 18, 0.55);
+         border: 1px solid var(--border);
+         opacity: 0.2;
+         transition: opacity 0.25s ease;
          }
-
-
-
-
-.result-box { 
-  display: flex; 
-  flex-direction: column; 
-  justify-content: center; 
-  gap: 0.5rem; 
-  min-height: 4.75rem;
-  padding: 1.5rem 1.75rem;
-  margin-top: 1.5rem; 
-  border-radius: 12px; 
-  background: rgba(15, 15, 18, 0.55); 
-  border: 1px solid var(--border); 
-  opacity: 0.15; 
-  transition: opacity 0.25s ease; 
-  width: 100%; 
-  box-sizing: border-box;
-}
-
-  
-.result-box .result-uid { 
-  font-family: ui-monospace, monospace; 
-  font-size: 0.9rem; 
-  word-break: break-all; 
-  color: var(--text-muted); 
-} 
-.result-box .result-message { 
-  font-size: 0.95rem; 
-  font-weight: 500; 
-  line-height: 1.4; 
-} 
-.result-box .result-message.success { 
-  color: var(--success); 
-} 
-.result-box .result-message.error { 
-  color: var(--error); 
-} 
-.result-box .hexdump { 
-  font-family: ui-monospace, monospace; 
-  font-size: 0.8rem; 
-  line-height: 1.35; 
-  margin-top: 0.5rem; 
-  white-space: pre; 
-  max-height: 12rem; 
-  overflow: auto; 
-} 
-.result-box .hexdump .line { 
-  display: block; 
-} 
-.result-box .hexdump .line.highlight { 
-  /* Make default block highlight more obvious: higher contrast bg, accent border, bold text, slight shadow */
-  background: linear-gradient(90deg, rgba(99,102,241,0.36) 0%, rgba(129,140,248,0.75) 100%);
-  color: #fff;
-  font-weight: bold;
-  border-left: 4px solid var(--accent);
-  box-shadow: 0 2px 8px rgba(99,102,241,0.09);
-  position: relative;
-  z-index: 1;
-}
-.result-box.has-result { 
-  opacity: 0.65; 
-}
-.result-box.has-result .result-uid:empty { 
-  display: none; 
-}
-.footer-links {
-  margin-top: 1.25rem;
-  text-align: center;
-  font-size: 0.875rem;
-}
-.footer-links a {
-    color: var(--accent);
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 0.95rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 8px;
-    background: rgba(99, 102, 241, 0.15);
-    transition: background 0.2s;
-}
-.footer-links a:hover {
-    background: rgba(99, 102, 241, 0.25);
-    text-decoration: none;
-}
+         .result-box.has-result { opacity: 0.7; }
+         .result-uid {
+         font-family: ui-monospace, monospace;
+         font-size: 0.85rem;
+         word-break: break-all;
+         color: var(--text-muted);
+         }
+         .result-message { font-size: 0.95rem; font-weight: 500; }
+         .result-message.success { color: var(--success); }
+         .result-message.error { color: var(--error); }
+         .hexdump {
+         font-family: ui-monospace, monospace;
+         font-size: 0.8rem;
+         max-height: 150px;
+         overflow-y: auto;
+         background: rgba(0,0,0,0.2);
+         padding: 8px;
+         border-radius: 6px;
+         }
+         .hexdump .line { display: block; }
+         .hexdump .line.highlight {
+         background: linear-gradient(90deg, rgba(99,102,241,0.36), rgba(129,140,248,0.75));
+         color: #fff;
+         font-weight: bold;
+         border-left: 4px solid var(--accent);
+         }
+         .footer-links { margin-top: 1rem; text-align: center; }
+         .footer-links a {
+         color: var(--accent);
+         text-decoration: none;
+         font-size: 0.9rem;
+         padding: 0.35rem 0.75rem;
+         border-radius: 8px;
+         background: rgba(99, 102, 241, 0.15);
+         }
+         .brand-logos {
+         display: flex;
+         gap: 0.75rem;
+         margin-top: 1rem;
+         justify-content: center;
+         }
+         .brand-logos img { width: 48px; opacity: 0.85; }
          footer.footer-brand {
          position: fixed;
          bottom: 1rem;
@@ -271,75 +258,74 @@
          transform: translateX(-50%);
          font-size: 0.8rem;
          color: var(--text-muted);
-         z-index: 1;
          }
-         .status { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; min-height: 1.25rem; }
-
-
-
-.result-box .hexdump {
-    max-height: 150px;
-    overflow-y: auto;
-    background: rgba(0, 0, 0, 0.2);
-    padding: 8px;
-    border-radius: 6px;
-    margin-top: 10px;
-    scrollbar-width: thin;
-}
-
-
-.btn-flash {
-    background: var(--accent);
-    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
-}
-
-
-@media (max-width: 480px) {
-    .row {
-        flex-direction: column;
-    }
-    .btn {
-        width: 100%;
-    }
-}
+         @media (max-width: 480px) {
+         .load-row, .btn-secondary-row, .row { flex-direction: column; }
+         .btn-load { width: 100%; }
+         }
       </style>
    </head>
    <body>
       <div class="page">
          <h1>TagWriter</h1>
-<div class="card-wrapper">
-    <div class="card">
-        <form id="flash-form">
-            <div class="field">
-                <label for="employee_name">Employee name</label>
-                <input type="text" id="employee_name" name="employee_name" placeholder="Paste name from Excel" required autocomplete="off">
-                <div class="field-hint">For CSV asset tracking only (not written to tag)</div>
+         <div class="card">
+            <p class="section-label">Batch programming</p>
+            <ol class="flow-steps">
+               <li>Enter today’s starting number and tap <strong>Load</strong></li>
+               <li>Sticker the tag, place it on the reader</li>
+               <li>Tap <strong>Program Tag</strong> — repeat for each tag</li>
+            </ol>
+
+            <div class="load-row">
+               <div class="field">
+                  <label for="sequence_seed">Starting number</label>
+                  <input type="text" id="sequence_seed" placeholder="20266034" autocomplete="off" inputmode="numeric">
+               </div>
+               <button type="button" class="btn btn-load" id="btn-load">Load</button>
             </div>
 
-            <div class="field">
-                <label for="data_hex">4-byte hex data</label>
-                <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" pattern="[0-9A-Fa-f]{8}" autocomplete="off">
-                <div class="field-hint">Exactly 8 hex characters.</div>
+            <div class="next-tag-panel idle" id="next-tag-panel">
+               <div class="next-tag-label">Ready to program</div>
+               <div class="next-tag-id" id="next-tag-id">—</div>
+               <div class="next-tag-hex" id="next-tag-hex"></div>
             </div>
 
-            <div class="row">
-                <button type="button" class="btn btn-read" id="btn-read">Read</button>
-                <button type="submit" class="btn btn-flash" id="btn-flash">Flash!</button>
+            <button type="button" class="btn btn-program" id="btn-program" disabled>Program Tag</button>
+            <div class="btn-secondary-row">
+               <button type="button" class="btn" id="btn-read-batch">Read tag</button>
             </div>
             <div class="status" id="status" aria-live="polite"></div>
-        </form>
 
-        <div class="result-box" id="result-box">
-            <span class="result-uid" id="result-uid"></span>
-            <span class="result-message" id="result-message"></span>
-            <div class="hexdump" id="result-hexdump" aria-hidden="true"></div>
-        </div>
+            <details class="manual-section" id="manual-section">
+               <summary>Manual / custom data</summary>
+               <div class="manual-inner">
+                  <form id="manual-form">
+                     <div class="field">
+                        <label for="employee_name">Employee / ID</label>
+                        <input type="text" id="employee_name" name="employee_name" placeholder="Any value for CSV" autocomplete="off">
+                     </div>
+                     <div class="field">
+                        <label for="data_hex">4-byte hex (tag data)</label>
+                        <input type="text" id="data_hex" name="data_hex" placeholder="AABBCCDD" maxlength="8" autocomplete="off">
+                        <div class="field-hint">Exactly 8 hex characters.</div>
+                     </div>
+                     <div class="row">
+                        <button type="button" class="btn" id="btn-read-manual">Read</button>
+                        <button type="submit" class="btn btn-flash" id="btn-flash-manual">Flash!</button>
+                     </div>
+                  </form>
+               </div>
+            </details>
 
-        <div class="footer-links">
-            <a href="/csv" download>Download CSV</a>
-        </div>
-    </div>
-</div>
+            <div class="result-box" id="result-box">
+               <span class="result-uid" id="result-uid"></span>
+               <span class="result-message" id="result-message"></span>
+               <div class="hexdump" id="result-hexdump" hidden></div>
+            </div>
+            <div class="footer-links">
+               <a href="/csv" download>Download CSV</a>
+            </div>
+         </div>
          <div class="brand-logos" aria-hidden="true">
             <img src="/static/1.webp" alt="">
             <img src="/static/2.webp" alt="">
@@ -348,27 +334,116 @@
          <footer class="footer-brand">QuireTech LLC</footer>
       </div>
       <script>
-         const form = document.getElementById('flash-form');
-         const employeeName = document.getElementById('employee_name');
-         const dataHex = document.getElementById('data_hex');
-         const btnRead = document.getElementById('btn-read');
-         const btnFlash = document.getElementById('btn-flash');
+         const sequenceSeed = document.getElementById('sequence_seed');
+         const btnLoad = document.getElementById('btn-load');
+         const btnProgram = document.getElementById('btn-program');
+         const btnReadBatch = document.getElementById('btn-read-batch');
+         const nextTagPanel = document.getElementById('next-tag-panel');
+         const nextTagId = document.getElementById('next-tag-id');
+         const nextTagHex = document.getElementById('next-tag-hex');
          const status = document.getElementById('status');
          const resultBox = document.getElementById('result-box');
          const resultUid = document.getElementById('result-uid');
          const resultMessage = document.getElementById('result-message');
          const resultHexdump = document.getElementById('result-hexdump');
-         
+         const manualForm = document.getElementById('manual-form');
+         const employeeName = document.getElementById('employee_name');
+         const dataHex = document.getElementById('data_hex');
+         const btnReadManual = document.getElementById('btn-read-manual');
+         const btnFlashManual = document.getElementById('btn-flash-manual');
+
+         let sessionActive = false;
+         let sequenceBaseRaw = '';
+         let sequenceBaseInt = null;
+         let sequenceDigits = 0;
+         let sequenceIndex = 0;
+         let currentId = '';
+         let currentHex = '';
+
+         const actionButtons = [btnLoad, btnProgram, btnReadBatch, btnReadManual, btnFlashManual];
+
          function setBusy(busy) {
-           btnRead.disabled = btnFlash.disabled = busy;
+           actionButtons.forEach(function(b) { b.disabled = busy; });
            status.textContent = busy ? 'Working…' : '';
          }
-         
+
+         function toDataHex(idValue) {
+           if (/^[0-9A-Fa-f]{8}$/.test(idValue)) {
+             return idValue.toUpperCase();
+           }
+           if (!/^\d+$/.test(idValue)) {
+             return null;
+           }
+           const n = Number(idValue);
+           if (!Number.isSafeInteger(n) || n < 0 || n > 0xFFFFFFFF) {
+             return null;
+           }
+           return n.toString(16).toUpperCase().padStart(8, '0');
+         }
+
+         function valueAtIndex(index) {
+           if (sequenceBaseInt !== null) {
+             return String(sequenceBaseInt + index).padStart(sequenceDigits, '0');
+           }
+           return index === 0 ? sequenceBaseRaw : sequenceBaseRaw + '-' + index;
+         }
+
+         function showNextTag(idValue, hexValue) {
+           currentId = idValue;
+           currentHex = hexValue || '';
+           nextTagId.textContent = idValue;
+           nextTagHex.textContent = hexValue ? 'HEX ' + hexValue : '(hex required — use manual mode)';
+           nextTagPanel.classList.remove('idle');
+           nextTagPanel.classList.toggle('ready', !!hexValue);
+           btnProgram.disabled = !sessionActive || !hexValue;
+         }
+
+         function parseSeed(seed) {
+           if (/^\d+$/.test(seed)) {
+             sequenceBaseRaw = seed;
+             sequenceBaseInt = Number(seed);
+             sequenceDigits = seed.length;
+             return true;
+           }
+           if (/^[0-9A-Fa-f]{8}$/i.test(seed)) {
+             sequenceBaseRaw = seed.toUpperCase();
+             sequenceBaseInt = null;
+             sequenceDigits = 0;
+             return true;
+           }
+           sequenceBaseRaw = seed;
+           sequenceBaseInt = null;
+           sequenceDigits = 0;
+           return true;
+         }
+
+         function loadSession() {
+           const seed = sequenceSeed.value.trim();
+           if (!seed) {
+             showResult(null, 'Enter a starting number first.', true);
+             return false;
+           }
+           parseSeed(seed);
+           sequenceIndex = 0;
+           sessionActive = true;
+           const id = valueAtIndex(0);
+           const hex = toDataHex(id);
+           showNextTag(id, hex);
+           showResult(null, 'Session loaded. Place a tag and tap Program Tag.', false);
+           return true;
+         }
+
+         function advanceSession() {
+           sequenceIndex += 1;
+           const id = valueAtIndex(sequenceIndex);
+           const hex = toDataHex(id);
+           showNextTag(id, hex);
+         }
+
          function showResult(uid, message, isError, hexdumpLines) {
            resultUid.textContent = uid ? 'UID: ' + uid : '';
            resultMessage.textContent = message || '';
-           resultMessage.classList.toggle('success', !isError);
-           resultMessage.classList.toggle('error', isError);
+           resultMessage.className = 'result-message' + (message ? (isError ? ' error' : ' success') : '');
            resultHexdump.innerHTML = '';
            if (hexdumpLines && hexdumpLines.length) {
              resultHexdump.hidden = false;
@@ -383,35 +458,32 @@
            }
            resultBox.classList.toggle('has-result', !!(message || uid || (hexdumpLines && hexdumpLines.length)));
          }
-         
-         btnRead.addEventListener('click', function() {
+
+         function doRead() {
            setBusy(true);
            fetch('/read', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
-             .then(r => r.json())
-             .then(data => {
+             .then(function(r) { return r.json(); })
+             .then(function(data) {
                setBusy(false);
                if (data.success) {
-                 showResult(data.uid, 'Read complete. Blocks 0–27 (default block ' + data.default_block + ' highlighted).', false, data.hexdump);
+                 showResult(data.uid, 'Read complete (block ' + data.default_block + ' highlighted).', false, data.hexdump);
                } else {
                  showResult(null, data.error || 'Unknown error', true);
                }
              })
-             .catch(err => {
+             .catch(function(err) {
                setBusy(false);
                showResult(null, err.message || 'Request failed', true);
              });
-         });
-         
-         form.addEventListener('submit', function(e) {
-           e.preventDefault();
-           const name = employeeName.value.trim();
-           const hex = dataHex.value.trim().replace(/\s/g, '');
+         }
+
+         function doFlash(name, hex, onSuccess) {
            if (!name) {
-             showResult(null, 'Employee name is required.', true);
+             showResult(null, 'Employee / ID is required.', true);
              return;
            }
            if (!/^[0-9A-Fa-f]{8}$/.test(hex)) {
-             showResult(null, 'Data must be exactly 8 hex characters (e.g. AABBCCDD).', true);
+             showResult(null, 'Data must be exactly 8 hex characters.', true);
              return;
            }
            setBusy(true);
@@ -421,10 +493,10 @@
              body: JSON.stringify({ employee_name: name, data_hex: hex })
            })
              .then(function(r) {
-               const ct = r.headers.get('content-type') || '';
+               var ct = r.headers.get('content-type') || '';
                if (!ct.includes('application/json')) {
-                 return r.text().then(function(text) {
-                   throw new Error('Server returned an error. Try again or check the server log.');
+                 return r.text().then(function() {
+                   throw new Error('Server error — check the device log.');
                  });
                }
                return r.json();
@@ -432,9 +504,8 @@
              .then(function(data) {
                setBusy(false);
                if (data.success) {
-                 showResult(data.uid, 'Successfully written to block ' + data.block + '.', false);
-                 employeeName.value = '';
-                 dataHex.value = '';
+                 showResult(data.uid, 'Written: ' + name + ' → block ' + data.block + '. Next tag ready.', false);
+                 if (onSuccess) onSuccess();
                } else {
                  showResult(data.uid || null, data.error || 'Unknown error', true);
                }
@@ -443,6 +514,35 @@
                setBusy(false);
                showResult(null, err.message || 'Request failed', true);
              });
+         }
+
+         btnLoad.addEventListener('click', loadSession);
+         sequenceSeed.addEventListener('keydown', function(e) {
+           if (e.key === 'Enter') {
+             e.preventDefault();
+             loadSession();
+           }
+         });
+
+         btnProgram.addEventListener('click', function() {
+           if (!sessionActive) {
+             if (!loadSession()) return;
+           }
+           if (!currentHex) {
+             showResult(null, 'Cannot convert this ID to hex. Use manual mode.', true);
+             return;
+           }
+           doFlash(currentId, currentHex, advanceSession);
+         });
+
+         btnReadBatch.addEventListener('click', doRead);
+         btnReadManual.addEventListener('click', doRead);
+
+         manualForm.addEventListener('submit', function(e) {
+           e.preventDefault();
+           var name = employeeName.value.trim();
+           var hex = dataHex.value.trim().replace(/\s/g, '').toUpperCase();
+           doFlash(name, hex, null);
          });
       </script>
    </body>

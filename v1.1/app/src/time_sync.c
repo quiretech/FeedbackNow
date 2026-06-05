@@ -43,8 +43,6 @@ static void time_sync_post_done_event(int result) {
 
 static void time_sync_notify_done(int result) {
   time_sync_post_done_event(result);
-  /* Re-enable ADR so network manages DR; was off for DeviceTimeAns phase. */
-  lora_request_enable_adr();
 }
 
 static int gps_to_unix_epoch(uint32_t gps_s, uint32_t *out_unix_s) {
@@ -244,5 +242,4 @@ void time_sync_abort_on_link_lost(void) {
   atomic_set(&time_sync_last_result, -ENOTCONN);
   k_sem_give(&time_sync_done_sem);
   time_sync_post_done_event(-ENOTCONN);
-  /* Intentionally no lora_request_enable_adr(): not joined until re-join */
 }

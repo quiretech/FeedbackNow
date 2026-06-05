@@ -55,7 +55,7 @@ sudo python -m app.main --write-block 5 AABBCCDD   # write 4 bytes to block 5
    - **Local (7" screen on RPi):** `http://127.0.0.1:5000` or `http://localhost:5000`
    - **From PC over Ethernet:** Connect RPi to PC via Ethernet, find RPi IP (e.g. `ip addr`), then open `http://<RPi-IP>:5000`
 
-3. **Workflow:** Place tag on reader → paste employee name (for CSV) → enter 4-byte hex (e.g. `AABBCCDD`) → set block (default 5, 0–27) → click **Flash!** → dialog shows UID and success → one row is appended to the CSV. Use **Scan** to read UID only. Use **Download CSV** to get the log file.
+3. **Workflow (batch):** Enter starting number (e.g. `20266034`) → **Load** → sticker tag, place on reader → **Program Tag** (repeats; auto-increments after each success). **Manual / custom data** (collapsed section) keeps Read + Flash with your own employee ID and hex. **Read tag** works in both modes.
 
 ## Config
 

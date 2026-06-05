@@ -431,7 +431,11 @@ def _normalize_registry_csv(path: Path) -> None:
 
     tmp = path.with_suffix(".csv.tmp")
     with tmp.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=REGISTRY_FIELDS)
+        writer = csv.DictWriter(
+            f,
+            fieldnames=REGISTRY_FIELDS,
+            quoting=csv.QUOTE_ALL,
+        )
         writer.writeheader()
         for r in rows:
             out = {
@@ -701,6 +705,7 @@ def main() -> int:
         writer = csv.DictWriter(
             f,
             fieldnames=REGISTRY_FIELDS,
+            quoting=csv.QUOTE_ALL,
         )
         if write_header:
             writer.writeheader()

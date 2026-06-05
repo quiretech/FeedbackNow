@@ -16,6 +16,7 @@
 #define FLEXBOX 0
 #define FLEXBOX_PLUS 1
 
+
 #ifndef DEVICE_HW_VARIANT
 #define DEVICE_HW_VARIANT FLEXBOX_PLUS
 #endif
@@ -25,7 +26,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0333"
+#define DEVICE_UNIT_ID_STRING "UNIT-0355"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -33,8 +34,8 @@
  * RTC_SET_TIME_ON_BOOT=1 and RTC_PRESERVE_EXISTING_ON_BOOT=0 (desk profile).
  * If 0, RTC falls back to RTC_SET_YEAR/... in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1779326585ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-05-21T01:23:05Z"
+#define DEVICE_PROVISION_UNIX_UTC 1780453318ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-06-03T02:21:58Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -43,15 +44,15 @@
  * =============================================================================
  */
 #ifndef DEVICE_REGISTRY_NAME_PREFIX_STRING
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "SFO"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "BFS"
 #endif
 
 #ifndef DEVICE_REGISTRY_CLIENT_NAME
-#define DEVICE_REGISTRY_CLIENT_NAME "San Francisco International Airport"
+#define DEVICE_REGISTRY_CLIENT_NAME "Belfast International Airport"
 #endif
 
 #ifndef DEVICE_REGISTRY_DECAL_TYPE
-#define DEVICE_REGISTRY_DECAL_TYPE "Nursery"
+#define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
 #endif
 
 #endif /* ONBOARDING_CONFIG_H */
