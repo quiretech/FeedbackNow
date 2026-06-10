@@ -64,6 +64,59 @@ static int rtc_should_set_time(const struct rtc_time *t) {
   return 0;
 }
 
+/** Test-suite / factory placeholder (matches RTC_SET_* in sys_config.h). */
+static bool rtc_is_factory_default(const struct rtc_time *t) {
+  return (t->tm_year + 1900) == RTC_SET_YEAR && (t->tm_mon + 1) == RTC_SET_MONTH &&
+         t->tm_mday == RTC_SET_DAY && t->tm_hour == RTC_SET_HOUR &&
+         t->tm_min == RTC_SET_MINUTE && t->tm_sec == RTC_SET_SECOND;
+}
+
+static int rtc_rtc_time_to_epoch(const struct rtc_time *t, uint32_t *out_epoch_s) {
+  if (out_epoch_s == NULL) {
+    return -EINVAL;
+  }
+  struct tm tm_utc = {
+      .tm_sec = t->tm_sec,
+      .tm_min = t->tm_min,
+      .tm_hour = t->tm_hour,
+      .tm_mday = t->tm_mday,
+      .tm_mon = t->tm_mon,
+      .tm_year = t->tm_year,
+      .tm_wday = t->tm_wday,
+      .tm_yday = t->tm_yday,
+      .tm_isdst = t->tm_isdst,
+  };
+  int64_t epoch = timeutil_timegm64(&tm_utc);
+  if (epoch < 0) {
+    return -EINVAL;
+  }
+  *out_epoch_s = (uint32_t)epoch;
+  return 0;
+}
+
+/**
+ * PRODUCTION: keep RTC across reboots only after it was seeded at or past the
+ * gen_euis provision stamp. Pre-provision test time (e.g. 2026-01-01) is overwritten.
+ */
+static bool rtc_should_preserve_on_boot(const struct rtc_time *cur, int read_ret) {
+  if (!RTC_PRESERVE_EXISTING_ON_BOOT || read_ret != 0 || rtc_should_set_time(cur)) {
+    return false;
+  }
+  if (rtc_is_factory_default(cur)) {
+    return false;
+  }
+#if DEVICE_PROVISION_UNIX_UTC != 0ULL
+  uint32_t cur_epoch = 0;
+  if (rtc_rtc_time_to_epoch(cur, &cur_epoch) != 0) {
+    return false;
+  }
+  if (cur_epoch < (uint32_t)DEVICE_PROVISION_UNIX_UTC) {
+    return false;
+  }
+#endif
+  return true;
+}
+
 static int rtc_set_time_from_config(void) {
 #if DEVICE_PROVISION_UNIX_UTC != 0ULL
   /* Single source of truth after onboarding/gen_euis.py (full or
@@ -115,9 +168,7 @@ int rtc_app_init(void) {
 #if RTC_SET_TIME_ON_BOOT
   struct rtc_time cur = {0};
   int ret = rtc_get_time(rtc_dev, &cur);
-  const bool rtc_valid = (ret == 0) && !rtc_should_set_time(&cur);
-
-  if (RTC_PRESERVE_EXISTING_ON_BOOT && rtc_valid) {
+  if (rtc_should_preserve_on_boot(&cur, ret)) {
     LOG_INF("RTC preserved (%04d-%02d-%02d %02d:%02d:%02d)",
             cur.tm_year + 1900, cur.tm_mon + 1, cur.tm_mday, cur.tm_hour,
             cur.tm_min, cur.tm_sec);
@@ -126,8 +177,10 @@ int rtc_app_init(void) {
       LOG_WRN("RTC read failed (%d); applying provision time", ret);
     } else if (rtc_should_set_time(&cur)) {
       LOG_WRN("RTC uninitialized; applying provision time");
+    } else if (rtc_is_factory_default(&cur)) {
+      LOG_INF("RTC at factory/test default; applying provision time");
     } else {
-      LOG_INF("Applying provision time from sys_config");
+      LOG_INF("RTC before provision stamp; applying provision time");
     }
     ret = rtc_set_time_from_config();
     if (ret != 0) {

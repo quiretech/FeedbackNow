@@ -35,9 +35,12 @@
   LV_FONT_DECLARE(roboto_bold_36);
   LV_FONT_DECLARE(roboto_bold_42);
   LV_IMG_DECLARE(boot_screen);
-#if EPD_LOCALE_FR_BITMAPS
+#if EPD_LOCALE == EPD_LOCALE_FR
   LV_IMG_DECLARE(thanks_fr);
   LV_IMG_DECLARE(cleaning_fr);
+#elif EPD_LOCALE == EPD_LOCALE_DE
+  LV_IMG_DECLARE(thanks_de);
+  LV_IMG_DECLARE(cleaning_de);
 #else
   LV_IMG_DECLARE(thanks_en);
   LV_IMG_DECLARE(cleaning_en);
@@ -366,11 +369,11 @@
     lv_label_set_text(label, EPD_TEXT_LAST_CLEANED_HEADLINE);
 
 
-    #if EPD_LOCALE_FR_BITMAPS
-    lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
-    #else
+#if EPD_LOCALE == EPD_LOCALE_EN
     lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-    #endif
+#else
+    lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
+#endif
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     last_cleaned_label = lv_label_create(cont);
@@ -381,26 +384,30 @@
 
     lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: THANKS — full-screen bitmap; locale via EPD_LOCALE_FR_BITMAPS */
+    /* Screen: THANKS — full-screen bitmap; locale via EPD_LOCALE */
     screen_thanks = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_t *img_thanks = lv_img_create(screen_thanks);
-#if EPD_LOCALE_FR_BITMAPS
+#if EPD_LOCALE == EPD_LOCALE_FR
     lv_img_set_src(img_thanks, &thanks_fr);
+#elif EPD_LOCALE == EPD_LOCALE_DE
+    lv_img_set_src(img_thanks, &thanks_de);
 #else
     lv_img_set_src(img_thanks, &thanks_en);
 #endif
     lv_obj_center(img_thanks);
     lv_obj_add_flag(screen_thanks, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: CLEANING — full-screen bitmap (cleaning_en / cleaning_fr) */
+    /* Screen: CLEANING — full-screen bitmap (cleaning_en / cleaning_fr / cleaning_de) */
     screen_cleaning = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_cleaning, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_cleaning, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_t *img_cleaning = lv_img_create(screen_cleaning);
-#if EPD_LOCALE_FR_BITMAPS
+#if EPD_LOCALE == EPD_LOCALE_FR
     lv_img_set_src(img_cleaning, &cleaning_fr);
+#elif EPD_LOCALE == EPD_LOCALE_DE
+    lv_img_set_src(img_cleaning, &cleaning_de);
 #else
     lv_img_set_src(img_cleaning, &cleaning_en);
 #endif

@@ -17,20 +17,27 @@ config SSD1683_INIT_PRIORITY
 	int "SSD1683 initialization priority"
 	default 90
 	help
-	  Initialization priority. Must be higher than SPI and GPIO.
+	  Initialization priority. Must be higher than SPI (70) and GPIO.
 
 config SSD1683_FLUSH_DELAY_MS
-	int "Coalescing delay before EPD refresh (ms)"
-	default 30
+	int "Coalesce LVGL tiles (ms)"
+	default 20
 	help
-	  After a display_write() stages pixels into the shadow FB,
-	  the driver waits this many milliseconds before kicking the
-	  refresh. Each additional write within the window only
-	  expands the dirty rectangle and re-arms the timer, so
-	  LVGL's N-flushes-per-frame become one refresh.
+	  After display_write() stages pixels into the shadow FB, the driver
+	  waits this many milliseconds before kicking the refresh. Each
+	  additional write within the window expands the dirty rectangle and
+	  re-arms the timer, so LVGL's N-flushes-per-frame become one refresh.
 
-config SSD1683_PARTIAL_MAX_BEFORE_FULL
-	int "Partial refreshes before a forced full refresh"
+config SSD1683_PARTIAL_THRESHOLD_PCT
+	int "Dirty area percent forcing full refresh"
+	default 25
+	range 1 100
+	help
+	  When the coalesced dirty rectangle covers at least this percentage
+	  of the panel, use a full refresh instead of partial.
+
+config SSD1683_PARTIAL_LIMIT
+	int "Max partial refreshes before forced full"
 	default 50
 	help
 	  E-paper panels accumulate ghosting after many partial updates.
@@ -43,9 +50,15 @@ config SSD1683_WORKQUEUE_STACK_SIZE
 
 config SSD1683_WORKQUEUE_PRIORITY
 	int "Driver workqueue thread priority"
-	default 10
+	default 5
 	help
 	  Low priority is fine; the refresh takes hundreds of ms but
-	  mostly sleeps inside _wait_busy.
+	  mostly sleeps inside _ssd1683_wait_busy.
+
+config SSD1683_LOG_LEVEL
+	int "SSD1683 driver log level"
+	default 3
+	help
+	  Log level for the SSD1683 low-level driver (0=none, 4=debug).
 
 endif # SSD1683

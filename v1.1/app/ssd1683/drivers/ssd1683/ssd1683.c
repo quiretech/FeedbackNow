@@ -339,7 +339,7 @@ static int _ssd1683_write_screen_buffer(const struct device *dev,
     return ret;
 
   // Prepare a small burst buffer (e.g., 64 bytes)
-  uint8_t burst[15008];
+  uint8_t burst[256];
   memset(burst, value, sizeof(burst));
 
   struct spi_buf buf = {.buf = burst, .len = sizeof(burst)};

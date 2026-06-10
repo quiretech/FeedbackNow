@@ -171,7 +171,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 
@@ -245,9 +245,27 @@
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 
 #if EPD_ENABLED
-#ifndef EPD_LOCALE_FR_BITMAPS
-#define EPD_LOCALE_FR_BITMAPS 0
+/** Compile-time EPD locale — set EPD_LOCALE below (default EN if unset). */
+#define EPD_LOCALE_EN 0
+#define EPD_LOCALE_FR 1
+#define EPD_LOCALE_DE 2
+
+/* #define EPD_LOCALE EPD_LOCALE_FR */
+/* #define EPD_LOCALE EPD_LOCALE_DE */
+
+#ifndef EPD_LOCALE
+#if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
+#define EPD_LOCALE EPD_LOCALE_FR
+#else
+#define EPD_LOCALE EPD_LOCALE_DE
 #endif
+#endif
+
+#if EPD_LOCALE != EPD_LOCALE_EN && EPD_LOCALE != EPD_LOCALE_FR &&         \
+    EPD_LOCALE != EPD_LOCALE_DE
+#error "EPD_LOCALE must be EPD_LOCALE_EN, EPD_LOCALE_FR, or EPD_LOCALE_DE"
+#endif
+
 #include "display_strings.h"
 #endif
 

@@ -41,99 +41,89 @@
 #define SSD1683_CMD_SET_RAM_X_COUNTER       0x4E
 #define SSD1683_CMD_SET_RAM_Y_COUNTER       0x4F
 
-/* DISPLAY_UPDATE_CTRL_2 (0x22) payload options.  The payload bitfield
- * enables/disables specific phases of the update sequence. */
-#define SSD1683_UDC2_POWER_ON              0xE0 /* en clk, en analog, disp off */
-#define SSD1683_UDC2_FULL_SLOW             0xF7 /* en clk, en analog, LUT from OTP, display, dis analog, dis clk */
-#define SSD1683_UDC2_FULL_FAST             0xD7 /* skip LUT load, faster waveform (needs 0x1A temp write) */
-#define SSD1683_UDC2_PARTIAL               0xFC /* differential update using RAM-B as previous frame */
-#define SSD1683_UDC2_POWER_OFF_ANALOG      0x83 /* display, disable analog + clock */
+/* DISPLAY_UPDATE_CTRL_2 (0x22) payload options. */
+#define SSD1683_UDC2_POWER_ON              0xE0
+#define SSD1683_UDC2_FULL_SLOW             0xF7
+#define SSD1683_UDC2_FULL_FAST             0xD7
+#define SSD1683_UDC2_PARTIAL               0xFC
+#define SSD1683_UDC2_POWER_OFF_ANALOG      0x83
 
 struct ssd1683_config {
-    struct spi_dt_spec bus;
-    struct gpio_dt_spec dc;
-    struct gpio_dt_spec rst;
-    struct gpio_dt_spec busy;
-    uint16_t width;
-    uint16_t height;
-    bool fast_mode;
-
-    /* Per-instance resources provided by the DEVICE_DT_DEFINE macro. */
-    uint8_t *shadow_fb;           /* WIDTH*HEIGHT/8 bytes, MSB-first mono */
-    size_t   shadow_fb_size;
-    struct k_work_q *workq;
-    k_thread_stack_t *workq_stack;
-    size_t workq_stack_size;
+	/* From DT via SPI_DT_SPEC_GET / GPIO_DT_SPEC_GET */
+	struct spi_dt_spec bus;
+	struct gpio_dt_spec dc;
+	struct gpio_dt_spec rst;
+	struct gpio_dt_spec busy;
+	/* From DT_PROP(n, width/height/fast_mode) */
+	uint16_t width;
+	uint16_t height;
+	bool fast_mode;
+	/* Allocated by DEVICE_DT_DEFINE macro. Layout: width/8 bytes per row,
+	 * MSB-first mono (1=white, 0=black), size = width*height/8. */
+	uint8_t *shadow_fb;
+	size_t shadow_fb_size;
+	/* Per-instance workqueue for deferred flush */
+	struct k_work_q *workq;
+	k_thread_stack_t *workq_stack;
+	size_t workq_stack_size;
 };
 
 struct ssd1683_dirty_rect {
-    uint16_t x, y, w, h; /* byte-aligned on X, w = 0 means empty */
-};
-
-struct ssd1683_data {
-    const struct device *self;
-
-    bool is_initialized;
-    bool is_powered_on;
-    bool is_blanked;
-    bool use_fast_update;
-    bool force_full;
-
-    uint32_t partial_count;
-    struct ssd1683_dirty_rect dirty;
-
-    struct k_mutex lock;
-    struct k_sem refresh_done;
-    struct k_work_delayable refresh_work;
+	uint16_t x, y, w, h; /* w == 0 => empty; x byte-aligned, w multiple of 8 */
 };
 
 /**
- * @brief Force pending coalesced writes to be flushed to the panel now and
- *        block until the refresh sequence completes.
+ * Runtime state flags (Phase 2 state machine).
  *
- * Safe to call from any thread except the driver's own workqueue thread.
+ * is_initialized  — SW reset + register table programmed; cleared on
+ *                   hibernate, cold-start failure, refresh failure.
+ * is_powered_on   — Analog section awake; full refresh clears this
+ *                   (waveform power-off); partial refresh sets true.
+ * is_blanked      — blanking_on() was called; writes auto blanking_off().
+ * needs_full_sync — Next flush must rewrite PREVIOUS RAM; set at init,
+ *                   hibernate, cold-start, clear_screen.
+ * force_full      — App requested full waveform via ssd1683_force_full_refresh().
+ * use_fast_update — Fast full waveform (0xD7) vs slow OTP LUT (0xF7).
+ */
+struct ssd1683_data {
+	const struct device *self;
+	bool is_initialized;
+	bool is_powered_on;
+	bool is_blanked;
+	bool needs_full_sync;
+	bool force_full;
+	bool use_fast_update;
+	uint32_t partial_count;
+	struct ssd1683_dirty_rect dirty;
+	struct k_mutex lock;
+	struct k_sem refresh_done;
+	struct k_work_delayable refresh_work;
+};
+
+/**
+ * @brief Push coalesced shadow-FB pixels to the panel and block until done.
  *
- * @param dev Device pointer.
- * @param timeout Max time to wait for the refresh to finish.
+ * Not automatic: the application must call this after staging (e.g. once
+ * per lv_task_handler() loop). display_write() only copies into the shadow
+ * framebuffer and arms a deferred refresh; this function kicks the worker
+ * immediately and waits on @p timeout.
+ *
  * @return 0 on success, -EAGAIN on timeout, negative errno on failure.
  */
 int ssd1683_flush(const struct device *dev, k_timeout_t timeout);
 
 /**
- * @brief Query whether a refresh is currently in flight or scheduled.
- */
-bool ssd1683_is_busy(const struct device *dev);
-
-/**
- * @brief Request that the next flush performs a full refresh instead of
- *        partial, to clear accumulated ghosting.
+ * @brief Request a full-panel waveform on the next flush (ghosting cleanup).
+ *
+ * Sets force_full; does not block. Pair with ssd1683_flush().
  */
 int ssd1683_force_full_refresh(const struct device *dev);
-
-/**
- * @brief Fill the shadow framebuffer with @p value and force a full refresh.
- *        Useful at boot or whenever the app wants a clean wipe.
- *
- * @param value 0x00 (black) or 0xFF (white).
- */
+bool ssd1683_is_busy(const struct device *dev);
 int ssd1683_clear_screen(const struct device *dev, uint8_t value);
-
-/**
- * @brief Power on / off / hibernate the EPD analog section.
- * These map to DISPLAY_UPDATE_CTRL_2 sequences and (for hibernate) to the
- * DEEP_SLEEP command.  They are primarily used by the display API wrapper
- * (blanking_off / blanking_on) but are exported for direct use too.
- */
 int ssd1683_power_on(const struct device *dev);
 int ssd1683_power_off(const struct device *dev);
 int ssd1683_hibernate(const struct device *dev);
-
-/**
- * @brief Enable or disable the fast full-refresh waveform.  Fast mode skips
- *        the LUT-from-OTP load and shortens the update by ~30%.  Default on.
- */
 int ssd1683_set_fast_update(const struct device *dev, bool fast_update);
-
 bool ssd1683_is_powered_on(const struct device *dev);
 bool ssd1683_is_initialized(const struct device *dev);
 
