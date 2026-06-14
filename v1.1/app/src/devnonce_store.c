@@ -126,7 +126,7 @@ static int load_or_init(void) {
       return ret;
     }
 
-    LOG_INF("devnonce init slot=%u seq=%u next=0", ctx.active_slot, ctx.seq);
+    LOG_DBG("devnonce init slot=%u seq=%u next=0", ctx.active_slot, ctx.seq);
     return 0;
   }
 
@@ -152,7 +152,7 @@ static int load_or_init(void) {
   ctx.seq = best->seq;
   ctx.last_devnonce = best->last_devnonce;
 
-  LOG_INF("devnonce slot=%u seq=%u last=%u", ctx.active_slot, ctx.seq,
+  LOG_DBG("devnonce slot=%u seq=%u last=%u", ctx.active_slot, ctx.seq,
           ctx.last_devnonce);
   return 0;
 }

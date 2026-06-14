@@ -38,9 +38,9 @@ void eeprom_probe_log(void) {
   }
 
 #if SYS_CONFIG_EEPROM_PROBE_LOG
-  LOG_INF("EEPROM probe OK (first %u bytes):", (unsigned)sizeof(buf));
-  LOG_HEXDUMP_INF(buf, sizeof(buf), "EEPROM[0x0000..]");
+  LOG_DBG("EEPROM probe OK (first %u bytes):", (unsigned)sizeof(buf));
+  LOG_HEXDUMP_DBG(buf, sizeof(buf), "EEPROM[0x0000..]");
 #else
-  LOG_INF("EEPROM probe OK");
+  LOG_DBG("EEPROM probe OK");
 #endif
 }

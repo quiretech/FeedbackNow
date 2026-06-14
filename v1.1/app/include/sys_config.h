@@ -8,7 +8,6 @@
  *   sys_config_profile.h  — PRODUCTION / DESK / LAB (change SYS_CONFIG_PROFILE)
  *   onboarding_config.h   — unit id, provision UTC, DEVICE_HW_VARIANT, registry strings
  *   eeprom_layout.h       — fixed EEPROM map (do not tune per deployment)
- *   mapek/mapek_config.h  — MAPE-K timeouts (derived from MAPEK_LAB_FAST_TEST)
  *   display_strings.h     — EPD UI copy (when EPD_ENABLED)
  *
  * Release checklist: SYS_CONFIG_PROFILE_PRODUCTION, eui_keys.h production keys.
@@ -52,7 +51,11 @@
 #define LORA_THREAD_PRIORITY 7
 #define LORA_JOIN_RETRY_DELAY_SECONDS 60
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 10
-#if MAPEK_LAB_FAST_TEST
+/** lorawan_join() faster than this after DevTimeReq is a stale-MLME-sem false OK. */
+#define LORA_JOIN_SUSPICIOUS_MAX_MS 3000U
+/** Keep SPI/radio free at least this long after JoinRequest before post-join EPD/MAC. */
+#define LORA_JOIN_OTAA_GUARD_MS 9000U
+#if SYS_CONFIG_LAB_FAST
 #define LORA_JOIN_BACKOFF_HOURS 0
 #else
 #define LORA_JOIN_BACKOFF_HOURS 1
@@ -60,33 +63,26 @@
 #define LORA_SEND_BUSY_RETRY_MS 5000
 #define LORA_UPLINK_MIN_INTERVAL_MS 3000
 #define LORA_POST_JOIN_MAC_SETTLE_MS 0
-#define LORA_POST_JOIN_MAC_PROBE_RETRIES 30
+#define LORA_POST_JOIN_MAC_PROBE_RETRIES 5
 #define LORA_POST_JOIN_MAC_PROBE_RETRY_MS 500
 #define LORA_POST_JOIN_ANS_SETTLE_MS 2500
+#if EPD_ENABLED
+/** Typical full EPD refresh (~400x300); margin before LoRa MAC uses SPI again. */
+#define LORA_EPD_FULL_REFRESH_MS 3600U
+/** Defer post-join DeviceTime until after join LED + LAST_CLEANED EPD (shared SPI). */
+#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                       \
+  (((show_join_led) != 0)                                                        \
+       ? ((uint32_t)POST_JOIN_LED_BEFORE_EPD_MS +                                \
+          (uint32_t)LORA_EPD_FULL_REFRESH_MS +                                   \
+          (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)                                 \
+       : ((uint32_t)LORA_EPD_FULL_REFRESH_MS +                                   \
+          (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS))
+#else
+#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                       \
+  ((void)(show_join_led), (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
+#endif
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
 #define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
-/** MAPE-K monitor DL RSSI/SNR EWMA — see mapek/mapek_config.h for HB cadence. */
-#ifndef MAPEK_LINK_EWMA_SHIFT
-#define MAPEK_LINK_EWMA_SHIFT 3U
-#endif
-#ifndef MAPEK_RF_RSSI_GOOD_DB
-#define MAPEK_RF_RSSI_GOOD_DB (-80)
-#endif
-#ifndef MAPEK_RF_RSSI_FAIR_DB
-#define MAPEK_RF_RSSI_FAIR_DB (-95)
-#endif
-#ifndef MAPEK_RF_RSSI_POOR_DB
-#define MAPEK_RF_RSSI_POOR_DB (-105)
-#endif
-#ifndef MAPEK_RF_SNR_GOOD_MIN
-#define MAPEK_RF_SNR_GOOD_MIN 7
-#endif
-#ifndef MAPEK_RF_SNR_FAIR_MIN
-#define MAPEK_RF_SNR_FAIR_MIN 4
-#endif
-#ifndef MAPEK_RF_SNR_POOR_MIN
-#define MAPEK_RF_SNR_POOR_MIN 2
-#endif
 #define LORA_BUTTON_PORT 2
 #define LORA_BUTTON_UPLINK_CONFIRMED 0
 #define LORA_NFC_UPLINK_CONFIRMED 0
@@ -95,28 +91,20 @@
 #define COUNTER_SYNC_DELAY_MS 100
 #define COUNTER_SYNC_JITTER_MAX_MS 600
 
+/* Defer LinkCheck/DeviceTime after N app uplinks (3 s spacing each + fudge). */
+#define LORA_POST_APP_UPLINK_MAC_FUDGE_MS 500U
+#define LORA_POST_APP_UPLINKS_MAC_DELAY_MS(count)                                  \
+  (((uint32_t)(count) * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +                   \
+   (uint32_t)LORA_POST_APP_UPLINK_MAC_FUDGE_MS)
+/** Gap between deferred LinkCheckReq and DeviceTimeReq (after app uplinks). */
+#define LORA_POST_BURST_LINK_TO_TIME_GAP_MS                                        \
+  ((uint32_t)LORA_UPLINK_MIN_INTERVAL_MS + (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
+
 /* =============================================================================
  * Buttons / Input (FRD 4.1)
  * =============================================================================
  */
 #define NUM_BUTTONS 6
-#define LORA_BURST_JOIN_TAIL_UPLINKS ((uint32_t)NUM_BUTTONS + 1U)
-#define LORA_BURST_HK_TAIL_UPLINKS ((uint32_t)NUM_BUTTONS + 2U)
-#define LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS 5000U
-#define LORA_BURST_COUNTER_JITTER_BUDGET_MS                                          \
-  ((uint32_t)NUM_BUTTONS * (uint32_t)COUNTER_SYNC_JITTER_MAX_MS)
-#define LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS                              \
-  (((uint32_t)LORA_BURST_JOIN_TAIL_UPLINKS * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) + \
-   (uint32_t)LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS +                                    \
-   (uint32_t)LORA_BURST_COUNTER_JITTER_BUDGET_MS)
-#define LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS                                \
-  (((uint32_t)LORA_BURST_HK_TAIL_UPLINKS * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +   \
-   (uint32_t)LORA_BURST_TIME_SYNC_TAIL_FUDGE_MS +                                    \
-   (uint32_t)LORA_BURST_COUNTER_JITTER_BUDGET_MS)
-/** Gap between deferred LinkCheckReq and DeviceTimeReq (after burst uplinks). */
-#define LORA_POST_BURST_LINK_TO_TIME_GAP_MS                                        \
-  ((uint32_t)LORA_UPLINK_MIN_INTERVAL_MS + (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
-
 #define BUTTON_QUEUE_SIZE 16
 #define BUTTON_QUEUE_ALIGNMENT 4
 #define BUTTON_THREAD_STACK_SIZE 1536
@@ -127,7 +115,7 @@
 #else
 #define BUTTON_COOLDOWN_MS 5000
 #endif
-#define INPUT_COMBO_SCAN_INTERVAL_MS 50
+/* Combo hold + session recovery deadlines: k_work_delayable in button_thread.c */
 #define INPUT_SESSION_RECOVERY_MS 250
 #define COMBO_STAFF_HOLD_MS 1000
 #define COMBO_DEVICE_INFO_HOLD_MS 2000
@@ -195,23 +183,26 @@
 #define RTC_INIT_RETRY_DELAY_MS 30
 #define LORAWAN_GPS_UTC_LEAP_SECONDS 18
 #define GPS_TO_UNIX_EPOCH_OFFSET 315964800U
-#define TIME_SYNC_MAX_RETRIES 3
 #define TIME_SYNC_ANS_TIMEOUT_MS 12000
 
 /* =============================================================================
  * Power gating (rail manager)
  * =============================================================================
  */
-#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 60000
+#if EPD_ENABLED
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 30000
+#else
+#define RAIL_MANAGER_3V3A_KEEPALIVE_MS 5000
+#endif
 #define RAIL_MANAGER_3V6_KEEPALIVE_MS 15000
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
  * =============================================================================
  */
-#if MAPEK_LAB_FAST_TEST
+#if SYS_CONFIG_LAB_FAST
 #define HEARTBEAT_USE_DEVEUI_JITTER 0
-#define HOUSEKEEPING_INTERVAL_SECONDS 120
+#define HOUSEKEEPING_INTERVAL_SECONDS 100
 #else
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 #define HOUSEKEEPING_INTERVAL_SECONDS 86400
@@ -250,8 +241,7 @@
 #define EPD_LOCALE_FR 1
 #define EPD_LOCALE_DE 2
 
-/* #define EPD_LOCALE EPD_LOCALE_FR */
-/* #define EPD_LOCALE EPD_LOCALE_DE */
+#define EPD_LOCALE 1
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
@@ -291,7 +281,6 @@
 #define LED_UI_MSGQ_LEN 8
 #define LED_UI_MSGQ_ALIGN 4
 #define LED_UI_THREAD_STACK 1280
-#define HOUSEKEEPING_STACK_SIZE 1536
 #define NFC_WORKER_STACK_SIZE 1536
 
 /* =============================================================================
@@ -301,7 +290,7 @@
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 4
 #define FW_VERSION_PATCH 0
-#define FW_VERSION_STRING "1.4.0"
+#define FW_VERSION_STRING "1.5.0"
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4
 #define HW_VERSION_PATCH 1

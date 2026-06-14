@@ -1,4 +1,5 @@
 #include "downlink_dispatch.h"
+#include "log_fmt.h"
 #include "button_counter_store.h"
 #include "devnonce_store.h"
 #include "display_manager.h"
@@ -13,6 +14,7 @@
 #include "sys_config.h"
 #include "tz_offset_store.h"
 
+#include <stdbool.h>
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -102,9 +104,9 @@ static int dl_decode_hex_ascii_body(const uint8_t *hex, size_t hexlen, char *out
 
 }
 
-void downlink_queue_housekeeping_state_snapshot(void) {
+bool downlink_queue_housekeeping_state_snapshot(void) {
   if (!lora_is_joined()) {
-    return;
+    return false;
   }
 
   uint32_t epoch_s = 0;
@@ -125,7 +127,7 @@ void downlink_queue_housekeeping_state_snapshot(void) {
   uint8_t snap[PAYLOAD_LEN_BYTES];
   if (payload_gen_build_device_state_snapshot(epoch_s, last_cleaned, tz_min,
                                               snap) != 0) {
-    return;
+    return false;
   }
 
   lora_uplink_msg_t m = {0};
@@ -137,7 +139,9 @@ void downlink_queue_housekeeping_state_snapshot(void) {
   if (lora_put_event(&m, K_MSEC(500)) != 0) {
     LOG_WRN("HK state snapshot queue failed (0x13 fport %u)",
             (unsigned)FPORT_HOUSEKEEPING);
+    return false;
   }
+  return true;
 }
 
 static void downlink_queue_fw_hw_version_uplink(void) {
@@ -160,7 +164,7 @@ static void downlink_queue_fw_hw_version_uplink(void) {
   if (lora_put_event(&m, K_MSEC(500)) != 0) {
     LOG_WRN("fw/hw query (0x08): queue EVT 0x14 failed");
   } else {
-    LOG_INF("fw/hw query (0x08): queued EVT 0x14 fport %u",
+    LOG_DBG("fw/hw query (0x08): queued EVT 0x14 fport %u",
             (unsigned)FPORT_DEVICE_INFO);
   }
 }
@@ -173,7 +177,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
   uint8_t cmd = frmpayload[0];
 
-  LOG_INF("dispatch port=%u len=%u cmd=0x%02X", (unsigned)port,
+  LOG_EVT("DL port=%u len=%u cmd=0x%02X", (unsigned)port,
           (unsigned)len, cmd);
 
   switch (cmd) {
@@ -187,7 +191,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
                 (unsigned)cmd, (unsigned)epoch);
       }
       display_set_pending_last_cleaned_and_apply(epoch);
-      LOG_INF("cmd 0x%02X EPD update epoch=%u (EEPROM + display)",
+      LOG_DBG("cmd 0x%02X EPD update epoch=%u (EEPROM + display)",
               (unsigned)cmd, (unsigned)epoch);
     } else {
       LOG_WRN("cmd 0x%02X EPD update: len %u < 5", (unsigned)cmd,
@@ -196,40 +200,40 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
     break;
   case DL_CMD_EPD_REFRESH:
     display_request_full_refresh();
-    LOG_INF("cmd 0x%02X EPD refresh", (unsigned)cmd);
+    LOG_DBG("cmd 0x%02X EPD refresh", (unsigned)cmd);
     break;
   case DL_CMD_STATUS_REQ:
-    LOG_INF("cmd 0x%02X status request (heartbeat / telemetry)",
+    LOG_DBG("cmd 0x%02X status request (HK + counter sync burst)",
             (unsigned)cmd);
-    housekeeping_run();
+    housekeeping_submit_status_request();
     break;
   case DL_CMD_RESET_COUNTERS:
-    LOG_INF("cmd 0x%02X reset counters", (unsigned)cmd);
+    LOG_DBG("cmd 0x%02X reset counters", (unsigned)cmd);
     rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
-      LOG_INF("counters reset done");
+      LOG_DBG("counters reset done");
     } else {
       LOG_ERR("counters reset failed");
     }
     rail_manager_release_3v3a();
     break;
   case DL_CMD_FACTORY_RESET:
-    LOG_INF("cmd 0x%02X factory reset (counters + devnonce + "
+    LOG_DBG("cmd 0x%02X factory reset (counters + devnonce + "
             "has_joined_once)",
             (unsigned)cmd);
     rail_manager_request_3v3a();
     if (button_counter_store_factory_reset() == 0) {
-      LOG_INF("factory reset: counters done");
+      LOG_DBG("factory reset: counters done");
     } else {
       LOG_ERR("factory reset: counters failed");
     }
     if (devnonce_store_factory_reset() == 0) {
-      LOG_INF("factory reset: devnonce reset to 0");
+      LOG_DBG("factory reset: devnonce reset to 0");
     } else {
       LOG_WRN("factory reset: devnonce reset failed");
     }
     if (join_state_store_clear_has_joined_once() == 0) {
-      LOG_INF("factory reset: has_joined_once cleared");
+      LOG_DBG("factory reset: has_joined_once cleared");
     } else {
       LOG_WRN("factory reset: clear has_joined_once failed");
     }
@@ -252,7 +256,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
       int ret = tz_offset_store_set(offset_min);
       rail_manager_release_3v3a();
       if (ret == 0) {
-        LOG_INF("cmd 0x%02X timezone offset %d min", (unsigned)cmd,
+        LOG_DBG("cmd 0x%02X timezone offset %d min", (unsigned)cmd,
                 (int)offset_min);
         display_show_last_cleaned();
         downlink_queue_housekeeping_state_snapshot();
@@ -266,13 +270,13 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
     }
     break;
   case DL_CMD_REBOOT:
-    LOG_INF("cmd 0x%02X reboot (post SMF)", (unsigned)cmd);
+    LOG_DBG("cmd 0x%02X reboot (post SMF)", (unsigned)cmd);
     if (smf_post_event(SMF_EVT_DL_REBOOT, 0, k_uptime_get()) != 0) {
       LOG_WRN("DL reboot: SMF queue post failed");
     }
     break;
   case DL_CMD_QUERY_FW_HW_VERSION:
-    LOG_INF("cmd 0x%02X fw/hw version query -> EVT 0x14 fport %u",
+    LOG_DBG("cmd 0x%02X fw/hw version query -> EVT 0x14 fport %u",
             (unsigned)cmd, (unsigned)FPORT_DEVICE_INFO);
     downlink_queue_fw_hw_version_uplink();
     break;
@@ -287,7 +291,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
 
       char decoded[DISPLAY_DL_CUSTOM_TEXT_MAX + 1];
 
-      LOG_INF("cmd 0x99 custom EPD text dur=%umin hex_len=%zu",
+      LOG_DBG("cmd 0x99 custom EPD text dur=%umin hex_len=%zu",
 
               (unsigned)dur_min, hexlen);
 

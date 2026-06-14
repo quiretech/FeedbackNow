@@ -8,7 +8,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
 
-LOG_MODULE_REGISTER(power_ctrl, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(power_ctrl, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define EN3V3_NODE DT_NODELABEL(en3v3)
 #define EN1V8_NODE DT_NODELABEL(en1v8)
@@ -68,7 +68,7 @@ int power_ctrl_init(void) {
             power_gpios[i].pin);
   }
 
-  LOG_INF("power rails: gpio ok (%d domains)", POWER_DOMAIN_COUNT);
+  LOG_DBG("power rails: gpio ok (%d domains)", POWER_DOMAIN_COUNT);
   return 0;
 }
 

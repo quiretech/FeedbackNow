@@ -245,7 +245,7 @@ int led_manager_init(void) {
     LOG_ERR("LED init failed: %d", ret);
     return ret;
   }
-  LOG_INF("LED mgr init ok");
+  LOG_DBG("LED mgr init ok");
   return 0;
 }
 

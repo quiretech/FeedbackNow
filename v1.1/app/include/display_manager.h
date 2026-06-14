@@ -73,6 +73,12 @@ void display_show_cleaning_sync(void);
 void display_show_connecting(void);
 
 /**
+ * Show connecting and block until EPD SPI flush completes. Use before deliberate
+ * OTAA re-join so JoinAccept RX is not starved by EPD on shared SPI.
+ */
+void display_show_connecting_sync(void);
+
+/**
  * Device status screen (async): join state, link check snapshot, counters.
  * Uses 0 ms queue delay when enqueued from display layer.
  */

@@ -9,7 +9,9 @@
  */
 
 #include "time_sync.h"
+#include "log_fmt.h"
 
+#include "display_manager.h"
 #include "lora_app.h"
 #include "rail_manager.h"
 #include "rtc.h"
@@ -34,7 +36,6 @@ K_WORK_DELAYABLE_DEFINE(time_sync_timeout_work, time_sync_timeout_work_handler);
 static atomic_t time_sync_inflight = ATOMIC_INIT(0);
 static atomic_t time_sync_last_result = ATOMIC_INIT(-EAGAIN);
 K_SEM_DEFINE(time_sync_done_sem, 0, 1);
-static atomic_t time_sync_retries_done = ATOMIC_INIT(0);
 
 static void time_sync_post_done_event(int result) {
   (void)smf_post_event(SMF_EVT_TIME_SYNC_DONE, (result == 0 ? 0 : 1),
@@ -83,7 +84,7 @@ static int time_sync_apply_from_stack(void) {
   if (ret != 0) {
     LOG_WRN("RTC update skipped/failed (epoch=%u): %d", epoch_s, ret);
   } else {
-    LOG_INF("RTC synced gps=%u -> epoch=%u", gps_time, epoch_s);
+    LOG_EVT("RTC synced gps=%u epoch=%u", gps_time, epoch_s);
   }
   rail_manager_release_3v3a();
 
@@ -111,18 +112,7 @@ static void time_sync_timeout_work_handler(struct k_work *work) {
   if (atomic_get(&time_sync_inflight) == 0) {
     return;
   }
-  int retry = (int)atomic_inc(&time_sync_retries_done);
-  if (retry + 1 < TIME_SYNC_MAX_RETRIES) {
-    LOG_WRN("DeviceTimeAns timeout (attempt %d/%d); scheduling retry",
-            retry + 1, TIME_SYNC_MAX_RETRIES);
-    if (lora_cmd_put(LORA_CMD_TIME_SYNC_RETRY) == 0) {
-      return;
-    }
-    LOG_WRN("Failed to queue DeviceTimeReq retry command");
-  } else {
-    LOG_WRN("DeviceTimeReq gave up after %d attempts (no DeviceTimeAns)",
-            TIME_SYNC_MAX_RETRIES);
-  }
+  LOG_WRN("DeviceTimeAns timeout (%u ms)", (unsigned)TIME_SYNC_ANS_TIMEOUT_MS);
 
   if (!atomic_cas(&time_sync_inflight, 1, 0)) {
     return;
@@ -144,7 +134,6 @@ void time_sync_request_and_update_rtc(void) {
     return;
   }
 
-  atomic_set(&time_sync_retries_done, 0);
   atomic_set(&time_sync_last_result, -EINPROGRESS);
   k_sem_reset(&time_sync_done_sem);
 
@@ -158,7 +147,7 @@ void time_sync_request_and_update_rtc(void) {
   if (rret == 0) {
     LOG_DBG("RTC epoch before=%u", rtc_epoch_before);
   } else {
-    LOG_WRN("RTC epoch unreadable: %d", rret);
+    LOG_DBG("RTC epoch unreadable: %d", rret);
   }
 
   /* Log current LoRaWAN time state (if already available) */
@@ -170,7 +159,21 @@ void time_sync_request_and_update_rtc(void) {
     LOG_DBG("stack time unavailable (ret=%d)", tret);
   }
 
-  int ret = lorawan_request_device_time(true);
+  int ret = -EBUSY;
+  for (int attempt = 0; attempt < 5; attempt++) {
+#if EPD_ENABLED
+    display_wait_until_spi_idle(10000);
+#endif
+    ret = lorawan_request_device_time(true);
+    if (ret == 0) {
+      break;
+    }
+    if (ret != -EBUSY) {
+      break;
+    }
+    LOG_DBG("DeviceTimeReq busy (attempt %d/5)", attempt + 1);
+    k_msleep(500);
+  }
   if (ret != 0) {
     LOG_WRN("lorawan_request_device_time failed: %d", ret);
     if (!atomic_cas(&time_sync_inflight, 1, 0)) {
@@ -191,35 +194,6 @@ void time_sync_on_lorawan_time_updated(void) {
     return;
   }
   (void)k_work_submit(&time_sync_apply_work);
-}
-
-void time_sync_retry_request(void) {
-  if (atomic_get(&time_sync_inflight) == 0) {
-    return;
-  }
-  if (!lora_is_joined()) {
-    LOG_DBG("DeviceTimeReq retry skipped: not joined");
-    if (atomic_cas(&time_sync_inflight, 1, 0)) {
-      atomic_set(&time_sync_last_result, -ENOTCONN);
-      k_sem_give(&time_sync_done_sem);
-      time_sync_post_done_event(-ENOTCONN);
-    }
-    return;
-  }
-  int ret = lorawan_request_device_time(true);
-  if (ret != 0) {
-    LOG_WRN("Retry DeviceTimeReq failed: %d", ret);
-    if (!atomic_cas(&time_sync_inflight, 1, 0)) {
-      return;
-    }
-    atomic_set(&time_sync_last_result, ret);
-    k_sem_give(&time_sync_done_sem);
-    time_sync_notify_done(ret);
-    return;
-  }
-  int attempt = (int)atomic_get(&time_sync_retries_done);
-  LOG_DBG("DeviceTimeReq retry %d/%d queued", attempt, TIME_SYNC_MAX_RETRIES);
-  (void)k_work_schedule(&time_sync_timeout_work, K_MSEC(TIME_SYNC_ANS_TIMEOUT_MS));
 }
 
 int time_sync_wait(k_timeout_t timeout) {

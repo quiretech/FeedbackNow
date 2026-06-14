@@ -2,7 +2,6 @@
 #include "eui_keys.h"
 #include "lora_app.h"
 #include "payload_gen.h"
-#include "rtc.h"
 #include "sys_config.h"
 
 #include <string.h>
@@ -29,13 +28,8 @@ static uint32_t counter_sync_spacing_ms(uint8_t btn_idx) {
   return base;
 }
 
-void counter_sync_run(bool confirmed) {
-  uint32_t epoch_s = 0;
-
-  (void)rtc_get_epoch_seconds(&epoch_s);
-  if (epoch_s == 0) {
-    epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-  }
+uint32_t counter_sync_run(uint32_t epoch_s, bool confirmed) {
+  uint32_t queued = 0U;
 
   LOG_DBG("evt 0x%02X per button (confirmed=%d)",
           (unsigned)EVT_COUNTER_SYNC, (int)confirmed);
@@ -58,11 +52,13 @@ void counter_sync_run(bool confirmed) {
     memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
     ret = lora_put_event(&msg, K_MSEC(500));
     if (ret == 0) {
+      queued++;
       LOG_DBG("queued btn%u", btn);
     } else {
       LOG_WRN("lora_put_event btn=%u failed: %d", btn, ret);
     }
   }
 
-  LOG_DBG("done");
+  LOG_DBG("done queued=%u", (unsigned)queued);
+  return queued;
 }

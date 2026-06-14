@@ -6,7 +6,6 @@
 #include "led_manager.h"
 #include "log_fmt.h"
 #include "lora_app.h"
-#include "mapek_coordinator.h"
 #include "payload_gen.h"
 #include "rtc.h"
 #include "sys_config.h"
@@ -43,7 +42,7 @@ void app_logic_public_vote(uint8_t button_id) {
 
   /* Public lockout: 5s after any accepted press (per FRD) */
   if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
-      LOG_INF("vote blocked cooldown %ums",
+      LOG_DBG("vote blocked cooldown %ums",
               (uint32_t)(BUTTON_COOLDOWN_MS -
                          (now_ms - last_accepted_any_press_ms)));
     return;
@@ -57,7 +56,7 @@ void app_logic_public_vote(uint8_t button_id) {
   int ret = rtc_get_epoch_seconds(&epoch_s);
   if (ret != 0) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
-    LOG_WRN("RTC read failed (%d); using uptime s=%u", ret, epoch_s);
+    LOG_DBG("RTC read failed (%d); using uptime s=%u", ret, epoch_s);
   }
 
   uint8_t payload_button_id = button_id_map[button_id];
@@ -77,20 +76,19 @@ void app_logic_public_vote(uint8_t button_id) {
   msg.len = PAYLOAD_LEN_BYTES;
   memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
 
-  /* EEPROM counter already incremented in payload_gen; gate live uplink on MAPE-K. */
-  if (lora_is_joined() && mapek_uplink_allowed()) {
+  if (lora_is_joined()) {
     ret = lora_put_event(&msg, K_NO_WAIT);
     if (ret != 0) {
       LOG_ERR("Queue button uplink failed: %d", ret);
     } else {
       last_accepted_any_press_ms = now_ms;
-      LOG_INF("vote UL btn=%u ctr=%u ts=%u", payload_button_id, new_counter,
+      LOG_EVT("vote UL btn=%u ctr=%u ts=%u", payload_button_id, new_counter,
               epoch_s);
     }
   } else {
     last_accepted_any_press_ms =
         now_ms; /* Cooldown same as when joined (no EPD flood). */
-    LOG_INF("vote skip (not joined) btn=%u ctr=%u", payload_button_id,
+    LOG_DBG("vote skip (not joined) btn=%u ctr=%u", payload_button_id,
             new_counter);
   }
 }

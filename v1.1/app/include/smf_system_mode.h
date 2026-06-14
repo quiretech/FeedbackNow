@@ -3,9 +3,8 @@
  * Single SMF thread blocks on one input queue; events: button_combo, timeouts,
  * nfc_result, joined, downlink (latter added in later phases).
  *
- * Posting: critical events use a short bounded wait on the SMF queue;
- * SMF_EVT_HOUSEKEEPING_TICK is best-effort (K_NO_WAIT). Peak depth and drop
- * counts: smf_msgq_peak_used_get() / smf_msgq_drop_count_get(). Normal-mode
+ * Posting: events use a short bounded wait on the SMF queue. Peak depth and
+ * drop counts: smf_msgq_peak_used_get() / smf_msgq_drop_count_get(). Normal-mode
  * public votes run on the SMF thread (display_show_thanks_sync uses sysworkq;
  * deferring vote there would deadlock with display_work).
  *
@@ -39,8 +38,8 @@ enum smf_ev_type {
   SMF_EVT_NFC_TIMEOUT,
   SMF_EVT_DEVICE_INFO_TIMEOUT,
   /* LoRa / NFC (Phase 2+) */
-  SMF_EVT_JOINED, /* button_id: 1 = delay before EPD (installer join LED), 0 =
-                      silent */
+  SMF_EVT_JOINED, /* button_id: 0 = silent join; 1 = installer join;
+                     2 = deliberate re-join (CONNECTING before OTAA) */
   SMF_EVT_JOIN_STARTED,   /* LoRa thread started join (orchestration visibility)
                            */
   SMF_EVT_JOIN_CYCLE_FAILED, /* Join failed after N attempts; show Last Cleaned
@@ -50,8 +49,6 @@ enum smf_ev_type {
   SMF_EVT_DISCONNECTED,
   SMF_EVT_DOWNLINK,
   SMF_EVT_NFC_RESULT,
-  SMF_EVT_HOUSEKEEPING_TICK, /* Periodic housekeeping (time sync, later link
-                                check, battery) */
   SMF_EVT_SYSTEM_READY, /* All inits and threads started; "system go" */
   /** Downlink cmd 0x07: cold reboot after LED (same as Staff combo reboot). */
   SMF_EVT_DL_REBOOT,

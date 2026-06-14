@@ -1,6 +1,8 @@
---- a/subsys/lorawan/loramac-node/lorawan.c
-+++ b/subsys/lorawan/loramac-node/lorawan.c
-@@ -228,7 +228,12 @@
+--- a/subsys/lorawan/lorawan.c
++++ b/subsys/lorawan/lorawan.c
+@@ -226,9 +226,14 @@ static void mlme_confirm_handler(MlmeConfirm_t *mlme_confirm)
+ 		break;
+ 	}
  
  out_sem:
  	last_mlme_confirm_status = mlme_confirm->Status;
@@ -14,15 +16,15 @@
  }
  
  static void mlme_indication_handler(MlmeIndication_t *mlme_indication)
-@@ -483,6 +488,11 @@
+@@ -481,6 +486,11 @@ int lorawan_join(const struct lorawan_join_config *join_cfg)
+ 		}
  
  		LOG_DBG("Network join request sent!");
- 
++
 +		/* Drop stale credits from pre-patch MLME confirms (e.g. DeviceTime). */
 +		while (k_sem_take(&mlme_confirm_sem, K_NO_WAIT) == 0) {
 +			;
 +		}
-+
+ 
  		/*
  		 * We can be sure that the semaphore will be released for
- 		 * both success and failure cases after a specific time period.

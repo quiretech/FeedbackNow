@@ -143,7 +143,7 @@ static int rtc_set_time_from_config(void) {
     return ret;
   }
 
-  LOG_INF("RTC wall set UTC %04d-%02d-%02d %02d:%02d:%02d (config)",
+  LOG_DBG("RTC wall set UTC %04d-%02d-%02d %02d:%02d:%02d (config)",
           RTC_SET_YEAR, RTC_SET_MONTH, RTC_SET_DAY, RTC_SET_HOUR,
           RTC_SET_MINUTE, RTC_SET_SECOND);
   return 0;
@@ -169,7 +169,7 @@ int rtc_app_init(void) {
   struct rtc_time cur = {0};
   int ret = rtc_get_time(rtc_dev, &cur);
   if (rtc_should_preserve_on_boot(&cur, ret)) {
-    LOG_INF("RTC preserved (%04d-%02d-%02d %02d:%02d:%02d)",
+    LOG_DBG("RTC preserved (%04d-%02d-%02d %02d:%02d:%02d)",
             cur.tm_year + 1900, cur.tm_mon + 1, cur.tm_mday, cur.tm_hour,
             cur.tm_min, cur.tm_sec);
   } else {
@@ -178,9 +178,9 @@ int rtc_app_init(void) {
     } else if (rtc_should_set_time(&cur)) {
       LOG_WRN("RTC uninitialized; applying provision time");
     } else if (rtc_is_factory_default(&cur)) {
-      LOG_INF("RTC at factory/test default; applying provision time");
+      LOG_DBG("RTC at factory/test default; applying provision time");
     } else {
-      LOG_INF("RTC before provision stamp; applying provision time");
+      LOG_DBG("RTC before provision stamp; applying provision time");
     }
     ret = rtc_set_time_from_config();
     if (ret != 0) {
@@ -270,7 +270,7 @@ int rtc_set_epoch_seconds(uint32_t epoch_s) {
 
   int ret = rtc_set_time(rtc_dev, &t);
   if (ret == 0) {
-    LOG_INF("RTC set UTC %04d-%02d-%02d %02d:%02d:%02d epoch=%u",
+    LOG_DBG("RTC set UTC %04d-%02d-%02d %02d:%02d:%02d epoch=%u",
             tm_utc.tm_year + 1900, tm_utc.tm_mon + 1, tm_utc.tm_mday,
             tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec,
             (unsigned)epoch_s);

@@ -34,7 +34,7 @@ static void write_be32(uint8_t *buf, uint32_t v) {
 
 void payload_gen_init(void) {
   k_mutex_init(&ctx.lock);
-  LOG_INF("init ok");
+  LOG_DBG("init ok");
 }
 
 int payload_gen_build_button(uint8_t button_id, uint32_t epoch_s,
@@ -209,7 +209,7 @@ void payload_decode_log(const uint8_t *buf, size_t len) {
     return;
   }
   if (buf[0] == EVT_DEVICE_VERSION_INFO) {
-    LOG_INF("Decoded VersionInfo (no ts): fw=%u.%u.%u hw=%u.%u.%u epd=%u",
+    LOG_DBG("Decoded VersionInfo (no ts): fw=%u.%u.%u hw=%u.%u.%u epd=%u",
             buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
     return;
   }
@@ -218,25 +218,25 @@ void payload_decode_log(const uint8_t *buf, size_t len) {
                 ((uint32_t)buf[2] << 8) | (uint32_t)buf[3];
   uint8_t evt = buf[4];
 
-  LOG_INF("Decoded ts=%u evt=0x%02X", ts, evt);
+  LOG_DBG("Decoded ts=%u evt=0x%02X", ts, evt);
 
   switch (evt) {
   case EVT_BUTTON: {
     uint8_t btn = buf[5];
     uint32_t ctr =
         ((uint32_t)buf[6] << 16) | ((uint32_t)buf[7] << 8) | (uint32_t)buf[8];
-    LOG_INF(" Button: id=%u counter=%u", btn, ctr);
+    LOG_DBG(" Button: id=%u counter=%u", btn, ctr);
     break;
   }
   case EVT_COUNTER_SYNC: {
     uint8_t btn = buf[5];
     uint32_t ctr =
         ((uint32_t)buf[6] << 16) | ((uint32_t)buf[7] << 8) | (uint32_t)buf[8];
-    LOG_INF(" CounterSync: id=%u counter=%u", btn, ctr);
+    LOG_DBG(" CounterSync: id=%u counter=%u", btn, ctr);
     break;
   }
   default:
-    LOG_INF(" Other evt=0x%02X (not decoded)", evt);
+    LOG_DBG(" Other evt=0x%02X (not decoded)", evt);
     break;
   }
 }

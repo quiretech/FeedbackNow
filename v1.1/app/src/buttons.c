@@ -10,7 +10,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(buttons, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(buttons, CONFIG_LOG_DEFAULT_LEVEL);
 
 #define SW0_NODE DT_ALIAS(sw0)
 #define SW1_NODE DT_ALIAS(sw1)
@@ -109,6 +109,6 @@ int buttons_init(void) {
     LOG_DBG("btn%u %s pin%u", i, buttons[i].port->name, buttons[i].pin);
   }
 
-  LOG_INF("buttons: init ok (%d)", NUM_BUTTONS);
+  LOG_DBG("buttons: init ok (%d)", NUM_BUTTONS);
   return 0;
 }

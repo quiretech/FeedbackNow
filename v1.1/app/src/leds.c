@@ -6,7 +6,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/printk.h>
 
-LOG_MODULE_REGISTER(leds, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(leds, CONFIG_LOG_DEFAULT_LEVEL);
 
 /* Pull GPIO spec from DT alias - single LED */
 #define LED0_NODE DT_ALIAS(led0)
@@ -34,7 +34,7 @@ int leds_init(void) {
     LOG_DBG("led%u %s pin%u", i, leds[i].port->name, leds[i].pin);
   }
 
-  LOG_INF("leds: init ok (%d)", NUM_LEDS);
+  LOG_DBG("leds: init ok (%d)", NUM_LEDS);
   return 0;
 }
 

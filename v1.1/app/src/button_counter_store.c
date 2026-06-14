@@ -154,7 +154,7 @@ static int load_from_eeprom(void) {
     if (ret != 0) {
       return ret;
     }
-    LOG_INF("counters init slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
+    LOG_DBG("counters init slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
             ctx.seq, ctx.counters[0], ctx.counters[1], ctx.counters[2],
             ctx.counters[3], ctx.counters[4], ctx.counters[5]);
     return 0;
@@ -184,7 +184,7 @@ static int load_from_eeprom(void) {
     ctx.counters[i] = best->counters[i];
   }
 
-  LOG_INF("counters load slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
+  LOG_DBG("counters load slot=%u seq=%u b=[%u %u %u %u %u %u]", ctx.active_slot,
           ctx.seq, ctx.counters[0], ctx.counters[1], ctx.counters[2],
           ctx.counters[3], ctx.counters[4], ctx.counters[5]);
   return 0;
@@ -224,7 +224,7 @@ static void flush_work_handler(struct k_work *work) {
   ctx.active_slot = next_slot;
   ctx.seq = next_seq;
   ctx.dirty = false;
-  LOG_INF("counters flush ok slot=%u seq=%u", ctx.active_slot, ctx.seq);
+  LOG_DBG("counters flush ok slot=%u seq=%u", ctx.active_slot, ctx.seq);
   k_mutex_unlock(&ctx.lock);
 }
 

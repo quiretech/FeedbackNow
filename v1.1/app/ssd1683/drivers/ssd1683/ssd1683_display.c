@@ -20,7 +20,7 @@
 
 #include "ssd1683.h"
 
-LOG_MODULE_REGISTER(ssd1683_display, CONFIG_DISPLAY_LOG_LEVEL);
+LOG_MODULE_REGISTER(ssd1683_display, CONFIG_SSD1683_LOG_LEVEL);
 
 #define DT_DRV_COMPAT solomon_ssd1683
 
@@ -131,7 +131,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
   partial_update =
       (desc->width < SSD1683_WIDTH) || (desc->height < SSD1683_HEIGHT);
 
-  LOG_INF("Write: area=%ux%u@%u,%u -> %s update", desc->width, desc->height, x,
+  LOG_DBG("Write: area=%ux%u@%u,%u -> %s update", desc->width, desc->height, x,
           y, partial_update ? "partial" : "full");
 
   // STEP 1: Write image data to CURRENT buffer (0x24)
@@ -158,7 +158,7 @@ static int ssd1683_display_write(const struct device *dev, const uint16_t x,
     return ret;
   }
 
-  LOG_INF("Write: done in %lld ms", (long long)(k_uptime_get() - t_start));
+  LOG_DBG("Write: done in %lld ms", (long long)(k_uptime_get() - t_start));
   return 0;
 }
 
@@ -191,7 +191,7 @@ ssd1683_display_set_pixel_format(const struct device *dev,
 
   // E-paper displays only support MONO01 format
   if (pixel_format != PIXEL_FORMAT_MONO01) {
-    LOG_WRN("Pixel format %d not supported, only MONO01 is supported",
+    LOG_DBG("Pixel format %d not supported, only MONO01 is supported",
             pixel_format);
     return -ENOTSUP;
   }
@@ -208,7 +208,7 @@ ssd1683_display_set_orientation(const struct device *dev,
   LOG_DBG("Set orientation requested: %d", orientation);
 
   // E-paper displays have fixed orientation
-  LOG_WRN("Orientation change not supported for e-paper displays");
+  LOG_DBG("Orientation change not supported for e-paper displays");
   return -ENOTSUP;
 }
 
@@ -243,7 +243,7 @@ static int ssd1683_display_init(const struct device *dev) {
   struct ssd1683_display_data *data = dev->data;
   int ret;
 
-  LOG_INF("Initializing SSD1683 display driver");
+  LOG_DBG("Initializing SSD1683 display driver");
 
   // Initialize the low-level SSD1683 driver
   ret = ssd1683_init(dev, &config->epd_config);
@@ -256,7 +256,7 @@ static int ssd1683_display_init(const struct device *dev) {
   data->is_initialized = true;
   data->is_blanked = false;
 
-  LOG_INF("SSD1683 display driver initialized successfully");
+  LOG_DBG("SSD1683 display driver initialized successfully");
   return 0;
 }
 

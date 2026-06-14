@@ -38,10 +38,8 @@ enum lora_cmd_type {
   LORA_CMD_JOIN_SILENT, /* Auto-join / rejoin: no EPD; LED only first silent after
                          * boot, not after link backoff */
   LORA_CMD_TIME_SYNC,   /* Request DeviceTimeReq/Ans and update RTC */
-  LORA_CMD_TIME_SYNC_RETRY, /* Retry DeviceTimeReq in active sync cycle */
   LORA_CMD_LINK_CHECK,       /* Append LinkCheckReq to next uplink */
   LORA_CMD_LINK_CHECK_FORCE, /* Send empty frame now for LinkCheckReq */
-  LORA_CMD_SESSION_LOST,     /* MAPE-K: clear joined, backoff, silent rejoin */
   LORA_CMD_COUNT
 };
 
@@ -51,16 +49,6 @@ typedef struct {
   bool confirmed;
   uint8_t data[LORA_MAX_PAYLOAD_SIZE]; // Moved to end for better alignment
 } lora_uplink_msg_t;
-
-/** Which uplink burst just finished enqueueing — selects post-burst MAC defer. */
-enum lora_burst_tail_profile {
-  /** Post-join: NUM_BUTTONS counter UL + housekeeping snapshot UL. */
-
-  LORA_BURST_TAIL_JOIN_POST,
-  /** Housekeeping: HK + counters + snapshot. */
-
-  LORA_BURST_TAIL_HOUSEKEEPING,
-};
 
 typedef struct {
   uint8_t button_id; // Unique button identifier
@@ -89,23 +77,34 @@ int lora_wait_until_ready(k_timeout_t timeout);
 void lora_request_join(void);
 
 /**
+ * Clear app-layer session state before deliberate OTAA re-join (Staff combo).
+ * Aborts time sync, cancels deferred MAC, drops stale uplink queue entries.
+ * Zephyr has no public lorawan_leave(); lorawan_join() with a new DevNonce follows.
+ */
+void lora_prepare_deliberate_rejoin(void);
+
+/**
  * Request LoRa thread to run time sync (DeviceTimeReq/Ans, update RTC).
  * SMF can call this for housekeeping; LoRa thread owns all lorawan_* calls.
  */
 void lora_request_time_sync(void);
 
 /**
- * After counter-sync (+ HK/snapshot burst) enqueue, wait for approximate drain,
- * then queue LinkCheckReq (force), then DeviceTimeReq. Cancels prior deferral.
+ * After @a app_uplink_count app frames are enqueued, defer LinkCheckReq then
+ * DeviceTimeReq so the LoRa thread can drain the queue first. Cancels prior
+ * deferral.
  */
-void lora_schedule_time_sync_after_counter_burst(
-    enum lora_burst_tail_profile profile);
+void lora_schedule_link_check_and_time_sync_after_app_uplinks(
+    uint32_t app_uplink_count);
 
-/** Cancel deferred LinkCheck + DeviceTime scheduled after a counter burst. */
+/** Cancel deferred LinkCheck + DeviceTime. */
 void lora_cancel_scheduled_burst_time_sync(void);
 
+/** Queue DeviceTimeReq after @a delay_ms (post-join EPD / MAC settle). */
+void lora_schedule_time_sync_deferred(uint32_t delay_ms);
+
 /**
- * After an immediate LinkCheckReq (e.g. MAPE-K heartbeat), defer DeviceTimeReq.
+ * After an immediate LinkCheckReq, defer DeviceTimeReq.
  */
 void lora_schedule_time_sync_after_link_check(void);
 
@@ -123,13 +122,6 @@ void lora_request_link_check(bool force_request);
  * cmd queue full, or RX timed out.
  */
 bool lora_probe_link_check_sync(uint32_t timeout_ms);
-
-/**
- * Request session teardown and join backoff (MAPE-K Execute). LoRa thread clears
- * joined, posts SMF_EVT_DISCONNECTED, schedules LORA_CMD_JOIN_SILENT after
- * LORA_JOIN_BACKOFF_HOURS. Idempotent while already not joined.
- */
-void lora_request_session_lost(void);
 
 /**
  * Reset one-shot DR-based time sync retry guard. Call on each new join cycle

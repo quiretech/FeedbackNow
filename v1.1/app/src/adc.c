@@ -12,6 +12,7 @@
  */
 
 #include <hal/nrf_saadc.h>
+#include <stdio.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/adc.h>
@@ -21,11 +22,12 @@
 
 #include "battery_adc.h"
 
-LOG_MODULE_REGISTER(battery_adc, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(battery_adc, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* LoRaWAN: 255 = unknown; 1..254 = normalized level (not used for charging path).
- */
+/* Shared battery cache: boot sample + housekeeping refresh last_battery_mv;
+ * lorawan_battery_level derived from the same mV value for DevStatus. */
 static atomic_t lorawan_battery_level = ATOMIC_INIT(255);
+static atomic_t last_battery_mv = ATOMIC_INIT(-1);
 
 #define LORAWAN_BAT_MV_MIN 2800
 #define LORAWAN_BAT_MV_MAX 4200
@@ -40,6 +42,15 @@ static uint8_t battery_mv_to_lorawan_level(int32_t mv) {
   uint32_t span = (uint32_t)(LORAWAN_BAT_MV_MAX - LORAWAN_BAT_MV_MIN);
   uint32_t x = (uint32_t)(mv - LORAWAN_BAT_MV_MIN);
   return (uint8_t)(1U + (x * 253U) / span);
+}
+
+static void battery_cache_update_from_mv(int32_t battery_mv) {
+  if (battery_mv <= 0) {
+    return;
+  }
+  atomic_set(&last_battery_mv, battery_mv);
+  atomic_set(&lorawan_battery_level,
+             (atomic_val_t)battery_mv_to_lorawan_level(battery_mv));
 }
 
 #define ADC_NODE DT_NODELABEL(adc)
@@ -98,11 +109,11 @@ int battery_adc_init(void) {
     cached_ref_mv = ADC_REF_INTERNAL_MV;
     LOG_WRN("ADC internal ref not available, using %u mV", cached_ref_mv);
   } else {
-    LOG_INF("ADC internal reference voltage: %u mV", cached_ref_mv);
+    LOG_DBG("ADC internal reference voltage: %u mV", cached_ref_mv);
   }
   nrf_saadc_task_trigger(NRF_SAADC, NRF_SAADC_TASK_CALIBRATEOFFSET);
   k_msleep(20);
-  LOG_INF("ADC initialized and calibrated");
+  LOG_DBG("ADC initialized and calibrated");
 
   return 0;
 }
@@ -162,17 +173,39 @@ int battery_adc_read_mv(int32_t *battery_mv) {
   }
 
   *battery_mv = battery_mv_sum / valid_reads;
-  LOG_INF("ADC ref=%u mV raw_first=%d valid=%d battery_mv=%d", ref_mv,
+  battery_cache_update_from_mv(*battery_mv);
+  LOG_DBG("ADC ref=%u mV raw_first=%d valid=%d battery_mv=%d", ref_mv,
           first_raw, valid_reads, *battery_mv);
   return 0;
 }
 
 void battery_adc_lorawan_cache_set_from_mv(int32_t battery_mv) {
-  if (battery_mv <= 0) {
-    return;
+  battery_cache_update_from_mv(battery_mv);
+}
+
+int battery_adc_last_mv_get(int32_t *battery_mv) {
+  if (battery_mv == NULL) {
+    return -EINVAL;
   }
-  atomic_set(&lorawan_battery_level,
-             (atomic_val_t)battery_mv_to_lorawan_level(battery_mv));
+  int32_t mv = (int32_t)atomic_get(&last_battery_mv);
+  if (mv <= 0) {
+    return -ENODATA;
+  }
+  *battery_mv = mv;
+  return 0;
+}
+
+int battery_adc_format_mv_display(int32_t battery_mv, char *buf, size_t buf_len) {
+  if (buf == NULL || buf_len == 0) {
+    return -EINVAL;
+  }
+  if (battery_mv <= 0) {
+    (void)snprintf(buf, buf_len, "--");
+    return 0;
+  }
+  uint32_t mv = (uint32_t)battery_mv;
+  (void)snprintf(buf, buf_len, "%u.%03u v", mv / 1000U, mv % 1000U);
+  return 0;
 }
 
 uint8_t battery_adc_lorawan_level_get(void) {

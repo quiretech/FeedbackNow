@@ -11,11 +11,9 @@
  */
 void time_sync_request_and_update_rtc(void);
 void time_sync_on_lorawan_time_updated(void);
-void time_sync_retry_request(void);
 
 /** Call when the link is torn down (stack not joined). Cancels in-flight
- * DeviceTimeReq timeout/apply work and notifies SMF so housekeeping does not
- * hold rails.
+ * DeviceTimeReq timeout/apply work.
  */
 void time_sync_abort_on_link_lost(void);
 

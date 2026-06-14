@@ -89,7 +89,7 @@ static int nfc_init_with_recovery(void) {
       (void)pn5180_prepare_poweroff(nfc_dev);
       continue;
     }
-    LOG_INF("NFC probe ok attempt %d/%d %lld ms", attempt,
+    LOG_DBG("NFC probe ok attempt %d/%d %lld ms", attempt,
             NFC_INIT_MAX_ATTEMPTS, k_uptime_get() - t0);
     return 0;
   }
@@ -137,7 +137,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       }
     }
 
-    LOG_INF("NFC scan i=%u btn=%u blk=%d", intent, button_id,
+    LOG_DBG("NFC scan i=%u btn=%u blk=%d", intent, button_id,
             NFC_READ_BLOCK);
     uint32_t scan_t0 = k_uptime_get_32();
     deadline_ms = scan_t0 + NFC_SCAN_PHASE1_MS;
@@ -159,7 +159,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       }
       ret = pn5180_read_block(nfc_dev, uid, NFC_READ_BLOCK, block_data, 4);
       if (ret == 0) {
-        LOG_INF("NFC read ok blk=%d", NFC_READ_BLOCK);
+        LOG_DBG("NFC read ok blk=%d", NFC_READ_BLOCK);
         (void)smf_post_nfc_result(1, intent, button_id, block_data);
         (void)pn5180_prepare_poweroff(nfc_dev);
         nfc_warm_eligible = true;
@@ -174,7 +174,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
      * "no tag presented" (chip healthy) OR "chip wedged mid-scan" (chip bad).
      * We clear nfc_chip_alive so the next scan re-inits via the recovery
      * loop. Costs ~200 ms on the next timeout path; earns auto-healing. */
-    LOG_INF("NFC scan end (timeout/cancel)");
+    LOG_DBG("NFC scan end (timeout/cancel)");
     (void)smf_post_nfc_result(0, intent, button_id, NULL);
     (void)pn5180_prepare_poweroff(nfc_dev);
     nfc_warm_eligible = false;
@@ -212,7 +212,7 @@ static int nfc_service_self_test(void) {
     return ret;
   }
 
-  LOG_INF("NFC test ok p=%u.%u fw=%u.%u eeprom=%u.%u",
+  LOG_DBG("NFC test ok p=%u.%u fw=%u.%u eeprom=%u.%u",
           (info.product_version >> 8) & 0xFFU, info.product_version & 0xFFU,
           (info.firmware_version >> 8) & 0xFFU, info.firmware_version & 0xFFU,
           (info.eeprom_version >> 8) & 0xFFU, info.eeprom_version & 0xFFU);
@@ -264,7 +264,7 @@ void nfc_scan_cancel(void) {
 static K_SEM_DEFINE(nfc_ready_sem, 1, 1);
 
 int nfc_service_init(void) {
-  LOG_INF("NFC disabled (DEVICE_HW_VARIANT FLEXBOX)");
+  LOG_DBG("NFC disabled (DEVICE_HW_VARIANT FLEXBOX)");
   return 0;
 }
 

@@ -71,7 +71,7 @@ int rail_manager_init(void) {
   ref_3v6 = 0;
   keepalive_pending = false;
   keepalive_pending_3v6 = false;
-  LOG_INF("rails manager init refs=0");
+  LOG_DBG("rails manager init refs=0");
   return 0;
 }
 
@@ -176,10 +176,17 @@ void rail_manager_release_3v3a(void) {
     ref_3v3 = 0; /* Prevent negative */
   }
   if (ref_3v3a == 0) {
+#if RAIL_MANAGER_3V3A_KEEPALIVE_MS > 0
     keepalive_pending = true;
     k_mutex_unlock(&lock);
     (void)k_work_schedule(&keepalive_work, K_MSEC(KEEPALIVE_MS));
     return;
+#else
+    set_rail(POWER_EN_3V3A, false);
+    if (ref_3v3 == 0) {
+      set_rail(POWER_EN_3V3, false);
+    }
+#endif
   }
   k_mutex_unlock(&lock);
 }
@@ -218,6 +225,7 @@ void rail_manager_release_3v6(void) {
 }
 
 void rail_manager_keepalive_3v3a(void) {
+#if RAIL_MANAGER_3V3A_KEEPALIVE_MS > 0
   k_mutex_lock(&lock, K_FOREVER);
   if (ref_3v3a == 0 && keepalive_pending) {
     (void)k_work_cancel_delayable(&keepalive_work);
@@ -232,6 +240,7 @@ void rail_manager_keepalive_3v3a(void) {
     return;
   }
   k_mutex_unlock(&lock);
+#endif
 }
 
 bool rail_manager_is_3v6_on(void) {

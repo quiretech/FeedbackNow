@@ -84,7 +84,7 @@ int tz_offset_store_init(void) {
       LOG_ERR("TZ offset store write default failed: %d", ret);
       return ret;
     }
-    LOG_INF("TZ offset store: initialized with default %d min (UTC%+d)",
+    LOG_DBG("TZ offset store: initialized with default %d min (UTC%+d)",
             (int)val, (int)val / 60);
   }
   /* val already set from init_buf when magic was TZ_MAGIC, or from default */
@@ -149,6 +149,6 @@ int tz_offset_store_set(int16_t minutes) {
   }
   ctx.cached = minutes;
   ctx.cached_valid = true;
-  LOG_INF("TZ offset store set %d min (UTC%+d)", (int)minutes, (int)minutes / 60);
+  LOG_DBG("TZ offset store set %d min (UTC%+d)", (int)minutes, (int)minutes / 60);
   return 0;
 }

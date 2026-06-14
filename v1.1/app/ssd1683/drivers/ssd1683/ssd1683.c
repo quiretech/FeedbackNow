@@ -301,7 +301,7 @@ static int _ssd1683_init_display(const struct device *dev) {
 
   data->is_initialized = true;
   data->is_hibernating = false;
-  LOG_INF("Display initialization completed");
+  LOG_DBG("Display initialization completed");
   return 0;
 }
 
@@ -501,7 +501,7 @@ static int _ssd1683_power_on(const struct device *dev) {
   ret = _ssd1683_wait_busy(cfg);
   if (ret == 0) {
     data->is_powered_on = true;
-    LOG_INF("Power-on: quick-resume OK in %lld ms",
+    LOG_DBG("Power-on: quick-resume OK in %lld ms",
             (long long)(k_uptime_get() - t0));
     return 0;
   }
@@ -510,7 +510,7 @@ cold_start:
   /* Busy timeout or SPI failure — EPD was likely power-cycled (rail off/on).
    * The driver state says "initialized" but the hardware lost all register
    * configuration. Force a full re-initialization with hardware reset. */
-  LOG_WRN("Power-on: quick-resume failed after %lld ms, cold-start recovery",
+  LOG_DBG("Power-on: quick-resume failed after %lld ms, cold-start recovery",
           (long long)(k_uptime_get() - t0));
   data->is_initialized = false;
   data->is_hibernating = true; /* force _ssd1683_reset before re-init */
@@ -523,7 +523,7 @@ cold_start:
   }
 
   data->is_powered_on = true;
-  LOG_INF("Power-on: cold-start recovery OK in %lld ms (total %lld ms)",
+  LOG_DBG("Power-on: cold-start recovery OK in %lld ms (total %lld ms)",
           (long long)(k_uptime_get() - t_cold),
           (long long)(k_uptime_get() - t0));
   return 0;
@@ -629,7 +629,7 @@ int ssd1683_init(const struct device *dev, const struct ssd1683_config *cfg) {
     return ret;
   }
 
-  LOG_INF("SSD1683 driver initialized");
+  LOG_DBG("SSD1683 driver initialized");
   return 0;
 }
 
@@ -672,7 +672,7 @@ int ssd1683_hibernate(const struct device *dev) {
 
   data->is_hibernating = true;
   data->is_initialized = false;
-  LOG_INF("Hibernate completed");
+  LOG_DBG("Hibernate completed");
   return 0;
 }
 
@@ -773,7 +773,7 @@ static int _ssd1683_write_image_buffer(const struct device *dev,
   h1 -= dy;
 
   if ((w1 <= 0) || (h1 <= 0)) {
-    LOG_WRN("Invalid image dimensions");
+    LOG_DBG("Invalid image dimensions");
     return -EINVAL;
   }
 
@@ -888,11 +888,11 @@ int ssd1683_refresh(const struct device *dev, bool partial) {
 
   if (partial) {
     ret = _ssd1683_update_partial(dev);
-    LOG_INF("Refresh partial: %lld ms (ret=%d)",
+    LOG_DBG("Refresh partial: %lld ms (ret=%d)",
             (long long)(k_uptime_get() - t0), ret);
   } else {
     ret = _ssd1683_update_full(dev);
-    LOG_INF("Refresh full (%s): %lld ms (ret=%d)",
+    LOG_DBG("Refresh full (%s): %lld ms (ret=%d)",
             data->use_fast_update ? "fast" : "slow",
             (long long)(k_uptime_get() - t0), ret);
   }

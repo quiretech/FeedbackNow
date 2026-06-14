@@ -69,7 +69,7 @@ int boot_info_init(void) {
   cause_raw = raw;
   cause_kind = classify(raw);
   cached = true;
-  LOG_INF("cause raw=0x%08x kind=%s commission=%d", (unsigned)cause_raw,
+  LOG_DBG("cause raw=0x%08x kind=%s commission=%d", (unsigned)cause_raw,
           boot_info_cause_str(), (int)boot_info_is_commission_boot());
   return ret == -ENOSYS ? 0 : ret;
 }

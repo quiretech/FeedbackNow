@@ -25,19 +25,19 @@
  * | NFC PN5180               | nfc_worker              | SMF starts scans; |
  * |                          |                         | results via        |
  * |                          |                         | smf_post_nfc_result|
- * | smf_post_event /         | Any producer            | Critical events use|
- * | smf_post_downlink        |                         | bounded wait; HK   |
- * |                          |                         | tick best-effort.  |
+ * | smf_post_event /         | Any producer            | Bounded wait on    |
+ * | smf_post_downlink        |                         | smf_msgq.          |
  * | SMF state machine         | smf_thread only        | Single consumer of |
  * |                          |                         | smf_msgq.          |
  * | buttons_get_event        | button_uplink (input)  | GPIO ISR only starts|
  * |                          |                         | debounce timers.   |
- * | housekeeping thread      | HK thread only         | Posts SMF tick only.|
- * | battery_adc_read_mv      | Slow (sleeps)         | Call from SMF work |
- * |                          |                         | / init, not ISR or |
- * |                          |                         | LoRa MAC callback. |
- * | battery_adc_lorawan_*    | Any read / HK writer   | Cache for fast     |
- * |                          |                         | lorawan battery cb.|
+ * | housekeeping (HK)        | system workqueue       | k_work_delayable   |
+ * |                          |                         | schedules daily; DL|
+ * |                          |                         | 0x04 via submit.   |
+ * | battery_adc_read_mv      | Slow (sleeps)         | Boot + HK; updates |
+ * |                          |                         | shared mV cache.   |
+ * | battery_adc_last_mv_get  | Any thread             | Device-info EPD;   |
+ * | battery_adc_lorawan_*    | Read path / cache      | LoRa DevStatus cb. |
  *
  * Include this header from one .c (e.g. main) if you want the doc in the build
  * unit; it contains no declarations.

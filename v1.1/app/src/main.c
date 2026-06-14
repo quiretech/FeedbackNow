@@ -87,7 +87,7 @@ static int system_init(void) {
   if (ret != 0) {
     LOG_ERR("DevNonce factory reset failed (%d) - rebooting", ret);
   }
-  LOG_INF("DevNonce factory reset complete - rebooting");
+  LOG_DBG("DevNonce factory reset complete - rebooting");
   sys_reboot(SYS_REBOOT_COLD);
 #endif
 
@@ -117,6 +117,11 @@ static int system_init(void) {
   if (ret != 0) {
     LOG_WRN("battery_adc_init failed (%d); heartbeat battery status disabled",
             ret);
+  } else {
+    int32_t battery_mv = 0;
+    if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
+      LOG_DBG("boot bat=%dmV", (int)battery_mv);
+    }
   }
 
 #if NFC_ENABLED
@@ -175,7 +180,7 @@ int main(void) {
       i2c_retries--;
     }
     if (device_is_ready(i2c_dev)) {
-      LOG_INF("I2C bus ready");
+      LOG_DBG("I2C bus ready");
     } else {
       LOG_WRN("I2C bus not ready after waiting");
     }
@@ -190,7 +195,7 @@ int main(void) {
 
   /* Enter idle before worker threads run to avoid refcount-reset races. */
   rail_manager_enter_idle();
-  LOG_INF("rails idle (3.3 / 3.3A / 3.6 off until use)");
+  LOG_DBG("rails idle (3.3 / 3.3A / 3.6 off until use)");
 
   /* Centralized thread start (single block for ordering and priorities). */
   k_thread_start(led_ui_thread_id);
@@ -217,10 +222,9 @@ int main(void) {
   (void)button_thread_wait_until_ready(K_SECONDS(1));
 
   (void)housekeeping_init();
-  k_thread_start(housekeeping_thread_id);
   (void)housekeeping_wait_until_ready(K_SECONDS(1));
 
-  LOG_INF("workers running: LED NFC LoRa SMF input HK");
+  LOG_DBG("workers running: LED NFC LoRa SMF input HK");
 
   /* Signal SMF: all inits and threads started ("system go"). */
   if (smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get()) != 0) {

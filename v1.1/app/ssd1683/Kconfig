@@ -19,8 +19,8 @@ config SSD1683_INIT_PRIORITY
 
 config SSD1683_LOG_LEVEL
 	int "SSD1683 log level"
-	default 2
+	default 1
 	help
-	  SSD1683 driver log level.
+	  SSD1683 driver log level (1=ERR only; see app prj.conf).
 
 endif # SSD1683

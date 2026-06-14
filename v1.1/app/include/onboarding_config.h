@@ -26,7 +26,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0141"
+#define DEVICE_UNIT_ID_STRING "UNIT-0356"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -34,8 +34,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1781126339ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-06-10T21:18:59Z"
+#define DEVICE_PROVISION_UNIX_UTC 1781404806ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-06-14T02:40:06Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================

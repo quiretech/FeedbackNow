@@ -7,6 +7,7 @@
   #include "last_cleaned_store.h"
   #include "lora_app.h"
   #include "lora_link_stats.h"
+  #include "battery_adc.h"
   #include "rail_manager.h"
   #include "rtc.h"
   #include "sys_config.h"
@@ -103,8 +104,9 @@
   static lv_obj_t *last_cleaned_label;
   /* Device status screen */
   static lv_obj_t *ds_brand;
-  static lv_obj_t *ds_unit_la;
-  static lv_obj_t *ds_deveui_ra;
+  static lv_obj_t *ds_unit_ra;
+  static lv_obj_t *ds_eui_la;
+  static lv_obj_t *ds_battery_ra;
   static lv_obj_t *ds_link_row;
   static lv_obj_t *ds_link_la;
   static lv_obj_t *ds_link_ra;
@@ -202,6 +204,10 @@
   /* For display_show_last_cleaned_sync: NFC check-out / immediate last cleaned. */
   K_SEM_DEFINE(last_cleaned_done_sem, 0, 1);
   static atomic_t last_cleaned_sync_waiting = ATOMIC_INIT(0);
+
+  /* For display_show_connecting_sync: deliberate re-join before OTAA. */
+  K_SEM_DEFINE(connecting_done_sem, 0, 1);
+  static atomic_t connecting_sync_waiting = ATOMIC_INIT(0);
 
   /* For display_show_cleaning_sync: NFC check-in / immediate cleaning screen. */
   K_SEM_DEFINE(cleaning_done_sem, 0, 1);
@@ -511,20 +517,19 @@
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(ds_root, 4, LV_PART_MAIN);
 
-    ds_brand = lv_label_create(ds_root);
-    lv_obj_set_width(ds_brand, 360);
-    lv_label_set_text(ds_brand, EPD_TEXT_BRAND_TITLE);
+    (void)epd_status_lr_row_create(ds_root, &ds_brand, &ds_unit_ra);
     lv_obj_set_style_text_font(ds_brand, &roboto_bold_42, LV_PART_MAIN);
-    lv_obj_set_style_text_color(ds_brand, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_text_align(ds_brand, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_unit_ra, &roboto_36, LV_PART_MAIN);
+    lv_label_set_text(ds_brand, EPD_TEXT_BRAND_TITLE);
+    lv_label_set_text(ds_unit_ra, "---");
 
     (void)epd_hline_create(ds_root);
 
-    (void)epd_status_lr_row_create(ds_root, &ds_unit_la, &ds_deveui_ra);
-    lv_obj_set_style_text_font(ds_unit_la, &roboto_36, LV_PART_MAIN);
-    lv_obj_set_style_text_font(ds_deveui_ra, &roboto_36, LV_PART_MAIN);
-    lv_label_set_text(ds_unit_la, "unit");
-    lv_label_set_text(ds_deveui_ra, "---");
+    (void)epd_status_lr_row_create(ds_root, &ds_eui_la, &ds_battery_ra);
+    lv_obj_set_style_text_font(ds_eui_la, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_battery_ra, &roboto_36, LV_PART_MAIN);
+    lv_label_set_text(ds_eui_la, "---");
+    lv_label_set_text(ds_battery_ra, "---");
 
     (void)epd_hline_create(ds_root);
 
@@ -642,6 +647,7 @@
     char brand_lower[32];
     char unit_lower[48];
     char deveui_tail[8];
+    char battery_buf[16];
     char fwbuf[32];
     char mfg_lower[40];
     char status_ra[48];
@@ -660,11 +666,21 @@
     if (ds_brand != NULL) {
       lv_label_set_text(ds_brand, brand_lower);
     }
-    if (ds_unit_la != NULL) {
-      lv_label_set_text(ds_unit_la, unit_lower);
+    if (ds_unit_ra != NULL) {
+      lv_label_set_text(ds_unit_ra, unit_lower);
     }
-    if (ds_deveui_ra != NULL) {
-      lv_label_set_text(ds_deveui_ra, deveui_tail);
+    if (ds_eui_la != NULL) {
+      lv_label_set_text(ds_eui_la, deveui_tail);
+    }
+    int32_t battery_mv = 0;
+    if (battery_adc_last_mv_get(&battery_mv) == 0) {
+      (void)battery_adc_format_mv_display(battery_mv, battery_buf,
+                                         sizeof(battery_buf));
+    } else {
+      (void)snprintf(battery_buf, sizeof(battery_buf), "--");
+    }
+    if (ds_battery_ra != NULL) {
+      lv_label_set_text(ds_battery_ra, battery_buf);
     }
     if (ds_mfg != NULL) {
       lv_label_set_text(ds_mfg, mfg_lower);
@@ -702,7 +718,7 @@
       if (ds_status_ra != NULL) {
         lv_label_set_text(ds_status_ra, EPD_STATUS_NOT_JOINED);
       }
-      LOG_INF("epd device_status not_joined");
+      LOG_DBG("epd device_status not_joined");
       return;
     }
 
@@ -775,7 +791,7 @@
       }
     }
 
-    LOG_INF("epd device_status %s %s m=%d gw=%u n=%u mode=%d",
+    LOG_DBG("epd device_status %s %s m=%d gw=%u n=%u mode=%d",
             device_status_link_tier_margin(margin), status_ra, (int)margin,
             (unsigned)gw, (unsigned)ls.samples, link_mode);
   }
@@ -863,7 +879,7 @@
     /* Show the requested screen */
     switch (type) {
     case JOB_SHOW_LOGO:
-      LOG_INF("epd show LOGO");
+      LOG_DBG("epd show LOGO");
       scr_to_show = screen_logo;
       break;
     case JOB_SHOW_LAST_CLEANED: {
@@ -878,7 +894,7 @@
         display_epoch = (int64_t)UINT32_MAX;
       }
       format_epoch_yyyymmdd_hhmm((uint32_t)display_epoch, ts, sizeof(ts));
-      LOG_INF("epd show LAST_CLEANED %s", ts);
+      LOG_DBG("epd show LAST_CLEANED %s", ts);
       if (last_cleaned_label) {
         lv_label_set_text(last_cleaned_label, ts);
       }
@@ -886,23 +902,23 @@
       break;
     }
     case JOB_SHOW_THANKS:
-      LOG_INF("epd show THANKS");
+      LOG_DBG("epd show THANKS");
       scr_to_show = screen_thanks;
       break;
     case JOB_SHOW_CLEANING:
-      LOG_INF("epd show CLEANING");
+      LOG_DBG("epd show CLEANING");
       scr_to_show = screen_cleaning;
       break;
     case JOB_SHOW_CONNECTING:
-      LOG_INF("epd show CONNECTING");
+      LOG_DBG("epd show CONNECTING");
       scr_to_show = screen_connecting;
       break;
     case JOB_SHOW_DEVICE_STATUS:
-      LOG_INF("epd show DEVICE_STATUS");
+      LOG_DBG("epd show DEVICE_STATUS");
       scr_to_show = screen_device_status;
       break;
     case JOB_SHOW_DL_CUSTOM_MESSAGE:
-      LOG_INF("epd show DL_CUSTOM");
+      LOG_DBG("epd show DL_CUSTOM");
       if (dl_custom_msg_label != NULL) {
         k_mutex_lock(&dl_custom_msg_mutex, K_FOREVER);
         lv_label_set_text(dl_custom_msg_label, dl_custom_msg_buf);
@@ -981,6 +997,12 @@
         k_sem_give(&last_cleaned_done_sem);
       }
       break;
+    case JOB_SHOW_CONNECTING:
+      if (atomic_get(&connecting_sync_waiting) != 0) {
+        atomic_set(&connecting_sync_waiting, 0);
+        k_sem_give(&connecting_done_sem);
+      }
+      break;
     case JOB_SHOW_CLEANING:
       if (atomic_get(&cleaning_sync_waiting) != 0) {
         atomic_set(&cleaning_sync_waiting, 0);
@@ -1048,7 +1070,7 @@
         atomic_set(&cleaning_timer_expired_atomic, 0);
         if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
           (void)last_cleaned_store_set(epoch);
-          LOG_INF("epd cleaning_revert epoch=%u", epoch);
+          LOG_DBG("epd cleaning_revert epoch=%u", epoch);
         } else {
           (void)last_cleaned_store_get(&epoch);
           LOG_WRN("epd cleaning_revert no_rtc");
@@ -1123,7 +1145,7 @@
 
       k_timer_start(&dl_custom_revert_timer, K_MINUTES(hold), K_NO_WAIT);
 
-      LOG_INF("epd dl_custom hold_min=%u", (unsigned)hold);
+      LOG_DBG("epd dl_custom hold_min=%u", (unsigned)hold);
 
       break;
 
@@ -1190,6 +1212,11 @@
         atomic_get(&last_cleaned_sync_waiting)) {
       atomic_set(&last_cleaned_sync_waiting, 0);
       k_sem_give(&last_cleaned_done_sem);
+    }
+    if (job.type == JOB_SHOW_CONNECTING &&
+        atomic_get(&connecting_sync_waiting)) {
+      atomic_set(&connecting_sync_waiting, 0);
+      k_sem_give(&connecting_done_sem);
     }
     if (job.type == JOB_SHOW_CLEANING &&
         atomic_get(&cleaning_sync_waiting)) {
@@ -1316,7 +1343,7 @@
       return -ENOMEM;
     }
 
-    LOG_INF("epd buf bytes=%zu stride=%u", sizeof(lvgl_buf1),
+    LOG_DBG("epd buf bytes=%zu stride=%u", sizeof(lvgl_buf1),
             (unsigned)stride_bytes);
     lv_display_set_buffers_with_stride(lvgl_display, lvgl_buf1, lvgl_buf2,
                                       full_buf_size, stride_bytes,
@@ -1328,9 +1355,9 @@
     /* Create all screens (they will be created on the default display) */
     create_lvgl_screens();
 
-    LOG_INF("epd init ok (+LVGL)");
+    LOG_DBG("epd init ok (+LVGL)");
   #else
-    LOG_INF("epd init ok (off)");
+    LOG_DBG("epd init ok (off)");
   #endif
     return 0;
   }
@@ -1450,6 +1477,22 @@
   void display_show_connecting(void) {
   #if EPD_ENABLED
     enqueue_job(JOB_SHOW_CONNECTING, 0);
+  #endif
+  }
+
+  void display_show_connecting_sync(void) {
+  #if EPD_ENABLED
+    struct display_job job = {.type = JOB_SHOW_CONNECTING, .epoch = 0};
+    if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+      LOG_WRN("connecting sync: job queue full");
+      return;
+    }
+    atomic_set(&connecting_sync_waiting, 1);
+    (void)k_work_schedule(&display_work, K_MSEC(0));
+    if (k_sem_take(&connecting_done_sem, K_MSEC(30000)) != 0) {
+      LOG_WRN("connecting sync timeout");
+    }
+    atomic_set(&connecting_sync_waiting, 0);
   #endif
   }
 

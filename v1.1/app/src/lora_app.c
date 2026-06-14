@@ -6,8 +6,8 @@
 #include "battery_adc.h"
 #include "lora_app.h"
 #include "lora_link_stats.h"
+#include "log_fmt.h"
 #include "eui_keys.h"
-#include "mapek_coordinator.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
@@ -71,20 +71,19 @@ static void lora_cancel_scheduled_post_burst_mac(void) {
   (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
 }
 
-void lora_schedule_time_sync_after_counter_burst(
-    enum lora_burst_tail_profile profile) {
+void lora_schedule_link_check_and_time_sync_after_app_uplinks(
+    uint32_t app_uplink_count) {
 
   const uint32_t link_delay_ms =
-      (profile == LORA_BURST_TAIL_HOUSEKEEPING)
-          ? LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_HK_MS
-          : LORA_POST_COUNTER_BURST_TIME_SYNC_DELAY_JOIN_MS;
+      LORA_POST_APP_UPLINKS_MAC_DELAY_MS(app_uplink_count);
   const uint32_t time_delay_ms =
       link_delay_ms + LORA_POST_BURST_LINK_TO_TIME_GAP_MS;
 
   lora_cancel_scheduled_post_burst_mac();
 
-  LOG_DBG("post-burst MAC: LinkCheck @%u ms DeviceTime @%u ms (profile=%d)",
-          (unsigned)link_delay_ms, (unsigned)time_delay_ms, (int)profile);
+  LOG_DBG("post-HK MAC: LinkCheck @%u ms DeviceTime @%u ms (app_ul=%u)",
+          (unsigned)link_delay_ms, (unsigned)time_delay_ms,
+          (unsigned)app_uplink_count);
 
   (void)k_work_schedule(&lora_burst_tail_link_check_w, K_MSEC(link_delay_ms));
   (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(time_delay_ms));
@@ -100,6 +99,12 @@ void lora_schedule_time_sync_after_link_check(void) {
 
 void lora_cancel_scheduled_burst_time_sync(void) {
   lora_cancel_scheduled_post_burst_mac();
+}
+
+void lora_schedule_time_sync_deferred(uint32_t delay_ms) {
+  lora_cancel_scheduled_post_burst_mac();
+  LOG_DBG("DeviceTimeReq deferred %u ms", (unsigned)delay_ms);
+  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
 }
 
 void lora_request_link_check(bool force_request) {
@@ -133,19 +138,15 @@ bool lora_probe_link_check_sync(uint32_t timeout_ms) {
     if (now.samples > samples_before ||
         (now.last_ans_uptime_ms != 0U &&
          now.last_ans_uptime_ms != ans_ms_before)) {
-      LOG_INF("link probe: Ans margin=%d gw=%u",
+      LOG_DBG("link probe: Ans margin=%d gw=%u",
               (int)now.last_demod_margin, (unsigned)now.last_nb_gateways);
       return true;
     }
     k_msleep(50);
   }
 
-  LOG_INF("link probe: RX timeout (%u ms)", (unsigned)timeout_ms);
+  LOG_DBG("link probe: RX timeout (%u ms)", (unsigned)timeout_ms);
   return false;
-}
-
-void lora_request_session_lost(void) {
-  (void)lora_cmd_put(LORA_CMD_SESSION_LOST);
 }
 
 void lora_reset_dr_time_sync_retry(void) {
@@ -203,7 +204,7 @@ int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
 
   /* Reject messages if not joined to network */
   if (!lora_is_joined()) {
-    LOG_WRN("put_event: not joined");
+    LOG_DBG("put_event: not joined");
     return -ENOTCONN;
   }
 
@@ -236,14 +237,9 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
   }
 
   if (!frmpayload || len == 0U) {
-    uint8_t mf = 0U;
-    if (time_upd) {
-      mf |= MAPEK_DL_FEED_LORAWAN_TIME_UPD;
-    }
-    mapek_feed_dl(rssi, snr, mf);
     /* MAC-only Rx (dwell / join): very frequent unless pending or clock sync */
     if (pend != 0 || time_upd) {
-      LOG_INF("DL MAC p=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port, pend,
+      LOG_DBG("DL MAC p=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port, pend,
               rssi_i, snr_i, tu);
     } else {
       LOG_DBG("DL MAC p=%u rssi=%d snr=%d", (unsigned)port, rssi_i, snr_i);
@@ -257,15 +253,9 @@ void lora_app_dl_callback(uint8_t port, uint8_t flags, int16_t rssi, int8_t snr,
     len = (uint8_t)LORA_MAX_DOWNLINK_FRMPAYLOAD_SIZE;
   }
 
-  LOG_INF("DL app p=%u len=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port,
+  LOG_EVT("DL app p=%u len=%u pend=%d rssi=%d snr=%d tu=%d", (unsigned)port,
           (unsigned)len, pend, rssi_i, snr_i, tu);
   LOG_HEXDUMP_DBG(frmpayload, len, "DL FRMPayload");
-
-  uint8_t mf = MAPEK_DL_FEED_APP_PAYLOAD;
-  if (time_upd) {
-    mf |= MAPEK_DL_FEED_LORAWAN_TIME_UPD;
-  }
-  mapek_feed_dl(rssi, snr, mf);
 
   /* Post to SMF for command dispatch */
   if (smf_post_downlink(port, len, frmpayload) != 0) {
@@ -289,10 +279,6 @@ void lora_app_dr_changed(enum lorawan_datarate dr) {
  */
 int lora_app_init(void) {
   int ret;
-
-  static const uint8_t mapek_dev_eui[] = LORAWAN_DEV_EUI;
-  mapek_init(mapek_dev_eui);
-  mapek_start();
 
   const struct device *lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
   if (!device_is_ready(lora_dev)) {
@@ -320,7 +306,7 @@ int lora_app_init(void) {
   // if (ret_mask < 0) {
   //     LOG_ERR("Failed to set channel mask: %d", ret_mask);
   // } else {
-  //     LOG_INF("Channel mask set to FSB2 (channels 8–15)");
+  //     LOG_DBG("Channel mask set to FSB2 (channels 8–15)");
   // }
 
   static struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
@@ -349,6 +335,6 @@ int lora_app_init(void) {
 #else
   const char *region = "?";
 #endif
-  LOG_INF("LoRaWAN ok %s region=%s adr=on", lora_dev->name, region);
+  LOG_DBG("LoRaWAN ok %s region=%s adr=on", lora_dev->name, region);
   return 0;
 }

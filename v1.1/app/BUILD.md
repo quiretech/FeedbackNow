@@ -31,7 +31,7 @@ Serial console: 115200 8N1.
 
 | File | Purpose |
 |------|---------|
-| `sys_config_profile.h` | **One knob:** `SYS_CONFIG_PROFILE` → PRODUCTION, DESK, or LAB (RTC preserve, MAPE-K fast test, EEPROM test flags). |
+| `sys_config_profile.h` | **One knob:** `SYS_CONFIG_PROFILE` → PRODUCTION, DESK, or LAB (RTC preserve, fast HK/join backoff in LAB, EEPROM test flags). |
 | `onboarding_config.h` | Unit id, provision UTC, `DEVICE_HW_VARIANT` (→ `EPD_ENABLED`), registry strings. |
 | `sys_config.h` | LoRa, buttons, LED, NFC, RTC, thread sizes, versions. |
 | `eeprom_layout.h` | Fixed EEPROM offsets (do not change in the field). |
