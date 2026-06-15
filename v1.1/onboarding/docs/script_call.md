@@ -172,3 +172,18 @@ fbn-prod-eu
 aws sts get-caller-identity
 aws sso login --profile my-profile
 export AWS_PROFILE=your-profile-name
+
+
+lora_semtech_sx1262mb2das: sx1262@0 {
+	compatible = "semtech,sx1262";
+	reg = <0>;
+	spi-max-frequency = <7000000>;
+	label = "SX1262";
+	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
+	busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;
+	dio1-gpios  = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+	dio3-tcxo-voltage = <0x02>;
+	tcxo-power-startup-delay-ms = <10>;
+	dio2-tx-enable;
+	status = "okay";
+};
