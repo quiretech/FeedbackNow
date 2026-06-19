@@ -2,8 +2,8 @@
 """
 eui_collision_check.py
 
-Reads flexbox_euis/eui_registry.csv and flexbox_euis/eui_registry_EU868.csv and reports collisions on
-LoRaWAN identity fields only:
+Reads flexbox_euis/eui_registry.csv, eui_registry_EU868.csv, and any CSVs under
+flexbox_euis/demo_units/ and reports collisions on LoRaWAN identity fields only:
 
 - Duplicate dev_eui, join_eui, or app_key (across all loaded rows / files)
 - Cross-field clashes (one row's dev_eui equals another row's join_eui, etc.)
@@ -94,6 +94,13 @@ def main():
     if eu868_csv_path.exists() and eu868_csv_path.resolve() != main_csv_path.resolve():
         files_loaded.append(load_csv(eu868_csv_path, "eu868"))
         sources.append(str(eu868_csv_path))
+
+    demo_dir = _registry_dir / "demo_units"
+    if demo_dir.is_dir():
+        for demo_csv in sorted(demo_dir.glob("eui_registry*.csv")):
+            tag = f"demo:{demo_csv.name}"
+            files_loaded.append(load_csv(demo_csv, tag))
+            sources.append(str(demo_csv))
 
     # Flatten all to a single list with source tags
     all_rows = [row for rows in files_loaded for row in rows]

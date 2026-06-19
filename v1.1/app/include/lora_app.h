@@ -90,28 +90,20 @@ void lora_prepare_deliberate_rejoin(void);
 void lora_request_time_sync(void);
 
 /**
- * After @a app_uplink_count app frames are enqueued, defer LinkCheckReq then
- * DeviceTimeReq so the LoRa thread can drain the queue first. Cancels prior
- * deferral.
+ * After @a app_uplink_count app frames are enqueued, defer DeviceTimeReq so the
+ * LoRa thread can drain the queue first. Cancels prior deferral.
  */
-void lora_schedule_link_check_and_time_sync_after_app_uplinks(
-    uint32_t app_uplink_count);
+void lora_schedule_time_sync_after_app_uplinks(uint32_t app_uplink_count);
 
-/** Cancel deferred LinkCheck + DeviceTime. */
+/** Cancel deferred DeviceTimeReq from HK/status burst scheduling. */
 void lora_cancel_scheduled_burst_time_sync(void);
 
 /** Queue DeviceTimeReq after @a delay_ms (post-join EPD / MAC settle). */
 void lora_schedule_time_sync_deferred(uint32_t delay_ms);
 
 /**
- * After an immediate LinkCheckReq, defer DeviceTimeReq.
- */
-void lora_schedule_time_sync_after_link_check(void);
-
-/**
  * Request LoRa thread to send LinkCheckReq MAC command. LoRa thread calls
- * lorawan_request_link_check(force_request). For heartbeat use true to send
- * immediately; false appends to next uplink.
+ * lorawan_request_link_check(force_request). Used for device-info probe only.
  */
 void lora_request_link_check(bool force_request);
 

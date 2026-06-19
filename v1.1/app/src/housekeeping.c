@@ -205,7 +205,7 @@ static void housekeeping_run_core(bool counter_sync_burst) {
     app_uplinks += counter_sync_run(epoch_s, LORA_COUNTER_SYNC_CONFIRMED);
   }
 
-  lora_schedule_link_check_and_time_sync_after_app_uplinks(app_uplinks);
+  lora_schedule_time_sync_after_app_uplinks(app_uplinks);
 
   rail_manager_release_3v3();
   rail_manager_release_3v3a();

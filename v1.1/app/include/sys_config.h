@@ -91,14 +91,11 @@
 #define COUNTER_SYNC_DELAY_MS 100
 #define COUNTER_SYNC_JITTER_MAX_MS 600
 
-/* Defer LinkCheck/DeviceTime after N app uplinks (3 s spacing each + fudge). */
+/* Defer DeviceTime after N app uplinks (3 s spacing each + fudge). */
 #define LORA_POST_APP_UPLINK_MAC_FUDGE_MS 500U
 #define LORA_POST_APP_UPLINKS_MAC_DELAY_MS(count)                                  \
   (((uint32_t)(count) * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +                   \
    (uint32_t)LORA_POST_APP_UPLINK_MAC_FUDGE_MS)
-/** Gap between deferred LinkCheckReq and DeviceTimeReq (after app uplinks). */
-#define LORA_POST_BURST_LINK_TO_TIME_GAP_MS                                        \
-  ((uint32_t)LORA_UPLINK_MIN_INTERVAL_MS + (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
 
 /* =============================================================================
  * Buttons / Input (FRD 4.1)
@@ -241,7 +238,7 @@
 #define EPD_LOCALE_FR 1
 #define EPD_LOCALE_DE 2
 
-#define EPD_LOCALE 1
+#define EPD_LOCALE 0
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS

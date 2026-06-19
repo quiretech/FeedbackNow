@@ -46,18 +46,9 @@ void lora_request_join(void) { (void)lora_cmd_put(LORA_CMD_JOIN); }
 
 void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
 
-static void lora_burst_tail_link_check_fn(struct k_work *work);
 static void lora_burst_tail_time_sync_fn(struct k_work *work);
 
-K_WORK_DELAYABLE_DEFINE(lora_burst_tail_link_check_w, lora_burst_tail_link_check_fn);
 K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w, lora_burst_tail_time_sync_fn);
-
-static void lora_burst_tail_link_check_fn(struct k_work *work) {
-  ARG_UNUSED(work);
-
-  LOG_DBG("post-burst: LinkCheckReq (force)");
-  (void)lora_cmd_put(LORA_CMD_LINK_CHECK_FORCE);
-}
 
 static void lora_burst_tail_time_sync_fn(struct k_work *work) {
   ARG_UNUSED(work);
@@ -67,34 +58,19 @@ static void lora_burst_tail_time_sync_fn(struct k_work *work) {
 }
 
 static void lora_cancel_scheduled_post_burst_mac(void) {
-  (void)k_work_cancel_delayable(&lora_burst_tail_link_check_w);
   (void)k_work_cancel_delayable(&lora_burst_tail_time_sync_w);
 }
 
-void lora_schedule_link_check_and_time_sync_after_app_uplinks(
-    uint32_t app_uplink_count) {
-
-  const uint32_t link_delay_ms =
+void lora_schedule_time_sync_after_app_uplinks(uint32_t app_uplink_count) {
+  const uint32_t delay_ms =
       LORA_POST_APP_UPLINKS_MAC_DELAY_MS(app_uplink_count);
-  const uint32_t time_delay_ms =
-      link_delay_ms + LORA_POST_BURST_LINK_TO_TIME_GAP_MS;
 
   lora_cancel_scheduled_post_burst_mac();
 
-  LOG_DBG("post-HK MAC: LinkCheck @%u ms DeviceTime @%u ms (app_ul=%u)",
-          (unsigned)link_delay_ms, (unsigned)time_delay_ms,
+  LOG_DBG("post-HK MAC: DeviceTime @%u ms (app_ul=%u)", (unsigned)delay_ms,
           (unsigned)app_uplink_count);
 
-  (void)k_work_schedule(&lora_burst_tail_link_check_w, K_MSEC(link_delay_ms));
-  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(time_delay_ms));
-}
-
-void lora_schedule_time_sync_after_link_check(void) {
-  lora_cancel_scheduled_post_burst_mac();
-  LOG_DBG("DeviceTimeReq deferred %u ms (after LinkCheck)",
-          (unsigned)LORA_POST_BURST_LINK_TO_TIME_GAP_MS);
-  (void)k_work_schedule(&lora_burst_tail_time_sync_w,
-                        K_MSEC(LORA_POST_BURST_LINK_TO_TIME_GAP_MS));
+  (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
 }
 
 void lora_cancel_scheduled_burst_time_sync(void) {

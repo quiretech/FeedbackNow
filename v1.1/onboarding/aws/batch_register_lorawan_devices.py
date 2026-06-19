@@ -297,6 +297,16 @@ def main() -> int:
     parser.add_argument("--verbose", "-v", action="store_true", help="More output")
     parser.add_argument("--dryrun", "-d", action="store_true", help="Do not call AWS API; only log actions")
     parser.add_argument("--last-only", action="store_true", help="Only onboard the last entry in the CSV")
+    parser.add_argument(
+        "--unit",
+        metavar="ASSET_ID",
+        help="Only register the row with this asset_id (case-insensitive)",
+    )
+    parser.add_argument(
+        "--all-rows",
+        action="store_true",
+        help="Register all rows (overrides --last-only; use with care)",
+    )
 
 
     args = parser.parse_args()
@@ -310,7 +320,16 @@ def main() -> int:
         return 2
 
     rows = load_eui_registry(csv_path)
-    if args.last_only:
+    if args.unit:
+        want = args.unit.strip().lower()
+        rows = [r for r in rows if (r.get("asset_id") or "").strip().lower() == want]
+        if not rows:
+            logger.error("No row with asset_id=%r in %s", args.unit, csv_path)
+            return 2
+        logger.info("Processing unit asset_id=%s", rows[0]["asset_id"])
+    elif args.all_rows:
+        logger.info("Processing all %d CSV row(s)", len(rows))
+    elif args.last_only:
         if rows:
             rows = [rows[-1]]
             logger.info("Processing only last CSV entry (asset_id=%s)", rows[0]["asset_id"])

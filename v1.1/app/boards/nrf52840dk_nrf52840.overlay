@@ -63,18 +63,18 @@ enables {
 };
 
 
-	
-&spi1 {	
+
+&spi1 {
 	status="disabled";
-};	
-	
-&qspi {	
+};
+
+&qspi {
 	status="disabled";
-};	
-	
-&pwm0 {	
+};
+
+&pwm0 {
 	status="disabled";
-};	
+};
 
 
 /* ---------- PINCTRL configuration ---------- */

@@ -1,0 +1,53 @@
+{
+  "quiretech": {
+    "description": "QuireTech lab → TestDeviceDestination",
+    "aws_profile": "quiretech",
+    "aws_region": "us-east-1",
+    "destination_name": "TestDeviceDestination",
+    "lorawan": {
+      "us915": {
+        "device_profile_id": "9ca0d988-eb68-485a-ab92-a210e134ab82",
+        "service_profile_id": "9a8d999b-81d6-4071-8282-755b51d65d2e"
+      },
+      "eu868": {
+        "device_profile_id": "cf8adeae-ce9d-4a26-bcf2-c9805c2ef571",
+        "service_profile_id": "9a8d999b-81d6-4071-8282-755b51d65d2e"
+      }
+    },
+    "aliases": ["qt-us915", "qt-eu868"]
+  },
+  "fbn-eu": {
+    "description": "FBN production account 2 (fbn-prod-eu SSO) → capture",
+    "aws_profile": "fbn-prod-eu",
+    "aws_region": "us-east-1",
+    "destination_name": "capture",
+    "lorawan": {
+      "us915": {
+        "device_profile_id": "a7381c2f-3751-41fa-afb1-5aa0328f09f9",
+        "service_profile_id": "75c24d9c-3898-4b36-ad3b-eef0b63c7c3b"
+      },
+      "eu868": {
+        "device_profile_id": "30a6011a-2d0a-471f-8d81-19d7a294afb8",
+        "service_profile_id": "75c24d9c-3898-4b36-ad3b-eef0b63c7c3b"
+      }
+    },
+    "aliases": ["fbn-prod-eu"]
+  },
+  "fbn-admin": {
+    "description": "FBN admin (fbn-admin SSO) → destination",
+    "aws_profile": "fbn-admin",
+    "aws_region": "us-east-1",
+    "destination_name": "destination",
+    "lorawan": {
+      "us915": {
+        "device_profile_id": "a50e599b-d37d-41f1-a19b-aac66d93fdfa",
+        "service_profile_id": "71da2f46-8470-492a-a757-fcec760095cd"
+      },
+      "eu868": {
+        "device_profile_id": "7463ce62-58a8-4343-9a54-fbc6707cadd8",
+        "service_profile_id": "75c24d9c-3898-4b36-ad3b-eef0b63c7c3b"
+      }
+    },
+    "aliases": ["fbn-admin-us"]
+  }
+}
