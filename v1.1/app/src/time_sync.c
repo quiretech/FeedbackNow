@@ -35,7 +35,26 @@ K_WORK_DELAYABLE_DEFINE(time_sync_timeout_work, time_sync_timeout_work_handler);
 
 static atomic_t time_sync_inflight = ATOMIC_INIT(0);
 static atomic_t time_sync_last_result = ATOMIC_INIT(-EAGAIN);
+static bool time_sync_rail_held;
 K_SEM_DEFINE(time_sync_done_sem, 0, 1);
+
+static void time_sync_rail_hold(void)
+{
+  if (!time_sync_rail_held)
+  {
+    rail_manager_request_3v3a();
+    time_sync_rail_held = true;
+  }
+}
+
+static void time_sync_rail_release(void)
+{
+  if (time_sync_rail_held)
+  {
+    rail_manager_release_3v3a();
+    time_sync_rail_held = false;
+  }
+}
 
 static void time_sync_post_done_event(int result) {
   (void)smf_post_event(SMF_EVT_TIME_SYNC_DONE, (result == 0 ? 0 : 1),
@@ -98,13 +117,14 @@ static void time_sync_apply_work_handler(struct k_work *work) {
   }
   int ret = time_sync_apply_from_stack();
   if (!atomic_cas(&time_sync_inflight, 1, 0)) {
-    /* time_sync_abort_on_link_lost() won the teardown race */
+    /* time_sync_abort_on_link_lost() or timeout won the teardown race */
     return;
   }
   atomic_set(&time_sync_last_result, ret);
   (void)k_work_cancel_delayable(&time_sync_timeout_work);
   k_sem_give(&time_sync_done_sem);
   time_sync_notify_done(ret);
+  time_sync_rail_release();
 }
 
 static void time_sync_timeout_work_handler(struct k_work *work) {
@@ -120,6 +140,7 @@ static void time_sync_timeout_work_handler(struct k_work *work) {
   atomic_set(&time_sync_last_result, -ETIMEDOUT);
   k_sem_give(&time_sync_done_sem);
   time_sync_notify_done(-ETIMEDOUT);
+  time_sync_rail_release();
 }
 
 void time_sync_request_and_update_rtc(void) {
@@ -160,6 +181,7 @@ void time_sync_request_and_update_rtc(void) {
   }
 
   int ret = -EBUSY;
+  time_sync_rail_hold();
   for (int attempt = 0; attempt < 5; attempt++) {
 #if EPD_ENABLED
     display_wait_until_spi_idle(10000);
@@ -176,6 +198,7 @@ void time_sync_request_and_update_rtc(void) {
   }
   if (ret != 0) {
     LOG_WRN("lorawan_request_device_time failed: %d", ret);
+    time_sync_rail_release();
     if (!atomic_cas(&time_sync_inflight, 1, 0)) {
       return;
     }
@@ -216,4 +239,5 @@ void time_sync_abort_on_link_lost(void) {
   atomic_set(&time_sync_last_result, -ENOTCONN);
   k_sem_give(&time_sync_done_sem);
   time_sync_post_done_event(-ENOTCONN);
+  time_sync_rail_release();
 }

@@ -57,6 +57,31 @@ static atomic_t silent_join_installer_led_armed;
 
 K_SEM_DEFINE(lora_ready_sem, 0, 1);
 
+/* FLEXBOX status LED shares the 3.3A peripheral rail (see SMF Staff comments).
+ * Hold that rail for the whole installer join campaign — not only during each
+ * lorawan_join() call — so the LED stays powered in OTAA inter-attempt sleeps. */
+static bool join_installer_rail_held;
+
+static void join_installer_rail_hold(bool show_join_led)
+{
+  if (!show_join_led || join_installer_rail_held)
+  {
+    return;
+  }
+  rail_manager_request_3v3a();
+  join_installer_rail_held = true;
+}
+
+static void join_installer_rail_release(void)
+{
+  if (!join_installer_rail_held)
+  {
+    return;
+  }
+  rail_manager_release_3v3a();
+  join_installer_rail_held = false;
+}
+
 /** Join LED: deliberate join always; silent only for first cycle after boot
  *  auto-post (installer at power-on), never for backoff rejoin. */
 static bool join_installer_led_for_cmd(uint8_t cmd)
@@ -100,6 +125,8 @@ static void lora_session_lost_teardown(const char *reason)
   }
   LOG_WRN("LoRa session lost (%s)", reason);
   atomic_set(&lora_joined_flag, 0);
+  atomic_set(&silent_join_installer_led_armed, 0);
+  join_installer_rail_release();
   time_sync_abort_on_link_lost();
   lora_reset_dr_time_sync_retry();
   (void)smf_post_event(SMF_EVT_DISCONNECTED, 0, k_uptime_get());
@@ -111,9 +138,7 @@ static void join_after_backoff_work_handler(struct k_work *work)
 {
   (void)work;
   LOG_DBG("join backoff expired; rejoin (silent)");
-  /* Customer-facing rejoin: no join LED (installer LED only for deliberate join
-   * or first silent join right after power-on). */
-  atomic_set(&silent_join_installer_led_armed, 0);
+  /* armed flag consumed by join_installer_led_for_cmd on the silent cycle. */
   int ret;
   for (int attempt = 0; attempt < 5; attempt++)
   {
@@ -149,6 +174,17 @@ static void lora_log_boot_dev_eui_once(void)
   boot_dev_eui_logged = true;
 }
 
+/** Hold 3.3A for LoRa radio SPI/RF (FLEXBOX: same peripheral rail as SX1262). */
+static void lora_radio_rail_hold(void)
+{
+  rail_manager_request_3v3a();
+}
+
+static void lora_radio_rail_release(void)
+{
+  rail_manager_release_3v3a();
+}
+
 static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
                             bool confirmed)
 {
@@ -174,6 +210,9 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   }
 #endif
 
+  lora_radio_rail_hold();
+  lora_pace_uplink_spacing();
+
   for (int attempt = 0; attempt < 5; attempt++)
   {
     ret = lorawan_send(
@@ -197,6 +236,8 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
       break;
     }
   }
+
+  lora_radio_rail_release();
 
   if (ret == 0)
   {
@@ -252,11 +293,20 @@ void lora_prepare_deliberate_rejoin(void)
  * LORA_JOIN_BACKOFF_HOURS) when this returns false.
  *
  * @return true if joined, false if all attempts in this cycle failed.
- * @param show_join_led true: joining / success / fail-off LED for installer
- *                      (deliberate join, or first silent join after power-on).
- *                      false: silent background join (e.g. after link backoff).
+ * @param show_join_led true: joining blink for installer (deliberate join,
+ *                      first silent join after power-on, and through backoff).
+ *                      false: silent background join (e.g. link-loss rejoin).
  * @param deliberate_rejoin true for LORA_CMD_JOIN (Staff combo): prep session.
  */
+/** Re-post JOINING so blink survives long LoRa sleeps / thread starvation. */
+static void join_led_show_active(bool show_join_led)
+{
+  if (show_join_led)
+  {
+    (void)led_manager_show(0, LED_PATTERN_JOINING);
+  }
+}
+
 static bool run_join_cycle(struct lorawan_join_config *join_cfg,
                            bool show_join_led, bool deliberate_rejoin)
 {
@@ -276,6 +326,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     (void)led_manager_show(
         0, LED_PATTERN_JOINING);
   }
+  join_installer_rail_hold(show_join_led);
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++)
   {
@@ -338,6 +389,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
         LOG_WRN("join OK but MAC TX not ready; retry OTAA");
         if (attempt + 1 < LORA_JOIN_ATTEMPTS_PER_CYCLE)
         {
+          join_led_show_active(show_join_led);
           k_sleep(LORA_JOIN_RETRY_DELAY);
         }
         continue;
@@ -371,6 +423,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       (void)join_state_store_set_has_joined_once();
       rail_manager_release_3v3a();
       LOG_DBG("join loop done");
+      join_installer_rail_release();
       return true;
     }
 
@@ -390,16 +443,15 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     if (attempt + 1 < LORA_JOIN_ATTEMPTS_PER_CYCLE)
     {
       LOG_DBG("sleep %d s until next attempt", LORA_JOIN_RETRY_DELAY_SECONDS);
+      join_led_show_active(show_join_led);
       k_sleep(LORA_JOIN_RETRY_DELAY);
     }
   }
 
   LOG_WRN("join failed after %d attempts (no gateway or RF issue)",
           LORA_JOIN_ATTEMPTS_PER_CYCLE);
-  if (show_join_led)
-  {
-    (void)led_manager_show(0, LED_PATTERN_OFF); /* stop joining blink */
-  }
+  /* Keep JOINING blink + 3.3A through inter-cycle backoff; release on success. */
+  join_led_show_active(show_join_led);
   return false;
 }
 
@@ -444,11 +496,13 @@ static void lora_thread_fn(void *a, void *b, void *c)
   (void)lora_get_cmd(&cmd, K_FOREVER);
   LOG_DBG("join cmd=%u starting cycle", cmd);
 
-  while (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd),
-                         cmd == LORA_CMD_JOIN))
+  const bool show_join_led_boot = join_installer_led_for_cmd(cmd);
+
+  while (!run_join_cycle(&join_cfg, show_join_led_boot, cmd == LORA_CMD_JOIN))
   {
     (void)smf_post_event(SMF_EVT_JOIN_CYCLE_FAILED, 0, k_uptime_get());
     LOG_WRN("join retry in %d h", (int)LORA_JOIN_BACKOFF_HOURS);
+    join_led_show_active(show_join_led_boot);
     if (LORA_JOIN_BACKOFF_HOURS > 0)
     {
       k_sleep(K_HOURS(LORA_JOIN_BACKOFF_HOURS));
@@ -461,7 +515,8 @@ static void lora_thread_fn(void *a, void *b, void *c)
 
   /* Message loop: service command queue and uplink queue. SMF never calls
    * lorawan_*; it only posts commands (join, time_sync) or uplink via
-   * lora_put_event. This thread owns all LoRaWAN and time_sync calls. */
+   * lora_put_event. Steady-state TX/RX holds 3.3A for the full send/MAC
+   * session (see lora_send_helper). */
   LOG_DBG("message loop");
   struct k_poll_event events[2];
   struct k_poll_event *ev_msgq = &events[0];
@@ -488,9 +543,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
       {
         if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE)
         {
-          /* Rate limit: fair use + spacing before next PHY burst (see
-           * lora_pace_uplink_spacing). */
-          lora_pace_uplink_spacing();
+          /* lora_send_helper: 3.3A hold + rate limit + lorawan_send (TX/RX). */
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
           if (ret == 0)
           {
@@ -520,9 +573,18 @@ static void lora_thread_fn(void *a, void *b, void *c)
       {
         if (cmd == LORA_CMD_JOIN || cmd == LORA_CMD_JOIN_SILENT)
         {
-          if (!run_join_cycle(&join_cfg, join_installer_led_for_cmd(cmd),
-                              cmd == LORA_CMD_JOIN))
+          const bool show_join_led = join_installer_led_for_cmd(cmd);
+          if (!show_join_led)
           {
+            join_installer_rail_release();
+          }
+          if (!run_join_cycle(&join_cfg, show_join_led, cmd == LORA_CMD_JOIN))
+          {
+            /* Deliberate Staff rejoin: keep installer LED on silent backoff retry. */
+            if (cmd == LORA_CMD_JOIN)
+            {
+              (void)atomic_set(&silent_join_installer_led_armed, 1);
+            }
             /* Join cycle failed (e.g. 20 attempts); schedule retry after
              * backoff. */
             k_timer_start(&join_after_backoff_timer, lora_join_backoff_timeout(),
@@ -532,8 +594,6 @@ static void lora_thread_fn(void *a, void *b, void *c)
         }
         else if (cmd == LORA_CMD_TIME_SYNC)
         {
-          /* DeviceTimeReq often rides the next MCPS uplink; spacing avoids
-           * back-to-back PHY with the last app frame. */
 #if EPD_ENABLED
           display_wait_until_spi_idle(10000);
 #endif
@@ -543,9 +603,13 @@ static void lora_thread_fn(void *a, void *b, void *c)
         else if (cmd == LORA_CMD_LINK_CHECK ||
                  cmd == LORA_CMD_LINK_CHECK_FORCE)
         {
-          lora_pace_uplink_spacing();
           bool force = (cmd == LORA_CMD_LINK_CHECK_FORCE);
+          lora_radio_rail_hold();
+          lora_pace_uplink_spacing();
           (void)lorawan_request_link_check(force);
+          /* Class-A MAC answer windows after LinkCheckReq */
+          k_msleep(LORA_POST_JOIN_ANS_SETTLE_MS);
+          lora_radio_rail_release();
         }
       }
       k_poll_event_init(ev_cmdq, K_POLL_TYPE_MSGQ_DATA_AVAILABLE,

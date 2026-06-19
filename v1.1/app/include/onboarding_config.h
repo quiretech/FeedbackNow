@@ -18,7 +18,7 @@
 
 
 #ifndef DEVICE_HW_VARIANT
-#define DEVICE_HW_VARIANT FLEXBOX_PLUS
+#define DEVICE_HW_VARIANT FLEXBOX
 #endif
 
 /* =============================================================================
@@ -26,7 +26,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "DEMO-0015"
+#define DEVICE_UNIT_ID_STRING "UNIT-0356"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -34,8 +34,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1781833501ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-06-19T01:45:01Z"
+#define DEVICE_PROVISION_UNIX_UTC 1781888562ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-06-19T17:02:42Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -44,15 +44,15 @@
  * =============================================================================
  */
 #ifndef DEVICE_REGISTRY_NAME_PREFIX_STRING
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "TEST"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "WW"
 #endif
 
 #ifndef DEVICE_REGISTRY_CLIENT_NAME
-#define DEVICE_REGISTRY_CLIENT_NAME "TEST"
+#define DEVICE_REGISTRY_CLIENT_NAME "Wawa"
 #endif
 
 #ifndef DEVICE_REGISTRY_DECAL_TYPE
-#define DEVICE_REGISTRY_DECAL_TYPE "TEST"
+#define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
 #endif
 
 #endif /* ONBOARDING_CONFIG_H */

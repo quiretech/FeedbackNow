@@ -200,6 +200,18 @@ static void led_ui_thread_fn(void *a, void *b, void *c) {
 
   while (1) {
     int64_t now_ms = k_uptime_get();
+
+    /* Run overdue pattern steps before computing the next sleep (if the UI
+     * thread was starved during long LoRa join/sleep, next_ms can lag behind
+     * now_ms; K_FOREVER on msgq would otherwise freeze JOINING blink). */
+    for (int i = 0; i < NUM_LEDS; i++) {
+      while (led_state[i].next_ms > 0 && now_ms >= led_state[i].next_ms) {
+        run_timeout(i, now_ms);
+        now_ms = k_uptime_get();
+      }
+    }
+
+    now_ms = k_uptime_get();
     int64_t next_ms = 0;
 
     for (int i = 0; i < NUM_LEDS; i++) {
@@ -213,7 +225,9 @@ static void led_ui_thread_fn(void *a, void *b, void *c) {
     k_timeout_t timeout = K_FOREVER;
     if (next_ms > 0) {
       int64_t delta = next_ms - now_ms;
-      if (delta > 0) {
+      if (delta <= 0) {
+        timeout = K_NO_WAIT;
+      } else {
         timeout = K_MSEC((int32_t)(delta > 2147483647 ? 2147483647 : delta));
       }
     }
@@ -254,7 +268,13 @@ int led_manager_show(uint8_t led_id, enum led_pattern_id pattern) {
     return -EINVAL;
   }
   led_ui_msg_t msg = {.led_id = led_id, .pattern = (uint8_t)pattern};
-  return k_msgq_put(&led_ui_msgq, &msg, K_NO_WAIT) == 0 ? 0 : -ENOMEM;
+  for (int i = 0; i < 4; i++) {
+    if (k_msgq_put(&led_ui_msgq, &msg, K_NO_WAIT) == 0) {
+      return 0;
+    }
+    k_msleep(2);
+  }
+  return -ENOMEM;
 }
 
 int led_manager_wait_until_ready(k_timeout_t timeout) {

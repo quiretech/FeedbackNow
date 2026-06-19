@@ -455,7 +455,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         (void)led_manager_show(0, LED_PATTERN_OFF);
-        rail_manager_release_3v3a(); /* paired with request on enter Staff */
+        rail_manager_release_3v3a(); /* Staff solid-ON ref; join path re-holds */
         LOG_DBG("smf Staff->Norm join_req");
         (void)led_manager_show(0, LED_PATTERN_JOINING);
 #if EPD_ENABLED

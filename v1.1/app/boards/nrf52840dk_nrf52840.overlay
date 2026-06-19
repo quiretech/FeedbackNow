@@ -133,11 +133,11 @@ enables {
 		spi-max-frequency = <7000000>;
 		label = "SX1262";
 		reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>;
-		busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;
-		dio1-gpios  = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-		dio3-tcxo-voltage = <0x02>;
-		tcxo-power-startup-delay-ms = <10>;
+		busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>;
+		antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>;
+		dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
 		dio2-tx-enable;
+		tcxo-power-startup-delay-ms = <10>;
 		status = "okay";
 	};
 	/* END LORA_RADIO_PROFILE (gen_euis.py) */
