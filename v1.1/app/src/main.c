@@ -225,6 +225,7 @@ int main(void) {
   (void)housekeeping_wait_until_ready(K_SECONDS(1));
 
   LOG_DBG("workers running: LED NFC LoRa SMF input HK");
+  LOG_STATE("system go (workers started)");
 
   /* Signal SMF: all inits and threads started ("system go"). */
   if (smf_post_event(SMF_EVT_SYSTEM_READY, 0, k_uptime_get()) != 0) {
@@ -232,10 +233,6 @@ int main(void) {
   } else if (smf_wait_until_ready(K_SECONDS(2)) != 0) {
     LOG_WRN("SMF ready ack timeout; proceeding with rail idle transition");
   }
-
-#if !EPD_ENABLED
-  display_show_logo();
-#endif
 
   /* Main sleeps; buttons wake via GPIO; Input -> SMF -> app_logic -> LED/uplink
    */

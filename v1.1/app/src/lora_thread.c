@@ -343,7 +343,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       sys_reboot(SYS_REBOOT_COLD);
     }
     join_cfg->otaa.dev_nonce = dev_nonce;
-    LOG_DBG("join %d/%d devNonce=%u", attempt + 1, LORA_JOIN_ATTEMPTS_PER_CYCLE,
+    LOG_STATE("join %d/%d devNonce=%u", attempt + 1, LORA_JOIN_ATTEMPTS_PER_CYCLE,
             (unsigned)dev_nonce);
     lora_log_join_ids();
 #if EPD_ENABLED
@@ -356,7 +356,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     int64_t join_elapsed = k_uptime_get() - join_t0;
     if (ret == 0)
     {
-      LOG_DBG("lorawan_join ok (%lld ms)", (long long)join_elapsed);
+      LOG_STATE("lorawan_join ok (%lld ms)", (long long)join_elapsed);
     }
     else
     {
@@ -422,7 +422,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       (void)smf_post_event(SMF_EVT_JOINED, joined_tag, k_uptime_get());
       (void)join_state_store_set_has_joined_once();
       rail_manager_release_3v3a();
-      LOG_DBG("join loop done");
+      LOG_STATE("join loop done");
       join_installer_rail_release();
       return true;
     }
@@ -460,7 +460,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
   int ret;
   uint8_t cmd;
 
-  LOG_DBG("LoRa thread start");
+  LOG_STATE("LoRa thread start");
   k_sem_give(&lora_ready_sem);
   LOG_DBG("tid=%p prio=%d stk=%u", k_current_get(),
           k_thread_priority_get(k_current_get()), LORA_THREAD_STACK_SIZE);
@@ -491,10 +491,10 @@ static void lora_thread_fn(void *a, void *b, void *c)
   }
   else
   {
-    LOG_DBG("first boot: wait staff combo join");
+    LOG_STATE("first boot: wait staff combo join");
   }
   (void)lora_get_cmd(&cmd, K_FOREVER);
-  LOG_DBG("join cmd=%u starting cycle", cmd);
+  LOG_STATE("join cmd=%u starting cycle", cmd);
 
   const bool show_join_led_boot = join_installer_led_for_cmd(cmd);
 
@@ -589,7 +589,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
              * backoff. */
             k_timer_start(&join_after_backoff_timer, lora_join_backoff_timeout(),
                           K_NO_WAIT);
-            LOG_DBG("join cycle failed; backoff retry scheduled");
+            LOG_STATE("join cycle failed; backoff retry scheduled");
           }
         }
         else if (cmd == LORA_CMD_TIME_SYNC)

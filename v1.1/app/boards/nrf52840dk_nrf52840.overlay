@@ -1,8 +1,4 @@
 / {
-    chosen {
-        zephyr,display = &ssd1683;
-    };
-
     aliases {
         sw0 = &button0;
         sw1 = &button1;
@@ -122,9 +118,8 @@ enables {
 &arduino_spi {
 	status = "okay";
 
-	/* CS pins for each SPI device: [0]=LoRa, [1]=EPD, [2]=NFC */
-	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>, /* LoRa CS - P1.08 */
-	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
+	/* LoRa CS only; EPD/NFC CS and nodes are in flexbox_plus overlay */
+	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>; /* LoRa CS - P1.08 */
 
 	/* BEGIN LORA_RADIO_PROFILE (gen_euis.py) */
 	lora_semtech_sx1262mb2das: sx1262@0 {
@@ -141,32 +136,6 @@ enables {
 		status = "okay";
 	};
 	/* END LORA_RADIO_PROFILE (gen_euis.py) */
-
-	ssd1683: ssd1683@1 {
-	compatible = "solomon,ssd1683";
-	reg = <1>;
-	spi-max-frequency = <7000000>;
-	/* Display dimensions */
-	width = <400>;
-	height = <300>;
-	/* Control GPIOs */
-	dc-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-	reset-gpios = <&gpio1 3 GPIO_ACTIVE_HIGH>;
-	busy-gpios = <&gpio0 30 GPIO_ACTIVE_HIGH>;
-	// fast-mode;
-	};
-
-	pn5180: pn5180@2 {
- 		compatible = "nxp,pn5180";
-		reg = <2>;
-		spi-max-frequency = <8000000>;
-		irq-gpios = <&gpio0 0 GPIO_ACTIVE_HIGH>;
-		rst-gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
-		busy-gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
-		nss-gpios = <&gpio0 29 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)	>;
-		timeout-ms = <1000>;
-	};
-
 
 };
 
@@ -201,17 +170,17 @@ enables {
 	};
 };
 
-&adc {
-    status = "okay";
-    #address-cells = <1>;
-    #size-cells = <0>;
+// &adc {
+//     status = "okay";
+//     #address-cells = <1>;
+//     #size-cells = <0>;
 
-    channel@3 {
-        reg = <3>;
-        zephyr,gain = "ADC_GAIN_1_3";
-        zephyr,reference = "ADC_REF_INTERNAL";
-		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
-        zephyr,input-positive = <NRF_SAADC_AIN3>;
-        zephyr,resolution = <10>;
-    };
-};
+//     channel@3 {
+//         reg = <3>;
+//         zephyr,gain = "ADC_GAIN_1_3";
+//         zephyr,reference = "ADC_REF_INTERNAL";
+// 		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 40)>;
+//         zephyr,input-positive = <NRF_SAADC_AIN3>;
+//         zephyr,resolution = <10>;
+//     };
+// };

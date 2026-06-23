@@ -4,6 +4,7 @@
  */
 #include "button_thread.h"
 #include "buttons.h"
+#include "log_fmt.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
 
@@ -16,6 +17,7 @@ LOG_MODULE_REGISTER(input, CONFIG_LOG_DEFAULT_LEVEL);
 K_SEM_DEFINE(button_thread_ready_sem, 0, 1);
 
 #define BUTTON_MASK(b) (1U << (b))
+#define BUTTON_MASK_ALL ((1U << NUM_BUTTONS) - 1U)
 
 typedef struct {
   uint32_t mask;
@@ -24,6 +26,8 @@ typedef struct {
 } combo_def_t;
 
 static const combo_def_t combo_table[] = {
+    {BUTTON_MASK_ALL, COMBO_FACTORY_RESET_HOLD_MS,
+     SMF_EVT_COMBO_FACTORY_RESET},
     {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2) | BUTTON_MASK(3),
      COMBO_REBOOT_HOLD_MS, SMF_EVT_COMBO_REBOOT},
     {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(5),
@@ -80,7 +84,7 @@ static void input_reset_session_locked(void) {
 }
 
 static void input_fire_combo_locked(const combo_def_t *combo) {
-  LOG_DBG("combo fire ev=%u mask=0x%x hold_ms=%u",
+  LOG_STATE("combo fire ev=%u mask=0x%x hold_ms=%u",
           (unsigned)combo->ev_type, (unsigned)combo->mask,
           (unsigned)combo->hold_ms);
   (void)smf_post_event(combo->ev_type, 0, k_uptime_get());
@@ -220,7 +224,7 @@ static void input_handle_event_locked(const button_event_t *evt) {
   if (!st.session_combo_fired) {
     const int btn = session_lone_button(st.session_buttons);
     if (btn >= 0) {
-      LOG_DBG("single tap btn=%d -> SMF (session end)", btn);
+      LOG_STATE("single tap btn=%d -> SMF (session end)", btn);
       (void)smf_post_event(SMF_EVT_BUTTON_SINGLE_0 + (uint8_t)btn, (uint8_t)btn,
                            evt->timestamp_ms);
     } else {
@@ -240,7 +244,7 @@ static void button_input_thread_fn(void *a, void *b, void *c) {
   ARG_UNUSED(c);
 
   k_sem_give(&button_thread_ready_sem);
-  LOG_DBG("input thread ready (k_work_delayable deadlines, K_FOREVER queue)");
+  LOG_STATE("input thread ready");
 
   while (1) {
     (void)buttons_get_event(&evt, K_FOREVER);

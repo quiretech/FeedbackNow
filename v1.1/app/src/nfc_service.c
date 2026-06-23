@@ -12,6 +12,7 @@
  *     NFC is disabled (with a warning) if the chip never answers.
  */
 #include "nfc_service.h"
+#include "log_fmt.h"
 #include "rail_manager.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
@@ -139,6 +140,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
 
     LOG_DBG("NFC scan i=%u btn=%u blk=%d", intent, button_id,
             NFC_READ_BLOCK);
+    LOG_STATE("NFC scan start intent=%u btn=%u", intent, button_id);
     uint32_t scan_t0 = k_uptime_get_32();
     deadline_ms = scan_t0 + NFC_SCAN_PHASE1_MS;
     const uint32_t deadline_cap = scan_t0 + NFC_SCAN_TOTAL_MS;
@@ -159,7 +161,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
       }
       ret = pn5180_read_block(nfc_dev, uid, NFC_READ_BLOCK, block_data, 4);
       if (ret == 0) {
-        LOG_DBG("NFC read ok blk=%d", NFC_READ_BLOCK);
+        LOG_STATE("NFC read ok blk=%d", NFC_READ_BLOCK);
         (void)smf_post_nfc_result(1, intent, button_id, block_data);
         (void)pn5180_prepare_poweroff(nfc_dev);
         nfc_warm_eligible = true;
@@ -174,7 +176,7 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
      * "no tag presented" (chip healthy) OR "chip wedged mid-scan" (chip bad).
      * We clear nfc_chip_alive so the next scan re-inits via the recovery
      * loop. Costs ~200 ms on the next timeout path; earns auto-healing. */
-    LOG_DBG("NFC scan end (timeout/cancel)");
+    LOG_STATE("NFC scan end (timeout/cancel)");
     (void)smf_post_nfc_result(0, intent, button_id, NULL);
     (void)pn5180_prepare_poweroff(nfc_dev);
     nfc_warm_eligible = false;
@@ -239,7 +241,7 @@ int nfc_service_init(void) {
     LOG_WRN("self-test failed; per-scan recovery will try to recover");
   }
 
-  LOG_DBG("nfc_service ready");
+  LOG_STATE("nfc_service ready");
   return 0;
 }
 

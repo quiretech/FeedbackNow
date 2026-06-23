@@ -144,6 +144,34 @@ bool downlink_queue_housekeeping_state_snapshot(void) {
   return true;
 }
 
+void factory_reset_perform(const struct downlink_dispatch_ops *ops,
+                           bool reset_counters) {
+  LOG_WRN("factory reset: devnonce + has_joined_once%s",
+          reset_counters ? " + counters" : " (counters kept)");
+  rail_manager_request_3v3a();
+  if (reset_counters) {
+    if (button_counter_store_factory_reset() == 0) {
+      LOG_DBG("factory reset: counters done");
+    } else {
+      LOG_ERR("factory reset: counters failed");
+    }
+  }
+  if (devnonce_store_factory_reset() == 0) {
+    LOG_DBG("factory reset: devnonce reset to 0");
+  } else {
+    LOG_WRN("factory reset: devnonce reset failed");
+  }
+  if (join_state_store_clear_has_joined_once() == 0) {
+    LOG_DBG("factory reset: has_joined_once cleared");
+  } else {
+    LOG_WRN("factory reset: clear has_joined_once failed");
+  }
+  if (ops != NULL && ops->schedule_reboot_led_ms != NULL) {
+    ops->schedule_reboot_led_ms(REBOOT_LED_MS);
+  }
+  rail_manager_release_3v3a();
+}
+
 static void downlink_queue_fw_hw_version_uplink(void) {
   if (!lora_is_joined()) {
     LOG_WRN("fw/hw query (0x08): not joined, skip uplink");
@@ -218,29 +246,8 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
     rail_manager_release_3v3a();
     break;
   case DL_CMD_FACTORY_RESET:
-    LOG_DBG("cmd 0x%02X factory reset (counters + devnonce + "
-            "has_joined_once)",
-            (unsigned)cmd);
-    rail_manager_request_3v3a();
-    if (button_counter_store_factory_reset() == 0) {
-      LOG_DBG("factory reset: counters done");
-    } else {
-      LOG_ERR("factory reset: counters failed");
-    }
-    if (devnonce_store_factory_reset() == 0) {
-      LOG_DBG("factory reset: devnonce reset to 0");
-    } else {
-      LOG_WRN("factory reset: devnonce reset failed");
-    }
-    if (join_state_store_clear_has_joined_once() == 0) {
-      LOG_DBG("factory reset: has_joined_once cleared");
-    } else {
-      LOG_WRN("factory reset: clear has_joined_once failed");
-    }
-    if (ops->schedule_reboot_led_ms != NULL) {
-      ops->schedule_reboot_led_ms(REBOOT_LED_MS);
-    }
-    rail_manager_release_3v3a();
+    LOG_DBG("cmd 0x%02X factory reset", (unsigned)cmd);
+    factory_reset_perform(ops, true);
     break;
   case DL_CMD_TIMEZONE_OFFSET:
     if (len >= 3) {

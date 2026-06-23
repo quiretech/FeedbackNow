@@ -26,8 +26,9 @@ void rail_manager_release_1v8(void);
 void rail_manager_request_3v3a(void);
 void rail_manager_release_3v3a(void);
 
-/** Request/release 3.6V (PN5180 + LoRa radio). 3.6V uses keep-alive after
- *  last release so consecutive NFC scans skip re-init. */
+/** Request/release 3.6V (PN5180 NFC). LoRa (SX1262) uses 3.3A via lora_thread.
+ *  3.6V uses keep-alive after last release so consecutive NFC scans skip
+ *  re-init. */
 void rail_manager_request_3v6(void);
 void rail_manager_release_3v6(void);
 

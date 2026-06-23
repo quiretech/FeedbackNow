@@ -118,6 +118,8 @@
 #define COMBO_DEVICE_INFO_HOLD_MS 2000
 #define COMBO_JOIN_HOLD_MS 2000
 #define COMBO_REBOOT_HOLD_MS 5000
+/** All six buttons (Staff mode) — devnonce + join state wipe; counters kept. */
+#define COMBO_FACTORY_RESET_HOLD_MS 7000
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS 20000
 /** Max wait for LinkCheckAns after user opens device info (joined). Covers
@@ -191,7 +193,7 @@
 #else
 #define RAIL_MANAGER_3V3A_KEEPALIVE_MS 5000
 #endif
-#define RAIL_MANAGER_3V6_KEEPALIVE_MS 15000
+#define RAIL_MANAGER_3V6_KEEPALIVE_MS 5000
 
 /* =============================================================================
  * Housekeeping / Heartbeat (FRD 4.9)
@@ -204,7 +206,7 @@
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 #define HOUSEKEEPING_INTERVAL_SECONDS 86400
 #endif
-#define HOUSEKEEPING_RAIL_ADC_SETTLE_MS 100
+#define HOUSEKEEPING_RAIL_ADC_SETTLE_MS 50
 #define SECONDS_PER_DAY 86400
 #define MINUTES_PER_DAY (24 * 60)
 
@@ -228,7 +230,7 @@
  * EPD timings and locale (EPD_ENABLED set above from DEVICE_HW_VARIANT)
  * =============================================================================
  */
-#define EPD_THANKS_DISPLAY_MS 1500
+#define EPD_THANKS_DISPLAY_MS 3000
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 
@@ -260,7 +262,7 @@
 #define EPD_DEVICE_STATUS_COMMISSION_BOOT 0
 #endif
 #if EPD_DEVICE_STATUS_COMMISSION_BOOT
-#define EPD_DEVICE_STATUS_COMMISSION_MS 15000
+#define EPD_DEVICE_STATUS_COMMISSION_MS 10000
 #endif
 
 #define DISPLAY_WORK_DELAY_MS 5000
@@ -285,7 +287,7 @@
  * =============================================================================
  */
 #define FW_VERSION_MAJOR 1
-#define FW_VERSION_MINOR 4
+#define FW_VERSION_MINOR 5
 #define FW_VERSION_PATCH 0
 #define FW_VERSION_STRING "1.5.0"
 #define HW_VERSION_MAJOR 1

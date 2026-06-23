@@ -2,6 +2,7 @@
   * Display manager: EPD screen jobs and work queue. When EPD_ENABLED=0, no-ops.
   */
   #include "display_manager.h"
+  #include "log_fmt.h"
   #include "button_counter_store.h"
   #include "eui_keys.h"
   #include "last_cleaned_store.h"
@@ -17,14 +18,14 @@
   #include <stdio.h>
   #include <string.h>
   #include <time.h>
-  #include <zephyr/device.h>
-  #include <zephyr/devicetree.h>
-  #include <zephyr/drivers/display.h>
   #include <zephyr/kernel.h>
   #include <zephyr/logging/log.h>
   #include <zephyr/sys/atomic.h>
 
   #if EPD_ENABLED
+  #include <zephyr/device.h>
+  #include <zephyr/devicetree.h>
+  #include <zephyr/drivers/display.h>
   #include "ssd1683.h"
   #include <lvgl.h>
 
@@ -879,7 +880,7 @@
     /* Show the requested screen */
     switch (type) {
     case JOB_SHOW_LOGO:
-      LOG_DBG("epd show LOGO");
+      LOG_STATE("epd screen LOGO");
       scr_to_show = screen_logo;
       break;
     case JOB_SHOW_LAST_CLEANED: {
@@ -894,7 +895,7 @@
         display_epoch = (int64_t)UINT32_MAX;
       }
       format_epoch_yyyymmdd_hhmm((uint32_t)display_epoch, ts, sizeof(ts));
-      LOG_DBG("epd show LAST_CLEANED %s", ts);
+      LOG_STATE("epd screen LAST_CLEANED %s", ts);
       if (last_cleaned_label) {
         lv_label_set_text(last_cleaned_label, ts);
       }
@@ -902,19 +903,19 @@
       break;
     }
     case JOB_SHOW_THANKS:
-      LOG_DBG("epd show THANKS");
+      LOG_STATE("epd screen THANKS");
       scr_to_show = screen_thanks;
       break;
     case JOB_SHOW_CLEANING:
-      LOG_DBG("epd show CLEANING");
+      LOG_STATE("epd screen CLEANING");
       scr_to_show = screen_cleaning;
       break;
     case JOB_SHOW_CONNECTING:
-      LOG_DBG("epd show CONNECTING");
+      LOG_STATE("epd screen CONNECTING");
       scr_to_show = screen_connecting;
       break;
     case JOB_SHOW_DEVICE_STATUS:
-      LOG_DBG("epd show DEVICE_STATUS");
+      LOG_STATE("epd screen DEVICE_STATUS");
       scr_to_show = screen_device_status;
       break;
     case JOB_SHOW_DL_CUSTOM_MESSAGE:
@@ -1355,9 +1356,9 @@
     /* Create all screens (they will be created on the default display) */
     create_lvgl_screens();
 
-    LOG_DBG("epd init ok (+LVGL)");
+    LOG_STATE("epd init ok (+LVGL)");
   #else
-    LOG_DBG("epd init ok (off)");
+    LOG_STATE("epd init ok (off)");
   #endif
     return 0;
   }

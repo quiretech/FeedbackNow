@@ -5,11 +5,11 @@
  * Per-unit and per-deployment values for onboarding/gen_euis.py and firmware.
  *
  * DEVICE_HW_VARIANT selects FLEXBOX vs FLEXBOX_PLUS (sys_config.h derives
- * EPD_ENABLED). gen_euis.py updates UNIT_ID and PROVISION_UTC markers only.
+ * EPD_ENABLED). CMake reads this header and appends prj_flexbox.conf or
+ * prj_flexbox_plus.conf, devicetree overlay, and driver modules.
  *
- * FLEXBOX_PLUS: DEVICE_HW_VARIANT FLEXBOX_PLUS, CONFIG_PN5180=y, display in prj.conf.
- * FLEXBOX:      DEVICE_HW_VARIANT FLEXBOX — no EPD/NFC in firmware; omit CONFIG_PN5180
- *               in prj.conf to save flash if desired.
+ * FLEXBOX_PLUS: DEVICE_HW_VARIANT FLEXBOX_PLUS — EPD + NFC enabled at build time.
+ * FLEXBOX:      DEVICE_HW_VARIANT FLEXBOX — no EPD/NFC drivers or devicetree nodes.
  */
 
 /** Product line — mirrored in registry CSV hw_profile and AWS tag Variant. */
@@ -26,7 +26,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "UNIT-0356"
+#define DEVICE_UNIT_ID_STRING "DEMO-0034"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -34,8 +34,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1781888562ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-06-19T17:02:42Z"
+#define DEVICE_PROVISION_UNIX_UTC 1782182831ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-06-23T02:47:11Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -44,15 +44,15 @@
  * =============================================================================
  */
 #ifndef DEVICE_REGISTRY_NAME_PREFIX_STRING
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "WW"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "TEST"
 #endif
 
 #ifndef DEVICE_REGISTRY_CLIENT_NAME
-#define DEVICE_REGISTRY_CLIENT_NAME "Wawa"
+#define DEVICE_REGISTRY_CLIENT_NAME "Test"
 #endif
 
 #ifndef DEVICE_REGISTRY_DECAL_TYPE
-#define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
+#define DEVICE_REGISTRY_DECAL_TYPE "Test"
 #endif
 
 #endif /* ONBOARDING_CONFIG_H */

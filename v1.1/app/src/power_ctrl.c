@@ -87,30 +87,3 @@ int power_ctrl_toggle(enum power_domain domain) {
 
   return gpio_pin_toggle_dt(&power_gpios[domain]);
 }
-
-/* LoRa radio power domain stabilization delay (ms) */
-#define LORA_POWER_STABILIZATION_MS 10
-
-int power_ctrl_lora_power_up(void) {
-  int ret = power_ctrl_set(POWER_EN_3V6, true);
-  if (ret != 0) {
-    LOG_ERR("Failed to power up LoRa domain: %d", ret);
-    return ret;
-  }
-
-  /* Allow power rail to stabilize before using radio */
-  k_msleep(LORA_POWER_STABILIZATION_MS);
-  LOG_DBG("LoRa power domain (3V6) powered up");
-  return 0;
-}
-
-int power_ctrl_lora_power_down(void) {
-  int ret = power_ctrl_set(POWER_EN_3V6, false);
-  if (ret != 0) {
-    LOG_ERR("Failed to power down LoRa domain: %d", ret);
-    return ret;
-  }
-
-  LOG_DBG("LoRa power domain (3V6) powered down");
-  return 0;
-}

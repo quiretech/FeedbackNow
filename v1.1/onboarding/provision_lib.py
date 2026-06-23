@@ -23,7 +23,12 @@ EUI_KEYS_H = REPO_ROOT / "app" / "include" / "eui_keys.h"
 ONBOARDING_CONFIG_H = REPO_ROOT / "app" / "include" / "onboarding_config.h"
 SYS_CONFIG_H = REPO_ROOT / "app" / "include" / "sys_config.h"
 PRJ_CONF = REPO_ROOT / "app" / "prj.conf"
+PRJ_FLEXBOX_CONF = REPO_ROOT / "app" / "prj_flexbox.conf"
+PRJ_FLEXBOX_PLUS_CONF = REPO_ROOT / "app" / "prj_flexbox_plus.conf"
 BOARD_OVERLAY = REPO_ROOT / "app" / "boards" / "nrf52840dk_nrf52840.overlay"
+FLEXBOX_PLUS_OVERLAY = (
+    REPO_ROOT / "app" / "boards" / "nrf52840dk_nrf52840_flexbox_plus.overlay"
+)
 REGISTRY_DIR = ONBOARDING_DIR / "flexbox_euis"
 DEMO_REGISTRY_DIR = REGISTRY_DIR / "demo_units"
 REGISTRY_CSV_US915 = "eui_registry.csv"
@@ -99,6 +104,11 @@ DEVICE_HW_VARIANT_RE = re.compile(
     r"#define\s+DEVICE_HW_VARIANT\s+(FLEXBOX_PLUS|FLEXBOX)\b"
 )
 CONFIG_PN5180_Y_RE = re.compile(r"(?m)^CONFIG_PN5180=y\s*$")
+CONFIG_SSD1683_Y_RE = re.compile(r"(?m)^CONFIG_SSD1683=y\s*$")
+CONFIG_DISPLAY_Y_RE = re.compile(r"(?m)^CONFIG_DISPLAY=y\s*$")
+CONFIG_LVGL_Y_RE = re.compile(r"(?m)^CONFIG_LVGL=y\s*$")
+SSD1683_DT_RE = re.compile(r"compatible\s*=\s*\"solomon,ssd1683\"")
+PN5180_DT_RE = re.compile(r"compatible\s*=\s*\"nxp,pn5180\"")
 REGISTRY_NAME_PREFIX_STRING_RE = re.compile(
     r"#define\s+DEVICE_REGISTRY_NAME_PREFIX_STRING\s+\"([^\"]*)\""
 )
@@ -403,18 +413,93 @@ def _parse_device_hw_variant(onboarding_text: str) -> str:
     return m.group(1)
 
 
-def _hardware_profile_code(onboarding_text: str, prj_text: str) -> str:
+def validate_hw_variant_build() -> list[str]:
+    """
+    Check DEVICE_HW_VARIANT matches prj fragments, base overlay, and plus overlay.
+    Returns human-readable ERROR:/WARNING: strings (empty if OK).
+    """
+    issues: list[str] = []
+    onboarding_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
     variant = _parse_device_hw_variant(onboarding_text)
-    nfc_on = bool(CONFIG_PN5180_Y_RE.search(prj_text))
-    if variant == "FLEXBOX_PLUS" and nfc_on:
-        return "FLEXBOX_PLUS"
-    if variant == "FLEXBOX_PLUS" and not nfc_on:
+    prj_base = PRJ_CONF.read_text(encoding="utf-8")
+    overlay_base = BOARD_OVERLAY.read_text(encoding="utf-8")
+
+    enabled_in_base = {
+        "PN5180": CONFIG_PN5180_Y_RE.search(prj_base),
+        "SSD1683": CONFIG_SSD1683_Y_RE.search(prj_base),
+        "DISPLAY": CONFIG_DISPLAY_Y_RE.search(prj_base),
+        "LVGL": CONFIG_LVGL_Y_RE.search(prj_base),
+    }
+    for name, enabled in enabled_in_base.items():
+        if enabled:
+            issues.append(
+                f"ERROR: {name} enabled in prj.conf; use prj_flexbox*.conf fragments only"
+            )
+
+    if SSD1683_DT_RE.search(overlay_base) or PN5180_DT_RE.search(overlay_base):
+        issues.append(
+            "ERROR: base overlay contains EPD/NFC nodes; use flexbox_plus overlay only"
+        )
+
+    if variant == "FLEXBOX":
+        if not PRJ_FLEXBOX_CONF.exists():
+            issues.append(f"ERROR: missing {PRJ_FLEXBOX_CONF.name}")
+        if FLEXBOX_PLUS_OVERLAY.exists():
+            plus_ovl = FLEXBOX_PLUS_OVERLAY.read_text(encoding="utf-8")
+            if SSD1683_DT_RE.search(plus_ovl) or PN5180_DT_RE.search(plus_ovl):
+                pass  # plus overlay is inert unless CMake selects it
+    else:
+        if not PRJ_FLEXBOX_PLUS_CONF.exists():
+            issues.append(f"ERROR: missing {PRJ_FLEXBOX_PLUS_CONF.name}")
+        else:
+            plus_conf = PRJ_FLEXBOX_PLUS_CONF.read_text(encoding="utf-8")
+            for name, regex in (
+                ("PN5180", CONFIG_PN5180_Y_RE),
+                ("SSD1683", CONFIG_SSD1683_Y_RE),
+                ("DISPLAY", CONFIG_DISPLAY_Y_RE),
+                ("LVGL", CONFIG_LVGL_Y_RE),
+            ):
+                if not regex.search(plus_conf):
+                    issues.append(
+                        f"ERROR: FLEXBOX_PLUS but {name} not enabled in "
+                        f"{PRJ_FLEXBOX_PLUS_CONF.name}"
+                    )
+        if not FLEXBOX_PLUS_OVERLAY.exists():
+            issues.append(f"ERROR: missing {FLEXBOX_PLUS_OVERLAY.name}")
+        else:
+            plus_ovl = FLEXBOX_PLUS_OVERLAY.read_text(encoding="utf-8")
+            if not SSD1683_DT_RE.search(plus_ovl):
+                issues.append(
+                    f"ERROR: FLEXBOX_PLUS but no ssd1683 node in {FLEXBOX_PLUS_OVERLAY.name}"
+                )
+            if not PN5180_DT_RE.search(plus_ovl):
+                issues.append(
+                    f"ERROR: FLEXBOX_PLUS but no pn5180 node in {FLEXBOX_PLUS_OVERLAY.name}"
+                )
+
+    return issues
+
+
+def _hardware_profile_code(onboarding_text: str, prj_text: str) -> str:
+    del prj_text  # build fragments are validated separately
+    variant = _parse_device_hw_variant(onboarding_text)
+    if variant != "FLEXBOX_PLUS":
+        return "FLEXBOX"
+    if not PRJ_FLEXBOX_PLUS_CONF.exists():
         print(
-            "WARNING: DEVICE_HW_VARIANT FLEXBOX_PLUS but CONFIG_PN5180 is not "
-            "enabled — registry hw_profile will be FLEXBOX",
+            f"WARNING: missing {PRJ_FLEXBOX_PLUS_CONF.name} — registry hw_profile FLEXBOX",
             file=sys.stderr,
         )
-    return "FLEXBOX"
+        return "FLEXBOX"
+    plus_conf = PRJ_FLEXBOX_PLUS_CONF.read_text(encoding="utf-8")
+    if not CONFIG_PN5180_Y_RE.search(plus_conf):
+        print(
+            "WARNING: DEVICE_HW_VARIANT FLEXBOX_PLUS but CONFIG_PN5180 is not "
+            f"enabled in {PRJ_FLEXBOX_PLUS_CONF.name} — registry hw_profile FLEXBOX",
+            file=sys.stderr,
+        )
+        return "FLEXBOX"
+    return "FLEXBOX_PLUS"
 
 
 def _parse_registry_name_prefix(onboarding_text: str) -> str:

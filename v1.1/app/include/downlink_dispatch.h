@@ -23,6 +23,10 @@ struct downlink_dispatch_ops {
 void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
                        const struct downlink_dispatch_ops *ops);
 
+/** Wipe devnonce and has_joined_once; optional counter erase; optional reboot LED. */
+void factory_reset_perform(const struct downlink_dispatch_ops *ops,
+                           bool reset_counters);
+
 /** Queue EVT_DEVICE_STATE_SNAPSHOT (0x13) on FPORT_HOUSEKEEPING when joined. */
 bool downlink_queue_housekeeping_state_snapshot(void);
 

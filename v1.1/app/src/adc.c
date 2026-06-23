@@ -54,25 +54,27 @@ static void battery_cache_update_from_mv(int32_t battery_mv) {
 }
 
 #define ADC_NODE DT_NODELABEL(adc)
-#define ADC_RESOLUTION 10
+#define ADC_RESOLUTION 12
 #define ADC_CHANNEL_ID                                                         \
   0 /* AIN3 on nRF52840; match reference (channel 0, BIT(0)) */
 #define ADC_RAW_MAX                                                            \
-  1023 /* 10-bit ADC valid range; values outside are hardware garbage */
+4095 /* 12-bit ADC valid range; values outside are hardware garbage */
 
 /* Simple resistor divider gain from board: approx 3.120x from pin to VBAT. */
-#define BATTERY_DIVIDER_NUM 2956
-#define BATTERY_DIVIDER_DEN 1000
-#define ADC_SAMPLES 20
-#define ADC_SAMPLE_DELAY_MS 100 /* match reference: 100 ms between samples */
+#define BATTERY_DIVIDER_RTOP   200000
+#define BATTERY_DIVIDER_RBOT   100000
 
+#define BATTERY_DIVIDER_NUM (BATTERY_DIVIDER_RTOP + BATTERY_DIVIDER_RBOT)
+#define BATTERY_DIVIDER_DEN BATTERY_DIVIDER_RBOT
+#define ADC_SAMPLES 8
+#define ADC_SAMPLE_DELAY_MS 5
 /* nRF internal reference 0.6 V; use if adc_ref_internal() returns 0 at read
  * time */
 #define ADC_REF_INTERNAL_MV 600
 
 static const struct device *adc_dev = DEVICE_DT_GET(ADC_NODE);
 static uint16_t cached_ref_mv;
-
+static bool adc_initialized;
 static int16_t sample_buffer;
 
 static struct adc_channel_cfg channel_cfg = {
@@ -93,6 +95,10 @@ static struct adc_sequence sequence = {
 int battery_adc_init(void) {
   int ret;
 
+  if (adc_initialized) {
+    return 0;
+  }
+
   if (!device_is_ready(adc_dev)) {
     LOG_ERR("ADC device not ready");
     return -ENODEV;
@@ -111,13 +117,17 @@ int battery_adc_init(void) {
   } else {
     LOG_DBG("ADC internal reference voltage: %u mV", cached_ref_mv);
   }
+
+  /* One-time SAADC offset calibration */
   nrf_saadc_task_trigger(NRF_SAADC, NRF_SAADC_TASK_CALIBRATEOFFSET);
   k_msleep(20);
+
+  adc_initialized = true;
+
   LOG_DBG("ADC initialized and calibrated");
 
   return 0;
 }
-
 int battery_adc_read_mv(int32_t *battery_mv) {
   if (battery_mv == NULL) {
     return -EINVAL;

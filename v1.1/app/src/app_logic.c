@@ -2,6 +2,7 @@
  * Application logic: public vote (Normal mode single button).
  */
 #include "app_logic.h"
+#include "log_fmt.h"
 #include "display_manager.h"
 #include "led_manager.h"
 #include "log_fmt.h"
@@ -38,7 +39,7 @@ void app_logic_public_vote(uint8_t button_id) {
   }
 #endif
 
-  LOG_DBG("vote btn=%u t=%ums", button_id, now_ms);
+  LOG_STATE("vote btn=%u", button_id);
 
   /* Public lockout: 5s after any accepted press (per FRD) */
   if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {

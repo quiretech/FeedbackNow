@@ -5,6 +5,7 @@
  */
 
 #include "eeprom_probe.h"
+#include "log_fmt.h"
 #include "sys_config.h"
 
 #include <zephyr/device.h>
@@ -41,6 +42,6 @@ void eeprom_probe_log(void) {
   LOG_DBG("EEPROM probe OK (first %u bytes):", (unsigned)sizeof(buf));
   LOG_HEXDUMP_DBG(buf, sizeof(buf), "EEPROM[0x0000..]");
 #else
-  LOG_DBG("EEPROM probe OK");
+  LOG_STATE("EEPROM probe OK");
 #endif
 }

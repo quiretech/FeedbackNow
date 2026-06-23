@@ -33,6 +33,7 @@ from provision_lib import (
     generate_keys,
     registry_csv_path,
     stamp_provision_only,
+    validate_hw_variant_build,
 )
 
 TARGETS_JSON = ONBOARDING_DIR / "targets.json"
@@ -143,7 +144,21 @@ def _cmd_list(_args: argparse.Namespace) -> int:
 
 
 def _cmd_validate(_args: argparse.Namespace) -> int:
-    return subprocess.call([sys.executable, str(COLLISION_CHECK)], cwd=str(REPO_ROOT))
+    issues = validate_hw_variant_build()
+    errors = [i for i in issues if i.startswith("ERROR:")]
+    warnings = [i for i in issues if i.startswith("WARNING:")]
+    for w in warnings:
+        print(w, file=sys.stderr)
+    for e in errors:
+        print(e, file=sys.stderr)
+    if errors:
+        print(
+            f"validate: {len(errors)} hardware-variant error(s); fix build config",
+            file=sys.stderr,
+        )
+        return 1
+    rc = subprocess.call([sys.executable, str(COLLISION_CHECK)], cwd=str(REPO_ROOT))
+    return rc
 
 
 def _ensure_aws_profile(profile: str, *, dry_run: bool) -> None:
