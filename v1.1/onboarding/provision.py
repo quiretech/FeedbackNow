@@ -9,6 +9,8 @@ Examples (from repo root v1.1):
   python onboarding/provision.py all --preset lr-us915 --target qt-us915 --dry-run
   python onboarding/provision.py all --preset seeed-eu868 --target fbn-main --flash
   python onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --unit UNIT-0042
+  python onboarding/provision.py sync --unit UNIT-0322 --preset lr-us915 --target fbn-admin --reprov --flash
+  python onboarding/provision.py sync --unit 194 --preset lr-us915 --from-config --target fbn-admin --reprov --flash
   python onboarding/provision.py validate
 """
 
@@ -31,8 +33,10 @@ from provision_lib import (
     BuildProfile,
     apply_build_profile,
     generate_keys,
+    normalize_asset_id,
     registry_csv_path,
     stamp_provision_only,
+    sync_unit_from_registry,
     validate_hw_variant_build,
 )
 
@@ -138,6 +142,8 @@ def _cmd_list(_args: argparse.Namespace) -> int:
     print("  python onboarding/provision.py all --preset seeed-us915 --target quiretech")
     print("  python onboarding/provision.py all --preset seeed-eu868 --target fbn-main --flash")
     print("  python onboarding/provision.py all --preset lr-us915 --target fbn-eu --dry-run")
+    print("  python onboarding/provision.py sync --unit 322 --preset lr-us915 --target fbn-admin --reprov --flash")
+    print("  python onboarding/provision.py sync --unit 194 --preset lr-us915 --from-config --target fbn-admin --reprov --flash")
     print("  python onboarding/provision.py all --preset seeed-us915 --test   # demo_units CSV only")
     print("")
     return 0
@@ -189,6 +195,7 @@ def _run_aws_register(
     all_rows: bool,
     dry_run: bool,
     confirm: bool,
+    reprov: bool = False,
     csv_override: Path | None = None,
 ) -> int:
     if target_id is None and csv_override is None:
@@ -241,6 +248,11 @@ def _run_aws_register(
         return 2
 
     if unit:
+        try:
+            unit = normalize_asset_id(unit, test=test)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
         selection = "unit"
     elif all_rows:
         selection = "all-rows"
@@ -266,6 +278,25 @@ def _run_aws_register(
 
     _ensure_aws_profile(aws_profile, dry_run=dry_run)
 
+    if not dry_run and aws_profile:
+        env_probe = os.environ.copy()
+        env_probe["AWS_PROFILE"] = aws_profile
+        probe = subprocess.run(
+            ["aws", "sts", "get-caller-identity", "--output", "json"],
+            env=env_probe,
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode == 0:
+            try:
+                ident = json.loads(probe.stdout)
+                print(
+                    f"AWS account: {ident.get('Account')}  "
+                    f"(profile {aws_profile!r}; SSO session name may differ in boto3 logs)"
+                )
+            except json.JSONDecodeError:
+                pass
+
     cmd = [
         sys.executable,
         str(BATCH_REGISTER),
@@ -281,6 +312,8 @@ def _run_aws_register(
     ]
     if eu_flag:
         cmd.append("--EU")
+    if reprov:
+        cmd.append("--reprov")
     if dry_run:
         cmd.append("--dryrun")
     if unit:
@@ -293,6 +326,8 @@ def _run_aws_register(
     print(f"CSV        : {csv_path}")
     print(f"Selection  : {selection}")
     print(f"Profile    : {aws_profile}")
+    if reprov:
+        print("Reprov     : delete existing DevEui in AWS, then create")
     if dry_run:
         print("(dry run — no AWS API calls)")
     print("")
@@ -348,7 +383,55 @@ def _cmd_aws(args: argparse.Namespace) -> int:
         all_rows=args.all_rows,
         dry_run=args.dry_run,
         confirm=args.confirm,
+        reprov=getattr(args, "reprov", False),
     )
+
+
+def _cmd_sync(args: argparse.Namespace) -> int:
+    profile = _resolve_preset(args.preset)
+    code, _row = sync_unit_from_registry(
+        unit=args.unit,
+        profile=profile,
+        test=args.test,
+        dry_run=args.dry_run,
+        from_config=getattr(args, "from_config", False),
+    )
+    if code != 0:
+        return code
+
+    if args.dry_run:
+        if args.target:
+            print("NOTE: --dry-run skips validate, flash, and AWS", file=sys.stderr)
+        return 0
+
+    code = _cmd_validate(args)
+    if code != 0:
+        print("ERROR: validate failed after sync", file=sys.stderr)
+        return code
+
+    if args.flash:
+        code = _cmd_flash(args)
+        if code != 0:
+            return code
+
+    if args.target:
+        if not args.unit:
+            print("ERROR: sync with --target requires --unit", file=sys.stderr)
+            return 2
+        return _run_aws_register(
+            target_id=args.target,
+            profile=profile,
+            region=getattr(args, "region", None),
+            test=args.test,
+            unit=args.unit,
+            last_only=False,
+            all_rows=False,
+            dry_run=False,
+            confirm=False,
+            reprov=args.reprov,
+        )
+
+    return 0
 
 
 def _cmd_all(args: argparse.Namespace) -> int:
@@ -386,7 +469,7 @@ def _add_common_flags(p: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_aws_flags(p: argparse.ArgumentParser) -> None:
+def _add_aws_flags(p: argparse.ArgumentParser, *, include_unit: bool = True) -> None:
     p.add_argument(
         "--target",
         metavar="ID",
@@ -397,11 +480,12 @@ def _add_aws_flags(p: argparse.ArgumentParser) -> None:
         choices=("us915", "eu868"),
         help="LoRaWAN region for AWS step only (default: from --preset)",
     )
-    p.add_argument(
-        "--unit",
-        metavar="ASSET_ID",
-        help="Register a specific asset_id from the registry (overrides --last-only)",
-    )
+    if include_unit:
+        p.add_argument(
+            "--unit",
+            metavar="ASSET_ID",
+            help="Register a specific asset_id from the registry (overrides --last-only)",
+        )
     p.add_argument(
         "--last-only",
         action="store_true",
@@ -422,6 +506,11 @@ def _add_aws_flags(p: argparse.ArgumentParser) -> None:
         "--confirm",
         action="store_true",
         help="Required with --all-rows for live AWS registration",
+    )
+    p.add_argument(
+        "--reprov",
+        action="store_true",
+        help="Delete existing AWS wireless device for DevEui before register (refresh tags/metadata)",
     )
 
 
@@ -468,6 +557,29 @@ def main(argv: list[str] | None = None) -> int:
     p_all.add_argument("--flash", action="store_true", help="Run west flash after keys")
     p_all.add_argument("--runner", default="jlink", help="west flash runner (default: jlink)")
     p_all.set_defaults(func=_cmd_all)
+
+    p_sync = sub.add_parser(
+        "sync",
+        help="Load existing registry row → headers + CSV metadata; optional flash/AWS",
+    )
+    _add_common_flags(p_sync)
+    p_sync.add_argument(
+        "--unit",
+        metavar="ASSET_ID",
+        required=True,
+        help="Registry asset_id (UNIT-0322, 322, …)",
+    )
+    _add_aws_flags(p_sync, include_unit=False)
+    p_sync.add_argument(
+        "--from-config",
+        action="store_true",
+        dest="from_config",
+        help="Use onboarding_config.h for hw_profile and registry tags (→ CSV); "
+        "default is CSV → onboarding_config.h",
+    )
+    p_sync.add_argument("--flash", action="store_true", help="Run west flash after sync")
+    p_sync.add_argument("--runner", default="jlink", help="west flash runner (default: jlink)")
+    p_sync.set_defaults(func=_cmd_sync)
 
     p_stamp = sub.add_parser(
         "stamp",

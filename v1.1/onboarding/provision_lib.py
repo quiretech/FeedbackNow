@@ -199,6 +199,353 @@ def apply_build_profile(profile: BuildProfile) -> None:
     _atomic_write(BOARD_OVERLAY, ovl_text)
 
 
+_LEGACY_HW_PROFILE_ALIASES = {"EPD_NFC": "FLEXBOX_PLUS", "NFC_BUTTONS": "FLEXBOX"}
+
+
+def normalize_asset_id(unit: str, *, test: bool = False) -> str:
+    """Accept UNIT-0322, unit-322, or bare 322 (demo: DEMO-0001 / 1 with --test)."""
+    u = (unit or "").strip()
+    if not u:
+        raise ValueError("empty unit id")
+    demo_prefix = "DEMO-"
+    unit_prefix = "UNIT-"
+    if re.fullmatch(r"\d+", u):
+        prefix = demo_prefix if test else unit_prefix
+        return f"{prefix}{int(u):04d}"
+    m = re.fullmatch(r"(UNIT|DEMO)-(\d+)", u, re.IGNORECASE)
+    if m:
+        prefix = m.group(1).upper() + "-"
+        if test and prefix != demo_prefix:
+            pass  # allow UNIT- in test mode if explicitly given
+        return f"{prefix}{int(m.group(2)):04d}"
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", u):
+        raise ValueError(f"asset_id unsafe: {unit!r}")
+    return u
+
+
+def _hw_profile_to_variant(hw_profile: str) -> str:
+    prof = (hw_profile or "").strip().upper()
+    if prof in _LEGACY_HW_PROFILE_ALIASES:
+        return _LEGACY_HW_PROFILE_ALIASES[prof]
+    if prof == "FLEXBOX_PLUS":
+        return "FLEXBOX_PLUS"
+    if prof in ("", "FLEXBOX"):
+        return "FLEXBOX"
+    raise ValueError(
+        f"hw_profile {hw_profile!r} must be FLEXBOX_PLUS, FLEXBOX, or a legacy alias"
+    )
+
+
+def _hex_field_to_bytes(hex_str: str, length: int, name: str) -> bytes:
+    h = _normalize_hex_string(hex_str)
+    if len(h) != length * 2:
+        raise ValueError(f"{name} must be {length * 2} hex chars, got {len(h)}")
+    return bytes.fromhex(h)
+
+
+def _find_registry_row(
+    asset_id: str,
+    *,
+    region: str,
+    test: bool,
+) -> tuple[Path, dict[str, str]]:
+    primary = registry_csv_path(region, test=test)
+    row = _find_row_in_csv(primary, asset_id)
+    if row is not None:
+        return primary, row
+    if test:
+        raise RuntimeError(f"asset_id {asset_id!r} not found in {primary}")
+    for path in master_registry_paths():
+        if path.resolve() == primary.resolve():
+            continue
+        row = _find_row_in_csv(path, asset_id)
+        if row is not None:
+            print(
+                f"NOTE: {asset_id} found in {path.name} "
+                f"(preset region is {region})",
+                file=sys.stderr,
+            )
+            return path, row
+    raise RuntimeError(f"asset_id {asset_id!r} not found in master registries")
+
+
+def _find_row_in_csv(path: Path, asset_id: str) -> dict[str, str] | None:
+    if not path.exists():
+        return None
+    want = asset_id.strip().upper()
+    for row in _read_existing_registry(path):
+        if (row.get("asset_id") or "").strip().upper() == want:
+            return row
+    return None
+
+
+def _c_string_literal(s: str) -> str:
+    return (s or "").replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _replace_device_hw_variant(contents: str, variant: str) -> str:
+    if variant not in ("FLEXBOX", "FLEXBOX_PLUS"):
+        raise ValueError(f"invalid variant {variant!r}")
+    ifndef_block = re.compile(
+        r"#ifndef DEVICE_HW_VARIANT\s*\n"
+        r"#define DEVICE_HW_VARIANT\s+\w+\s*\n"
+        r"#endif",
+        re.MULTILINE,
+    )
+    if ifndef_block.search(contents):
+        return ifndef_block.sub(f"#define DEVICE_HW_VARIANT {variant}", contents, count=1)
+    updated, n = DEVICE_HW_VARIANT_RE.subn(
+        f"#define DEVICE_HW_VARIANT {variant}", contents, count=1
+    )
+    if n != 1:
+        raise RuntimeError(f"Could not update DEVICE_HW_VARIANT in {ONBOARDING_CONFIG_H}")
+    return updated
+
+
+def _replace_onboarding_registry_strings(
+    contents: str,
+    *,
+    name_prefix: str,
+    tag_client: str,
+    decal_type: str,
+) -> str:
+    replacements = (
+        (
+            "DEVICE_REGISTRY_NAME_PREFIX_STRING",
+            re.compile(
+                r"#ifndef DEVICE_REGISTRY_NAME_PREFIX_STRING\s*\n"
+                r"#define DEVICE_REGISTRY_NAME_PREFIX_STRING\s+\"[^\"]*\"\s*\n"
+                r"#endif",
+                re.MULTILINE,
+            ),
+            name_prefix,
+        ),
+        (
+            "DEVICE_REGISTRY_CLIENT_NAME",
+            re.compile(
+                r"#ifndef DEVICE_REGISTRY_CLIENT_NAME\s*\n"
+                r"#define DEVICE_REGISTRY_CLIENT_NAME\s+\"[^\"]*\"\s*\n"
+                r"#endif",
+                re.MULTILINE,
+            ),
+            tag_client,
+        ),
+        (
+            "DEVICE_REGISTRY_DECAL_TYPE",
+            re.compile(
+                r"#ifndef DEVICE_REGISTRY_DECAL_TYPE\s*\n"
+                r"#define DEVICE_REGISTRY_DECAL_TYPE\s+\"[^\"]*\"\s*\n"
+                r"#endif",
+                re.MULTILINE,
+            ),
+            decal_type,
+        ),
+    )
+    for macro, pattern, value in replacements:
+        block = f'#define {macro} "{_c_string_literal(value)}"'
+        if pattern.search(contents):
+            contents = pattern.sub(block, contents, count=1)
+        else:
+            bare = re.compile(rf"#define\s+{macro}\s+\"[^\"]*\"")
+            if bare.search(contents):
+                contents = bare.sub(block, contents, count=1)
+            else:
+                raise RuntimeError(f"Missing {macro} in {ONBOARDING_CONFIG_H}")
+    return contents
+
+
+def _parse_onboarding_registry_metadata(
+    onboarding_text: str, prj_text: str
+) -> dict[str, str]:
+    """Registry/AWS tag fields from onboarding_config.h (keys flow direction)."""
+    variant = _parse_device_hw_variant(onboarding_text)
+    return {
+        "variant": variant,
+        "hw_profile": _hardware_profile_code(onboarding_text, prj_text),
+        "name_prefix": _parse_registry_name_prefix(onboarding_text),
+        "tag_client": _parse_registry_client_name(onboarding_text),
+        "decal_type": _parse_registry_decal_type(onboarding_text),
+    }
+
+
+def _update_registry_row_metadata(
+    csv_path: Path,
+    asset_id: str,
+    *,
+    provision_iso: str,
+    fw_ver: str,
+    hw_ver: str,
+    hw_profile: str,
+    name_prefix: str | None = None,
+    tag_client: str | None = None,
+    decal_type: str | None = None,
+) -> None:
+    rows = _read_existing_registry(csv_path)
+    want = asset_id.strip().upper()
+    found = False
+    for row in rows:
+        if (row.get("asset_id") or "").strip().upper() != want:
+            continue
+        row["provision_utc"] = provision_iso
+        row["fw_version"] = fw_ver
+        row["hw_version"] = hw_ver
+        row["hw_profile"] = hw_profile
+        if name_prefix is not None:
+            row["name_prefix"] = name_prefix
+        if tag_client is not None:
+            row["tag_client"] = tag_client
+        if decal_type is not None:
+            row["decal_type"] = decal_type
+        found = True
+        break
+    if not found:
+        raise RuntimeError(f"asset_id {asset_id!r} not in {csv_path}")
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=REGISTRY_FIELDS, quoting=csv.QUOTE_ALL)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: row.get(k, "") for k in REGISTRY_FIELDS})
+
+
+def sync_unit_from_registry(
+    *,
+    unit: str,
+    profile: BuildProfile,
+    test: bool = False,
+    dry_run: bool = False,
+    from_config: bool = False,
+) -> tuple[int, dict[str, str] | None]:
+    """
+    Fleet re-provision: load existing CSV row into headers, stamp provision time,
+    update CSV metadata from sys_config.h, sync build profile. No new keys.
+
+    Default: hw_profile and registry strings come from the CSV row (→ onboarding_config.h).
+    With from_config=True: those fields come from onboarding_config.h (→ CSV row).
+    """
+    try:
+        asset_id = normalize_asset_id(unit, test=test)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2, None
+
+    try:
+        csv_path, row = _find_registry_row(asset_id, region=profile.region, test=test)
+    except RuntimeError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2, None
+
+    try:
+        dev_eui = _hex_field_to_bytes(row["dev_eui"], 8, "dev_eui")
+        join_eui = _hex_field_to_bytes(row["join_eui"], 8, "join_eui")
+        app_key = _hex_field_to_bytes(row["app_key"], 16, "app_key")
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2, None
+
+    if not EUI_KEYS_H.exists() or not ONBOARDING_CONFIG_H.exists() or not SYS_CONFIG_H.exists():
+        print("ERROR: missing app headers (eui_keys.h / onboarding_config.h / sys_config.h)", file=sys.stderr)
+        return 2, None
+    if from_config and not PRJ_CONF.exists():
+        print(f"ERROR: missing {PRJ_CONF}", file=sys.stderr)
+        return 2, None
+
+    sc_text = SYS_CONFIG_H.read_text(encoding="utf-8")
+    onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
+    prj_text = PRJ_CONF.read_text(encoding="utf-8") if from_config else ""
+    try:
+        fw_ver, hw_ver = _parse_fw_hw_versions(sc_text)
+        if from_config:
+            meta = _parse_onboarding_registry_metadata(onb_text, prj_text)
+            variant = meta["variant"]
+            hw_profile_code = meta["hw_profile"]
+            name_prefix = meta["name_prefix"]
+            tag_client = meta["tag_client"]
+            decal_type = meta["decal_type"]
+        else:
+            variant = _hw_profile_to_variant(row.get("hw_profile", ""))
+            hw_profile_code = variant if variant == "FLEXBOX_PLUS" else "FLEXBOX"
+            name_prefix = (row.get("name_prefix") or "").strip()
+            tag_client = (row.get("tag_client") or "").strip()
+            decal_type = (
+                row.get("decal_type") or row.get("tag_location") or ""
+            ).strip()
+    except (RuntimeError, ValueError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2, None
+
+    prov_now = datetime.now(timezone.utc)
+    provision_unix = int(prov_now.timestamp())
+    provision_iso = prov_now.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    print("")
+    print("=== Sync unit from registry (no new keys) ===")
+    print(f"Asset ID  : {asset_id}")
+    print(f"Registry  : {csv_path}")
+    print(f"DevEUI    : {_colon_hex(dev_eui)}")
+    if from_config:
+        print(f"Metadata  : from {ONBOARDING_CONFIG_H.name} → CSV")
+    print(f"Variant   : {variant} (hw_profile → {hw_profile_code})")
+    if from_config:
+        print(f"Tags      : prefix={name_prefix!r}  client={tag_client!r}  decal={decal_type!r}")
+    print(f"Build     : {profile.hardware} + {profile.region}")
+    print(f"FW/HW     : {fw_ver} / {hw_ver}")
+    print(f"Provision : {provision_iso}")
+    if dry_run:
+        print("(dry run — no header/CSV/build changes)")
+        print("")
+        return 0, row
+
+    generated_block = (
+        f"{BEGIN_MARKER}\n"
+        f"/* UNIT_ID: {asset_id} */\n"
+        + _fmt_eui_define("LORAWAN_DEV_EUI", dev_eui)
+        + "\n"
+        + _fmt_eui_define("LORAWAN_JOIN_EUI", join_eui)
+        + "\n"
+        + _fmt_app_key_define(app_key)
+        + f"{END_MARKER}\n"
+    )
+    eui_text = EUI_KEYS_H.read_text(encoding="utf-8")
+    eui_text = _replace_generated_section(eui_text, generated_block)
+    _atomic_write(EUI_KEYS_H, eui_text)
+
+    onb_text = _replace_onboarding_unit_id(onb_text, asset_id)
+    onb_text = _replace_onboarding_provision_utc(onb_text, provision_unix, provision_iso)
+    onb_text = _replace_device_hw_variant(onb_text, variant)
+    onb_text = _replace_onboarding_registry_strings(
+        onb_text,
+        name_prefix=name_prefix,
+        tag_client=tag_client,
+        decal_type=decal_type,
+    )
+    _atomic_write(ONBOARDING_CONFIG_H, onb_text)
+
+    _update_registry_row_metadata(
+        csv_path,
+        asset_id,
+        provision_iso=provision_iso,
+        fw_ver=fw_ver,
+        hw_ver=hw_ver,
+        hw_profile=hw_profile_code,
+        name_prefix=name_prefix if from_config else None,
+        tag_client=tag_client if from_config else None,
+        decal_type=decal_type if from_config else None,
+    )
+
+
+    try:
+        apply_build_profile(profile)
+    except (RuntimeError, ValueError) as e:
+        print(f"ERROR: build profile update failed: {e}", file=sys.stderr)
+        return 6, None
+
+    print(f"Updated   : {EUI_KEYS_H.name}, {ONBOARDING_CONFIG_H.name}")
+    print(f"Updated   : {csv_path} row {asset_id}")
+    print(f"Build     : {PRJ_CONF.name} + overlay ({profile.hardware}/{profile.region})")
+    print("")
+    return 0, row
+
+
 def stamp_provision_only() -> int:
     if not ONBOARDING_CONFIG_H.exists():
         print(f"ERROR: {ONBOARDING_CONFIG_H} not found", file=sys.stderr)

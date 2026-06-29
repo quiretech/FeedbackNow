@@ -160,6 +160,66 @@ def load_eui_registry(csv_path: Path) -> list[dict]:
     return rows
 
 
+def _normalize_deveui(dev_eui: str) -> str:
+    return re.sub(r"[^0-9A-Fa-f]", "", (dev_eui or "")).upper()
+
+
+def find_wireless_device_by_deveui(client, dev_eui: str) -> dict | None:
+    """
+    Resolve a LoRaWAN wireless device by DevEui.
+
+    get_wireless_device(IdentifierType=DevEui) often returns NotFound even when
+    create_wireless_device later raises ConflictException — fall back to listing.
+    """
+    norm = _normalize_deveui(dev_eui)
+    for ident in (norm, norm.lower()):
+        try:
+            return client.get_wireless_device(Identifier=ident, IdentifierType="DevEui")
+        except client.exceptions.ResourceNotFoundException:
+            continue
+        except Exception as e:
+            logger.debug("get_wireless_device DevEui=%r: %s", ident, e)
+
+    token: str | None = None
+    while True:
+        kwargs: dict = {"MaxResults": 250}
+        if token:
+            kwargs["NextToken"] = token
+        page = client.list_wireless_devices(**kwargs)
+        for item in page.get("WirelessDeviceList", []):
+            wid = item.get("Id")
+            if not wid:
+                continue
+            try:
+                detail = client.get_wireless_device(
+                    Identifier=wid,
+                    IdentifierType="WirelessDeviceId",
+                )
+            except Exception as e:
+                logger.debug("get_wireless_device Id=%s: %s", wid, e)
+                continue
+            lorawan = detail.get("LoRaWANDeviceProperties") or {}
+            if _normalize_deveui(lorawan.get("DevEui") or "") == norm:
+                return detail
+        token = page.get("NextToken")
+        if not token:
+            break
+    return None
+
+
+def log_aws_caller_identity(*, region: str) -> None:
+    try:
+        sts = boto3.client("sts", region_name=region)
+        ident = sts.get_caller_identity()
+        logger.info(
+            "AWS caller: account=%s arn=%s",
+            ident.get("Account"),
+            ident.get("Arn"),
+        )
+    except Exception as e:
+        logger.warning("Could not resolve AWS caller identity: %s", e)
+
+
 def validate_aws_resources(
     client,
     *,
@@ -195,11 +255,18 @@ def validate_aws_resources(
         logger.warning("Could not validate service profile (%s); continuing anyway: %s", service_profile_id, e)
 
     try:
-        paginator = client.get_paginator("list_destinations")
-        for page in paginator.paginate():
+        token: str | None = None
+        while True:
+            kwargs: dict = {"MaxResults": 250}
+            if token:
+                kwargs["NextToken"] = token
+            page = client.list_destinations(**kwargs)
             for d in page.get("DestinationList", []):
                 if d.get("Name") == destination_name:
                     return
+            token = page.get("NextToken")
+            if not token:
+                break
         raise SystemExit(
             "Destination name not found in this region/account.\n"
             f"  Destination Name: {destination_name}\n"
@@ -210,6 +277,31 @@ def validate_aws_resources(
         raise
     except Exception as e:
         logger.warning("Could not validate destination (%s); continuing anyway: %s", destination_name, e)
+
+
+def delete_wireless_device_by_deveui(client, dev_eui: str, *, dryrun: bool) -> bool:
+    """If a wireless device exists for DevEui, delete it. True when safe to create."""
+    resp = find_wireless_device_by_deveui(client, dev_eui)
+    if resp is None:
+        logger.info("Reprov: no existing wireless device for DevEui=%s", dev_eui)
+        return True
+
+    wid = resp.get("Id")
+    if dryrun:
+        logger.info(
+            "[dryrun] would delete wireless device Id=%s DevEui=%s Name=%s",
+            wid,
+            dev_eui,
+            resp.get("Name"),
+        )
+        return True
+    try:
+        client.delete_wireless_device(Id=wid)
+        logger.info("Reprov: deleted wireless device Id=%s DevEui=%s", wid, dev_eui)
+        return True
+    except Exception as e:
+        logger.error("Reprov: delete failed Id=%s DevEui=%s: %s", wid, dev_eui, e)
+        return False
 
 
 def register_wireless_device(
@@ -227,6 +319,7 @@ def register_wireless_device(
     service_profile_id: str,
     destination_name: str,
     dryrun: bool,
+    reprov: bool = False,
 ) -> bool:
     row = {
         "asset_id": asset_id,
@@ -253,17 +346,43 @@ def register_wireless_device(
         },
     }
     logger.info(
-        "Creating device DevEui=%s Name=%s Tags=%s",
+        "Creating device DevEui=%s Name=%s Tags=%s reprov=%s",
         dev_eui,
         display_name,
         tags,
+        reprov,
     )
+    if reprov and client is not None:
+        if not delete_wireless_device_by_deveui(client, dev_eui, dryrun=dryrun):
+            return False
     if dryrun:
         logger.info("[dryrun] would call create_wireless_device")
         return True
     try:
         client.create_wireless_device(**create_input)
         return True
+    except client.exceptions.ConflictException as e:
+        if not reprov or client is None:
+            logger.error("Error creating wireless device %s: %s", dev_eui, e)
+            return False
+        logger.warning(
+            "Create conflict for DevEui=%s (%s); listing devices and retrying delete+create",
+            dev_eui,
+            e,
+        )
+        if not delete_wireless_device_by_deveui(client, dev_eui, dryrun=False):
+            return False
+        try:
+            client.create_wireless_device(**create_input)
+            logger.info("Reprov: recreated wireless device DevEui=%s", dev_eui)
+            return True
+        except Exception as retry_err:
+            logger.error(
+                "Error creating wireless device %s after reprov delete: %s",
+                dev_eui,
+                retry_err,
+            )
+            return False
     except Exception as e:
         logger.error("Error creating wireless device %s: %s", dev_eui, e)
         return False
@@ -307,7 +426,11 @@ def main() -> int:
         action="store_true",
         help="Register all rows (overrides --last-only; use with care)",
     )
-
+    parser.add_argument(
+        "--reprov",
+        action="store_true",
+        help="Delete existing AWS wireless device for DevEui before create (refresh tags/metadata)",
+    )
 
     args = parser.parse_args()
     if args.inputfilename is not None:
@@ -348,6 +471,9 @@ def main() -> int:
 
     client = None if args.dryrun else boto3.client("iotwireless", region_name=args.region)
 
+    if not args.dryrun:
+        log_aws_caller_identity(region=args.region)
+
     if not args.dryrun and client:
         logger.info("Validating device profile, service profile, and destination in %s...", args.region)
         validate_aws_resources(
@@ -376,6 +502,7 @@ def main() -> int:
             service_profile_id=args.service_profile_id.strip(),
             destination_name=args.destination_name.strip(),
             dryrun=args.dryrun,
+            reprov=args.reprov,
         ):
             success += 1
         else:

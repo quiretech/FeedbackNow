@@ -1,0 +1,8176 @@
+SOLOMON SYSTECH
+SEMICONDUCTOR TECHNICAL DATA
+
+SSD1683
+
+Advance Information
+400 Source x 300 Gate Red/Black/White
+Active Matrix EPD Display Driver with Controller
+
+This document contains information on a new product. Specifications and information herein are subject to change
+without notice.
+http://www.solomon-systech.com
+SSD1683
+Rev 1.0
+P 1/49
+
+Jan 2021
+
+Copyright  2020 Solomon Systech Limited
+
+Appendix: IC Revision history of SSD1683 Specification
+
+Version
+
+Change Items
+
+1.0
+
+Initial Release
+
+SSD1683
+
+Rev 1.0
+
+Effective Date
+26-Jan-2021
+
+P 2/49
+
+Jan 2021
+
+Solomon Systech
+
+CONTENTS
+1
+
+GENERAL DESCRIPTION.................................................................................................................... 5
+
+2
+
+FEATURES ........................................................................................................................................ 5
+
+3
+
+ORDERING INFORMATION ............................................................................................................... 6
+
+4
+
+BLOCK DIAGRAM ............................................................................................................................. 6
+
+5
+
+PIN DESCRIPTION ............................................................................................................................ 7
+
+6
+
+FUNCTIONAL BLOCK DESCRIPTION ................................................................................................. 10
+6.1
+6.1.1
+6.1.2
+6.1.3
+6.2
+6.3
+6.4
+6.5
+6.6
+6.7
+6.8
+6.8.1
+6.8.2
+6.8.3
+6.9
+6.10
+6.11
+6.12
+6.13
+6.14
+
+MCU INTERFACE ..............................................................................................................................................10
+MCU INTERFACE SELECTION .............................................................................................................................10
+MCU SERIAL INTERFACE (4-WIRE SPI) ..............................................................................................................10
+MCU SERIAL PERIPHERAL INTERFACE (3-WIRE SPI) ..........................................................................................11
+OSCILLATOR .................................................................................................................................................12
+BOOSTER & REGULATOR............................................................................................................................12
+VCOM SENSING ............................................................................................................................................12
+RAM ................................................................................................................................................................13
+PROGRAMMABLE W AVEFORM FOR GATE, SOURCE AND VCOM...........................................................................13
+WAVEFORM SETTING ..................................................................................................................................16
+TEMPERATURE SEARCHING ...............................................................................................................................17
+INTERNAL TEMPERATURE SENSOR .....................................................................................................................18
+EXTERNAL TEMPERATURE SENSOR I2C SINGLE MASTER INTERFACE ..................................................................18
+FORMAT OF TEMPERATURE VALUE .....................................................................................................................18
+W AVEFORM SETTING SEARCHING MECHANISM ....................................................................................................19
+ONE TIME PROGRAMMABLE (OTP) MEMORY......................................................................................................20
+THE FORMAT FOR TEMPERATURE RANGE (TR) ..................................................................................................20
+CASCADE MODE ...............................................................................................................................................21
+VCI DETECTION ................................................................................................................................................21
+HV READY DETECTION .....................................................................................................................................21
+
+7
+
+COMMAND TABLE ......................................................................................................................... 22
+
+8
+
+COMMAND DESCRIPTION .............................................................................................................. 37
+8.1
+8.2
+8.3
+8.4
+8.5
+
+9
+
+DRIVER OUTPUT CONTROL (01H) ......................................................................................................................37
+DATA ENTRY MODE SETTING (11H) ...................................................................................................................39
+SET RAM X - ADDRESS START / END POSITION (44H) ........................................................................................40
+SET RAM Y - ADDRESS START / END POSITION (45H) ........................................................................................40
+SET RAM ADDRESS COUNTER (4EH-4FH) .........................................................................................................40
+
+OPERATION FLOW AND CODE SEQUENCE ...................................................................................... 41
+9.1
+9.2
+
+SSD1683 OPERATION FLOW TO DRIVE DISPLAY PANEL WITH POWER ON/OFF .......................................................41
+SSD1683 OPERATION FLOW TO ENTER DEEP SLEEP MODE 2 AFTER DISPLAY UPDATE ...........................................42
+
+10 ABSOLUTE MAXIMUM RATING ...................................................................................................... 43
+11 ELECTRICAL CHARACTERISTICS ....................................................................................................... 43
+12 AC CHARACTERISTICS .................................................................................................................... 45
+12.1
+
+SERIAL PERIPHERAL INTERFACE ........................................................................................................................45
+
+13 APPLICATION CIRCUIT.................................................................................................................... 46
+14 PACKAGE INFORMATION ............................................................................................................... 47
+14.1
+14.2
+
+SSD1683
+
+DIE TRAY DIMENSIONS FOR SSD1683Z ............................................................................................................47
+DIE TRAY DIMENSIONS FOR SSD1683Z8 ..........................................................................................................48
+
+Rev 1.0
+
+P 3/49
+
+Jan 2021
+
+Solomon Systech
+
+TABLES
+TABLE 3-1 : ORDERING INFORMATION ..............................................................................................................6
+TABLE 5-1: POWER SUPPLY PINS ....................................................................................................................7
+TABLE 5-2: INTERFACE LOGIC PINS ..................................................................................................................8
+TABLE 5-3: ANALOG PINS ................................................................................................................................9
+TABLE 5-4: DRIVER OUTPUT PINS ....................................................................................................................9
+TABLE 5-5: MISCELLANEOUS PINS ...................................................................................................................9
+TABLE 6-1 : INTERFACE PINS ASSIGNMENT UNDER DIFFERENT MCU INTERFACE ............................................... 10
+TABLE 6-2 : CONTROL PINS STATUS OF 4-WIRE SPI ........................................................................................ 10
+TABLE 6-3 : CONTROL PINS STATUS OF 3-WIRE SPI ........................................................................................ 11
+TABLE 6-4 : RAM BIT AND LUT MAPPING FOR 3-COLOR DISPLAY ...................................................................... 13
+TABLE 6-5 : RAM BIT AND LUT MAPPING FOR BLACK/WHITE DISPLAY ............................................................... 13
+TABLE 6-6 : VS[NX-LUTM] SETTINGS FOR SOURCE VOLTAGE AND VCOM VOLTAGE ......................................... 14
+TABLE 6-7 : FR SETTINGS FOR FRAME RATE SELECTION .................................................................................. 15
+TABLE 6-8 : EXAMPLE OF 8-BIT BINARY TEMPERATURE SETTINGS FOR TEMPERATURE RANGES .......................... 18
+TABLE 6-9 : EXAMPLE OF WAVEFORM SETTINGS SELECTION BASED ON TEMPERATURE RANGES. ........................ 19
+TABLE 7-1: COMMAND TABLE ........................................................................................................................ 22
+TABLE 10-1 : MAXIMUM RATINGS ................................................................................................................... 43
+TABLE 11-1: DC CHARACTERISTICS ............................................................................................................... 43
+TABLE 11-2: REGULATORS CHARACTERISTICS ............................................................................................... 44
+TABLE 12-1 : SERIAL PERIPHERAL INTERFACE TIMING CHARACTERISTICS ........................................................ 45
+TABLE 13-1: COMPONENT LIST FOR SSD1683 APPLICATION CIRCUIT ............................................................... 46
+
+FIGURES
+FIGURE 4-1 : SSD1683 BLOCK DIAGRAM .........................................................................................................6
+FIGURE 6-1 : W RITE PROCEDURE IN 4-WIRE SPI MODE ................................................................................... 10
+FIGURE 6-2 : READ PROCEDURE IN 4-WIRE SPI MODE ..................................................................................... 11
+FIGURE 6-3 : W RITE PROCEDURE IN 3-WIRE SPI ............................................................................................. 11
+FIGURE 6-4 : READ PROCEDURE IN 3-WIRE SPI MODE ..................................................................................... 12
+FIGURE 6-5 : PROGRAMMABLE DRIVING WAVEFORM ILLUSTRATION .................................................................. 13
+FIGURE 6-6 : W AVEFORM SETTING FORMAT FOR 3-COLOR MODE ..................................................................... 16
+FIGURE 6-7 : W AVEFORM SETTING FORMAT FOR BLACK/WHITE MODE............................................................... 17
+FIGURE 6-8 : THE W AVEFORM SETTING MAPPING IN OTP FOR WAVEFORM SETTING AND TEMPERATURE RANGE . 20
+FIGURE 6-9 : FORMAT OF TEMPERATURE RANGE (TR) IN OTP ........................................................................ 20
+FIGURE 8-1: OUTPUT PIN ASSIGNMENT ON DIFFERENT SCAN MODE SETTING.................................................... 38
+FIGURE 9-1: OPERATION FLOW TO DRIVE DISPLAY PANEL POWER ON/OFF......................................................... 41
+FIGURE 9-2: OPERATION FLOW TO ENTER DEEP SLEEP MODE 2 AFTER DISPLAY UPDATE .................................... 42
+FIGURE 12-1: SPI TIMING DIAGRAM ................................................................................................................ 45
+FIGURE 13-1: SCHEMATIC OF SSD1683 APPLICATION CIRCUIT ........................................................................ 46
+FIGURE 14-1 : SSD1683Z DIE TRAY INFORMATION ......................................................................................... 47
+FIGURE 14-2 : SSD1683Z8 DIE TRAY INFORMATION (UNIT: MM) ....................................................................... 48
+
+SSD1683
+
+Rev 1.0
+
+P 4/49
+
+Jan 2021
+
+Solomon Systech
+
+1
+
+GENERAL DESCRIPTION
+SSD1683 is an Active Matrix EPD display driver with controller for Red/Black/White EPD displays.
+It consists of 400 source outputs, 300 gate outputs, 1 VCOM and 1VBD (for border), which can support displays
+with resolution up to 400x 300.
+In the SSD1683, data and commands are sent from MCU through hardware selectable serial peripheral interface.
+It has embedded booster, regulator and oscillator which is suitable for EPD display applications.
+
+2
+
+FEATURES
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SSD1683
+
+Design for dot matrix type active matrix EPD display, support Red/Black/White colour
+Resolution: 400 source outputs, 300 gate outputs, 1 VCOM and 1VBD (for border)
+Power supply:
+
+VCI:
+2.3 to 3.7V
+
+VDDIO: Connect to VCI
+
+VDD: 1.8V, regulate from VCI supply
+On chip display RAM
+
+Mono B/W: 400x300 bits
+
+Mono Red: 400x300 bits
+On-chip booster and regulator for generating VCOM, Gate and Source driving voltage
+Gate driving output voltage: 2-level outputs (VGH, VGL), Max 40Vp-p
+ VGH: 10V to 20V (Voltage adjustment step: 500mV)
+ VGL: -VGH (Voltage adjustment step: 500mV)
+Source driving output voltage: 4-levels outputs (VSH1, VSH2, VSS and VSL)
+ VSH1: 8.6V to 17V (Voltage adjustment step: 200mV)
+ VSH2: 2.4V to 17V (Voltage adjustment step: 100mV for 2.4V to 8.6V, 200mV for 8.8V to 17V)
+ VSL: -5V to -17V (Voltage adjustment step: 500mV)
+VCOM output voltage
+ DCVCOM: -3.0V to -0.2V in 100mV resolution
+ ACVCOM: 3-level outputs (VSH1+DCVCOM, DCVCOM, VSL+DCVCOM)
+On-chip oscillator, adjustable frame rate from 25Hz to 125Hz
+ Programmable output Waveform for 3-color mode and black/white mode:
+ 4 LUTs for 3-color mode
+ 5 LUTs for black/white mod
+Embedded OTP to store 24 sets of waveform setting and temperature range, color mode selection,
+4-byte waveform version, 10-byte User ID and initial code setting
+External or internal generated voltage for burning OTP
+Built-in CRC checking method for RAM content and WS & TR in OTP
+VCI low voltage detection
+Driving voltage ready detection
+Support display partial update
+Auto write RAM command for regular patterns
+Internal Temperature Sensor of +/-2degC accuracy from -25degC to 50degC
+I2C single master interface to communicate with external temperature sensor
+MCU interface: 4-wire or 3-wire Serial peripheral interface (maximum SPI write speed 20MHz)
+Available in COG package
+
+Rev 1.0
+
+P 5/49
+
+Jan 2021
+
+Solomon Systech
+
+3
+
+ORDERING INFORMATION
+Table 3-1 : Ordering Information
+
+Ordering Part Number
+
+Package Form
+
+SSD1683Z
+
+SSD1683Z8
+
+4
+
+Remark
+
+Gold Bump Die
+
+Bump Face Up
+On Waffle pack
+Die thickness: 300um
+Bump height: 12um
+
+Gold Bump Die
+
+Bump Face Down
+On Waffle pack
+Die thickness: 300um
+Bump height: 12um
+
+BLOCK DIAGRAM
+
+Waveform
+Selection
+Analog Block for
+Panel Driving Power
+
+VDD
+
+CL
+
+VCOM
+Control
+
+VBD
+
+VCOM
+
+VCOM
+OTP
+
+VPP
+
+LUT
+
+Waveform
+Setting
+[WS]
+
+LOGIC
+
+Temperature
+Range [TR]
+
+VDD
+Regulator
+
+Oscillator
+
+VCOM
+
+GDR
+RESE
+VGH
+VGL
+VSH1
+VSH2
+VSL
+VCOM
+
+Source Buffer
+
+VBD
+
+SOURCE
+
+GATE
+Gate Buffer
+
+I2C MASTER
+Internal
+Temperature
+Sensor
+
+RAM
+
+Mode
+Selection
+
+MCU Interface
+
+TSCL,
+TSDA
+VCI/
+VCIA
+VDDIO
+VSS/
+VSSA/
+VSSBG/
+VSSGS
+
+M/S#
+BS1
+
+BUSY
+
+SDA
+SCL
+CS#
+D/C#
+RES#
+
+Figure 4-1 : SSD1683 Block Diagram
+
+SSD1683
+
+Rev 1.0
+
+P 6/49
+
+Jan 2021
+
+Solomon Systech
+
+5 PIN DESCRIPTION
+Key:
+I = Input
+O =Output
+IO = Bi-directional (input/output)
+P = Power pin
+C = Capacitor Pin
+NC = Not Connected
+Table 5-1: Power Supply Pins
+
+Name
+
+Type Connect to
+
+VCI
+
+P
+
+VCIA
+
+P
+
+VDDIO
+
+VDD
+
+Function
+
+When not
+in use
+-
+
+Description
+
+Power
+Supply
+Power
+Supply
+
+Power Supply
+
+Power input pin for the chip.
+
+Power Supply
+
+Power input pin for the chip.
+- Connect to VCI in the application circuit.
+
+-
+
+P
+
+Power
+Supply
+
+Power input pin for the Interface.
+- Connect to VCI in the application circuit.
+
+-
+
+P
+
+Capacitor
+
+Power for
+interface logic
+pins
+Regulator
+output
+
+Core logic power pin
+VDD can be regulated internally from VCI.
+
+-
+
+A capacitor should be connected between VDD
+and VSS under all circumstances.
+Ground (Digital).
+
+VSS
+
+P
+
+VSS
+
+GND
+
+VSSA
+
+P
+
+VSS
+
+GND
+
+Ground (Analog)
+- Connect to VSS in the application circuit.
+
+-
+
+VSSBG
+
+P
+
+VSS
+
+GND
+
+Ground (Reference) pin.
+- Connect to VSS in the application circuit.
+
+-
+
+VSSGS
+
+P
+
+VSS
+
+GND
+
+Ground (Output) pin.
+- Connect to VSS in the application circuit.
+
+-
+
+VPP
+
+P
+
+Power
+Supply
+
+OTP power
+
+Power Supply for OTP Programming.
+
+SSD1683
+
+Rev 1.0
+
+P 7/49
+
+Jan 2021
+
+-
+
+Open
+
+Solomon Systech
+
+Table 5-2: Interface Logic Pins
+
+Type
+
+Connect to
+
+SCL
+
+I
+
+MPU
+
+SDA
+
+I/O
+
+CS#
+
+I
+
+D/C#
+
+I
+
+RES#
+
+I
+
+BUSY
+
+O
+
+M/S#
+
+I
+
+CL
+
+I/O
+
+BS1
+
+I
+
+TSDA
+
+I/O
+
+Temperature Interface to
+sensor SDA Digital Temp.
+Sensor
+
+This pin is I2C Interface to digital temperature
+sensor Data pin.
+External pull up resistor is required when
+connecting to I2C slave.
+
+VSS
+
+TSCL
+
+O
+
+Temperature Interface to
+sensor SCL Digital Temp.
+Sensor
+
+This pin is I2C Interface to digital temperature
+sensor Clock pin.
+External pull up resistor is required when
+connecting to I2C slave.
+
+VSS
+
+SSD1683
+
+Function
+
+Description
+
+When not
+in use
+-
+
+Name
+
+This pin is serial clock pin for interface.
+Refer to MCU interface in Section 6.1.
+MPU
+Data Bus
+This pin is serial data pin for interface.
+Refer to MCU interface in Section 6.1.
+MPU
+Logic Control
+This pin is the chip select input connecting to the
+MCU. Refer to MCU interface in Section 6.1.
+MPU
+Logic Control
+This pin is Data/Command control pin connecting
+to the MCU. Refer to MCU interface in Section 6.1.
+MPU
+System Reset This pin is reset signal input.
+Active Low.
+MPU
+Device Busy
+This pin is Busy state output pin.
+Signal
+When Busy is High, the operation of the chip
+should not be interrupted, and command should
+not be sent.
+For example., The chip would output Busy pin as
+High when
+- Outputting display waveform; or
+- Programming with OTP
+- Communicating with digital temperature sensor
+VDDIO/VSS Cascade
+This pin is Master and Slave selection pin.
+Mode
+- For the single chip application, the M/S# pin
+Selection
+should be connected to VDDIO.
+- In the cascade mode:
+For Master Chip, the M/S# pin should be
+connected to VDDIO.
+For Slave Chip, the M/S# pin should be
+connected to VSS. The oscillator, booster and
+regulator circuits of the slave chip will be
+disabled. The corresponding pins including CL,
+VDD, VDDIO, VGH, VGL, VSH1, VSH2, VSL
+and VCOM must be connected to the master
+chip.
+NC
+Clock signal
+This pin is the clock signal pin.
+For the single chip application, the CL pin
+should be left open.
+- In the cascade mode, the CL pin of the slave
+chip should be connected to the CL pin of the
+master chip.
+VDDIO/VSS MCU Interface This pin is for selecting 3-wire or 4-wire SPI bus.
+Mode
+Selection
+BS1
+MCU Interface
+L
+4-wire SPI
+H
+3-wire SPI (9-bit SPI)
+
+Rev 1.0
+
+P 8/49
+
+Data Bus
+
+Jan 2021
+
+VDDIO or
+VSS
+VDDIO or
+VSS
+-
+
+Solomon Systech
+
+Open
+
+-
+
+-
+
+-
+
+Table 5-3: Analog Pins
+
+Name
+
+Type Connect to
+
+GDR
+
+O
+
+POWER
+MOSFET
+Driver
+Control
+Booster
+Control
+Input
+Stabilizing
+capacitor
+
+RESE
+
+I
+
+VGH
+
+C
+
+VGL
+
+C
+
+Stabilizing
+capacitor
+
+VSH1
+
+C
+
+Stabilizing
+capacitor
+
+VSH2
+
+C
+
+Stabilizing
+capacitor
+
+VSL
+
+C
+
+Stabilizing
+capacitor
+
+VCOM
+
+C
+
+Panel/
+Stabilizing
+capacitor
+
+Function
+VGH, VGL
+Generation
+
+VSH1, VSH2,
+VSL
+Generation
+
+VCOM
+Generation
+
+Description
+This pin is N-Channel MOSFET gate drive control
+pin.
+
+When not
+in use
+-
+
+This pin is Current sense input pin for the control
+Loop.
+
+-
+
+This pin is Positive Gate driving voltage.
+Connect a stabilizing capacitor between VGH and
+VSS in the application circuit.
+This pin is Negative Gate driving voltage.
+Connect a stabilizing capacitor between VGL and
+VSS in the application circuit.
+This pin is Positive Source driving voltage, VSH1
+Connect a stabilizing capacitor between VSH1 and
+VSS in the application circuit.
+This pin is Positive Source driving voltage, VSH2
+Connect a stabilizing capacitor between VSH2 and
+VSS in the application circuit.
+This pin is Negative Source driving voltage.
+Connect a stabilizing capacitor between VSL and
+VSS in the application circuit.
+This pins is VCOM driving voltage
+Connect a stabilizing capacitor between VCOM
+and VSS in the application circuit.
+
+-
+
+-
+
+-
+
+-
+
+-
+
+Table 5-4: Driver Output Pins
+
+Name
+
+Type Connect to
+
+S [399:0]
+
+O
+
+Panel
+
+G [299:0]
+
+O
+
+Panel
+
+VBD
+
+O
+
+Panel
+
+Source output pin.
+
+When not
+in use
+Open
+
+Gate output pin.
+
+Open
+
+Border output pin.
+
+Open
+
+Function
+Source driving
+signal
+Gate driving
+signal
+Border driving
+signal
+
+Description
+
+Table 5-5: Miscellaneous Pins
+
+Name
+
+Type
+
+NC
+
+NC
+
+Connect
+to
+NC
+
+RSV
+TPA, TPB,
+TPC, TPD,
+TPF, FB
+
+NC
+NC
+
+NC
+NC
+
+TIN
+
+I
+
+TPE
+
+TPE
+
+O
+
+TIN
+
+SSD1683
+
+Rev 1.0
+
+P 9/49
+
+Function
+
+Description
+
+When not
+in use
+Open
+
+Not Connected This is dummy pin. It should not be connected with
+other NC pins.
+Reserved
+This is a reserved pin and should be kept open.
+Open
+Reserved for
+Reserved pins.
+Open
+Testing
+- Keep open.
+- Do not connect to other NC pins and test pins
+including TPA, TPB, TPC, TPD, TPF, TIN and FB.
+Reserved for
+This is a reserved pin and should be connected to VSS/VDDIO
+Testing
+TPE pin
+Reserved for
+This is a reserved pin and should be connected to
+Open
+Testing
+TIN pin
+
+Jan 2021
+
+Solomon Systech
+
+6 Functional Block Description
+6.1 MCU Interface
+6.1.1 MCU Interface selection
+The SSD1683 can support 3-wire/4-wire serial peripheral. MCU interface is pin selectable by BS1
+shown in Table 6-1.
+Table 6-1 : Interface pins assignment under different MCU interface
+
+MCU Interface
+4-wire serial peripheral
+interface (SPI)
+3-wire serial peripheral
+interface (SPI) – 9 bits SPI
+
+BS1
+
+RES#
+
+Pin Name
+CS#
+D/C#
+
+SCL
+
+SDA
+
+L
+
+RES#
+
+CS#
+
+DC#
+
+SCL
+
+SDA
+
+H
+
+RES#
+
+CS#
+
+L
+
+SCL
+
+SDA
+
+Note
+(1)
+L is connected to VSS and H is connected to VDDIO
+
+6.1.2 MCU Serial Interface (4-wire SPI)
+The 4-wire SPI consists of serial clock SCL, serial data SDA, D/C# and CS#. The control pins status in
+4-wire SPI in writing command/data is shown in Table 6-2 and the write procedure 4-wire SPI is shown
+in Table 6-2
+Table 6-2 : Control pins status of 4-wire SPI
+
+Function
+
+SCL pin
+
+SDA pin
+
+D/C# pin
+
+CS# pin
+
+Write command
+
+↑
+
+Command bit
+
+L
+
+L
+
+Write data
+
+↑
+
+Data bit
+
+H
+
+L
+
+Note:
+(1) L is connected to VSS and H is connected to VDDIO
+(2) ↑ stands for rising edge of signal
+(3) SDA (Write Mode) is shifted into an 8-bit shift register on every rising edge of SCL in the order of
+D7, D6, ... D0. The level of D/C# should be kept over the whole byte. The data byte in the shift
+register is written to the Graphic Display Data RAM (RAM)/Data Byte register or command Byte
+register according to D/C# pin.
+
+CS#
+
+D/C#
+
+SCL
+
+SDA
+(Write
+Mode)
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+D0
+
+Register
+
+Parameter
+
+Figure 6-1 : Write procedure in 4-wire SPI mode
+
+SSD1683
+
+Rev 1.0
+
+P 10/49
+
+Jan 2021
+
+Solomon Systech
+
+In the read operation (Command 0x1B, 0x27, 0x2D, 0x2E, 0x2F, 0x35). After CS# is pulled low, the
+first byte sent is command byte, D/C# is pulled low. After command byte sent, the following byte(s)
+read are data byte(s), so D/C# bit is then pulled high. An 8-bit data will be shifted out on every clock
+falling edge. The serial data SDA bit shifting sequence is D7, D6, to D0 bit. Figure 6-2 shows the read
+procedure in 4-wire SPI.
+
+CS#
+
+D/C#
+
+SCL
+
+Register
+SDA
+(Write Mode)
+
+D7
+
+D6
+
+D5
+
+D4
+
+Parameter
+D3
+
+D2
+
+D1
+
+D0
+
+SDA
+(Read Mode)
+
+D7
+
+D0
+
+Figure 6-2 : Read procedure in 4-wire SPI mode
+
+6.1.3 MCU Serial Peripheral Interface (3-wire SPI)
+The 3-wire SPI consists of serial clock SCL, serial data SDA and CS#. The operation is similar to 4wire SPI while D/C# pin is not used and it must be tied to LOW. The control pins status in 3-wire SPI
+is shown in Table 6-3.
+In the write operation, a 9-bit data will be shifted into the shift register on every clock rising edge. The
+bit shifting sequence is D/C# bit, D7 bit, D6 bit to D0 bit. The first bit is D/C# bit which determines the
+following byte is command or data. When D/C# bit is 0, the following byte is command. When D/C#
+bit is 1, the following byte is data. Table 6-3 shows the write procedure in 3-wire SPI
+Table 6-3 : Control pins status of 3-wire SPI
+
+Function
+
+SCL pin
+
+SDA pin
+
+D/C# pin
+
+CS# pin
+
+Write command
+
+↑
+
+Command bit
+
+Tie LOW
+
+L
+
+Write data
+
+↑
+
+Data bit
+
+Tie LOW
+
+L
+
+Note:
+(1)
+(2)
+
+L is connected to VSS and H is connected to VDDIO
+↑ stands for rising edge of signal
+CS#
+
+SCL
+
+SDA
+(Write
+Mode)
+
+0
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+Register
+
+D2
+
+D1
+
+D0
+
+1
+
+D7
+
+Parameter
+
+Figure 6-3 : Write procedure in 3-wire SPI
+
+SSD1683
+
+Rev 1.0
+
+P 11/49
+
+Jan 2021
+
+Solomon Systech
+
+In the read operation (Register 0x1B, 0x27, 0x2D, 0x2E, 0x2F, 0x35). SDA data are transferred in the
+unit of 9 bits. After CS# pull low, the first byte is command byte, the D/C# bit is as 0 and following with
+the register byte. After command byte send, the following byte(s) are data byte(s), with D/C# bit is 1.
+After D/C# bit sending from MCU, an 8-bit data will be shifted out on every clock falling edge. The serial
+data SDA bit shifting sequence is D7, D6, to D0 bit. Figure 6-4 shows the read procedure in 3-wire SPI.
+CS#
+
+SCL
+Register
+SDA
+(Write
+mode)
+
+0
+
+D7
+
+D6
+
+D5
+
+D4
+
+Parameter
+D3
+
+D2
+
+D1
+
+D0
+
+1
+
+SDA
+(Read
+Mode)
+
+D0
+
+D7
+
+Figure 6-4 : Read procedure in 3-wire SPI mode
+
+6.2
+
+OSCILLATOR
+The oscillator module generates the clock reference for waveform timing and analog operations.
+
+6.3
+
+BOOSTER & REGULATOR
+A voltage generation system is included in the driver. It provides all necessary driving voltages required for an
+AMEPD panel including VGH, VGL, VSH1, VSH2, VSL and VCOM. External application circuit is needed to make
+the on-chip booster & regulator circuit work properly.
+L1
+
+C0
+
+VCOM
+Generator
+
+6.4
+
+C1
+
+C8
+
+VCI
+
+GDR
+
+VDDIO
+
+RESE
+R1
+
+VDD
+VSS
+
+VCOM
+
+C3
+
+Q1
+
+VGH
+
+D1
+
+D2
+
+D3
+
+VGH & VGL
+Generator
+
+C2
+
+VGL
+
+C4
+
+VSH1
+
+C5
+
+VSH1
+Generator
+
+VSH2
+
+C6
+
+VSH2
+Generator
+
+VSL
+
+C7
+
+VSL
+Generator
+
+VCOM SENSING
+This functional block provides the scheme to select the optimal VCOM DC level. The sensed value can be
+programmed into OTP.
+The flow of VCOM sensing:
+
+Active Gate is scanning during the VCOM sense Period.
+
+Source are VSS.
+
+VCOM pin used for sensing.
+
+During Sensing period, BUSY is high.
+
+After Sensing, Active Gate return to non-select stage.
+
+SSD1683
+
+Rev 1.0
+
+P 12/49
+
+Jan 2021
+
+Solomon Systech
+
+6.5
+
+RAM
+The On chip display RAM is holding the image data.
+1 set of RAM is built for Mono B/W. The RAM size is 400x300 bits.
+1 set of RAM is built for Mono Red. The RAM size is 400x300 bits.
+Table 6-4 : RAM bit and LUT mapping for 3-color display
+
+Data bit in R RAM
+0
+0
+1
+
+Data bit in B/W RAM
+0
+1
+0
+
+Image Color
+Black
+White
+Red
+
+LUT
+LUTB for driving Black
+LUTW for driving White
+LUTR for driving Red
+
+Table 6-5 : RAM bit and LUT mapping for black/white display
+
+Data bit in R RAM
+0
+0
+1
+1
+
+6.6
+
+Data bit in B/W RAM
+0
+1
+0
+1
+
+Image Color
+Black
+White
+Black
+White
+
+LUT
+LUTBB for driving Black
+LUTWB for driving White
+LUTBW = LUTBB
+LUTWW = LUTWB
+
+Programmable Waveform for Gate, Source and VCOM
+There are two selectable programmable driving waveform, which is selected by Command 0x22.The color mode
+selection can be selected for 3-color mode and black/white mode. Figure 6-5 illustrates the programmable
+driving waveform with the description of parameter setting.
+
+Figure 6-5 : Programmable driving waveform illustration
+
+SSD1683
+
+Rev 1.0
+
+P 13/49
+
+Jan 2021
+
+Solomon Systech
+
+In 3-color mode, there are 8 groups (Group0 to Group7) for 4 LUTs. The 4 LUTs are LUTC, LUTR, LUTW and
+LUTB. In black/white mode, there are 6 groups (Group0 to Group5) for 5LUTs. The 5 LUTs are LUTC, LUTBB,
+LUTWB, LUTBW and LUTWW. In each group, there are 4 phases (Phase A to Phase D) and 2 state repeats
+(Phase A and B, Phase C and D). Totally, there are 32 phases in 3-color mode and 24 phases in black/white
+mode. In each phase, the phase length (TP[nX]) can be set by number of frame from 0 to 63 frames. Also, each
+group can be repeated with repeat counting number (RP[n]) from 0 to 255 times; each AB / CD phases can be
+repeated with state repeat counting number (SR[nAB]/SR[nCD]) from 0 to 255 times. For the voltage level (VS[nXLUTm]), there are four levels for Source voltage (VSS, VSH1, VSH2, VSL) and four levels for VCOM voltage
+(DCVCOM, VSH1+DCVCOM, VSL+DCVOM, Floating).
+The description of each parameter is as follows.
+1) TP[nX] represents the phase length set by the number of frame.
+ The range of TP[nX] is from 0 to 63.
+ n represents the Group number
+ from 0 to 7 for 3-color mode
+ from 0 to 5 for black/white mode
+ X represents the phase number from A to D.
+ When TP[nX] = 0, the phase is skipped. When TP[nX] = 1, the phase is 1 frame, and so on. The
+maximum phase length is 63 frame.
+2) RP[n] represents the repeat counting number for the Group.
+ The range of RP[n] is from 0 to 255.
+ n represents the Group number
+ from 0 to 7 for 3-color mode
+ from 0 to 5 for black/white mode
+ RP[n] = 0 indicates that the group is skipped, RP[n] = 1 indicates that the repeat times = 1, and so on.
+The maximum repeat times is 255.
+3) SR[nAB] and SR[nCD] represent the state repeat counting number for Phase A & B and Phase C & D
+respectively.
+ The range of SR[nXY] is from 0 to 255.
+ n represents the Group number
+ from 0 to 7 for 3-color mode
+ from 0 to 5 for black/white mode
+ SR[nXY] = 0 indicates that the sub-group is skipped, SR[nXY] = 1 indicates that the repeat times = 1,
+and so on. The maximum repeat times is 255.
+4) VS[nX-LUTm] represents Source and VCOM voltage level which is used in each phase. Table 6-6
+shows the voltage settings for source voltage and VCOM voltage.
+ In 3-color mode
+ n represents the Group number from 0 to 7.
+ X represents the phase number from A to D.
+ LUTm represents the corresponding LUT for LUTC, LUTB, LUTW and LUTR.
+ In black/white mode
+ n represents the Group number from 0 to 5.
+ X represents the phase number from A to D.
+ LUTm represents the corresponding LUT for LUTC, LUTBB, LUTWB, LUTBW and LUTWW.
+Table 6-6 : VS[nX-LUTm] settings for Source voltage and VCOM voltage
+
+VS[nX-LUTm]
+00
+01
+10
+11
+
+SSD1683
+
+Rev 1.0
+
+P 14/49
+
+Source voltage
+VSS
+VSH1
+VSL
+VSH2
+
+Jan 2021
+
+VCOM voltage
+DCVCOM
+VSH1 + DCVCOM
+VSL + DCVCOM
+Floating
+
+Solomon Systech
+
+5) FR indicates the frame rate for display. Table 6-7 shows the FR settings for frame rate selection.
+Table 6-7 : FR settings for frame rate selection
+FR[3:0]
+
+Frame Rate
+
+FR[3:0]
+
+Frame Rate
+
+0001
+
+25Hz
+
+1001
+
+37.5Hz
+
+0010
+
+50Hz
+
+1010
+
+62.5Hz
+
+0011
+
+75Hz
+
+1011
+
+87.5Hz
+
+0100
+
+100Hz
+
+1100
+
+112.5Hz
+
+0101
+
+125Hz
+
+6) XON[nAB] and XON[nCD], indicates the gate scan selection.
+ n represents the Group number
+ from 0 to 7 for 3-color mode
+ from 0 to 5 for black/white mode
+ XON[nXY] = 0 indicates Normal gate scan in Phase[nX] & Phase[nY].
+ XON[nXY] = 1 indicates All gate on, that Gate keeps High until the phase for normal gate scan, in
+Phase[nX] & Phase[nY].
+7) EOPT represents Display off sequence.
+ Set as 0x22 for
+ 2 scan frames to discharge TFT pixels voltage
+ VCOM and HV power will be discharged in a sequence.
+ Set as 0x07 for
+ No scan frame, keep previous TFT pixels voltage
+ VCOM will float. VSH1/VSH2/VSL/VGH will be discharged & VGL will float in a sequence
+For 0x07 setting, VCOM and VGL are floating after display update. Please wait until the system
+completely discharge before next operation.
+8) VGH, VSH1/ VSH2/ VSL and VCOM represent the gate driving voltage, source driving voltage and
+VCOM driving voltage respectively.
+ VGH setting from 10V to 20V.
+ VSH1 voltage setting from 8.6V to 17V.
+ VSH2 voltage setting from 2.4V to 8.6V, 8.8V to 17V
+ VSL setting from -5V to -17V.
+ VCOM setting from -0.2V to -3V.
+
+SSD1683
+
+Rev 1.0
+
+P 15/49
+
+Jan 2021
+
+Solomon Systech
+
+6.7
+
+WAVEFORM SETTING
+As described in Section 6.6, parameters VS[nX-LUTm], TP[nX], RP[n], SR[nXY], FR[n] and XON[nXY], EOPT
+and VGH, VSH1/ VSH2/ VSL, VCOM are used to define the driving waveform. In the SSD1683, there are 233
+bytes in the waveform setting as follows.
+
+
+
+
+
+
+WS byte 0~226, the content of waveform LUT are defined by Register 0x32
+WS byte 227, the content of display off sequence, is the parameter belonging to register 0x3F.
+WS byte 228, the content of gate level, is the parameter defined by Register 0x03.
+WS byte 229~231, the content of source level, is the parameter defined by Register 0x04.
+WS byte 232, the content of VCOM level，is the parameter defined by Register 0x2C.
+
+Figure 6-6 and Figure 6-7 show the waveform setting format for 3-color mode and black/white mode respectively.
+The waveform setting of a particular temperature range can be loaded from OTP or written by MCU. These
+commands (0x32, 0x3F, 0x03, 0x04 and 0x2C) can be overridden by the latest register setting. For example, if
+waveform setting A is loaded from OTP first, then, MCU has written another waveform setting B into the driver IC
+after OTP loaded. The driver IC will use the waveform setting B to drive the display.
+addr.
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+…
+…
+…
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+…
+…
+…
+106
+107
+108
+109
+110
+111
+
+D7
+
+D6
+
+D5
+
+VS-0A-LUTC
+VS-0B-LUTC
+VS-0C-LUTC
+VS-0D-LUTC
+
+VS-1A-LUTC
+VS-1B-LUTC
+VS-1C-LUTC
+VS-1D-LUTC
+
+VS-7A-LUTC
+VS-7B-LUTC
+VS-7C-LUTC
+VS-7D-LUTC
+
+VS-0A-LUTR
+VS-0B-LUTR
+VS-0C-LUTR
+VS-0D-LUTR
+
+VS-1A-LUTR
+VS-1B-LUTR
+VS-1C-LUTR
+VS-1D-LUTR
+
+VS-7A-LUTR
+VS-7B-LUTR
+VS-7C-LUTR
+VS-7D-LUTR
+
+D4
+D3
+D2
+RP LUTC 0
+TP LUTC 0A
+TP LUTC 0B
+TP LUTC 0C
+TP LUTC 0D
+SR LUTC 0AB
+SR LUTC 0CD
+RP LUTC 1
+TP LUTC 1A
+TP LUTC 1B
+TP LUTC 1C
+TP LUTC 1D
+SR LUTC 1AB
+SR LUTC 1CD
+RP LUTC 2
+…
+…
+…
+TP LUTC 7A
+TP LUTC 7B
+TP LUTC 7C
+TP LUTC 7D
+SR LUTC 7AB
+SR LUTC 7CD
+RP LUTR 0
+TP LUTR 0A
+TP LUTR 0B
+TP LUTR 0C
+TP LUTR 0D
+SR LUTR 0AB
+SR LUTR 0CD
+RP LUTR 1
+TP LUTR 1A
+TP LUTR 1B
+TP LUTR 1C
+TP LUTR 1D
+SR LUTR 1AB
+SR LUTR 1CD
+RP LUTR 2
+…
+…
+…
+TP LUTR 7A
+TP LUTR 7B
+TP LUTR 7C
+TP LUTR 7D
+SR LUTR 7AB
+SR LUTR 7CD
+
+D1
+
+D0
+
+addr.
+112
+113
+114
+115
+116
+117
+118
+119
+120
+121
+122
+123
+124
+125
+126
+…
+…
+…
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+…
+…
+…
+218
+219
+220
+221
+222
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+
+D7
+
+D6
+
+D5
+
+VS-0A-LUTW
+VS-0B-LUTW
+VS-0C-LUTW
+VS-0D-LUTW
+
+VS-1A-LUTW
+VS-1B-LUTW
+VS-1C-LUTW
+VS-1D-LUTW
+
+VS-7A-LUTW
+VS-7B-LUTW
+VS-7C-LUTW
+VS-7D-LUTW
+
+VS-0A-LUTB
+VS-0B-LUTB
+VS-0C-LUTB
+VS-0D-LUTB
+
+VS-1A-LUTB
+VS-1B-LUTB
+VS-1C-LUTB
+VS-1D-LUTB
+
+VS-7A-LUTB
+VS-7B-LUTB
+VS-7C-LUTB
+VS-7D-LUTB
+
+XON3CD
+XON7CD
+
+XON3AB
+XON7AB
+
+XON2CD
+XON6CD
+
+D4
+D3
+D2
+RP LUTW 0
+TP LUTW 0A
+TP LUTW 0B
+TP LUTW 0C
+TP LUTW 0D
+SR LUTW 0AB
+SR LUTW 0CD
+RP LUTW 1
+TP LUTW 1A
+TP LUTW 1B
+TP LUTW 1C
+TP LUTW 1D
+SR LUTW 1AB
+SR LUTW 1CD
+RP LUTW 2
+…
+…
+…
+TP LUTW 7A
+TP LUTW 7B
+TP LUTW 7C
+TP LUTW 7D
+SR LUTW 7AB
+SR LUTW 7CD
+RP LUTB 0
+TP LUTB 0A
+TP LUTB 0B
+TP LUTB 0C
+TP LUTB 0D
+SR LUTB 0AB
+SR LUTB 0CD
+RP LUTB 1
+TP LUTB 1A
+TP LUTB 1B
+TP LUTB 1C
+TP LUTB 1D
+SR LUTB 1AB
+SR LUTB 1CD
+RP LUTB 2
+…
+…
+…
+TP LUTB 7A
+TP LUTB 7B
+TP LUTB 7C
+TP LUTB 7D
+SR LUTB 7AB
+SR LUTB 7CD
+FR
+XON2AB XON1CD XON1AB
+XON6AB XON5CD XON5AB
+EOPT
+VGH
+VSH1
+VSH2
+VSL
+VCOM
+
+Figure 6-6 : Waveform Setting format for 3-color mode
+
+SSD1683
+
+Rev 1.0
+
+P 16/49
+
+Jan 2021
+
+Solomon Systech
+
+D1
+
+D0
+
+XON0CD
+XON4CD
+
+XON0AB
+XON4AB
+
+addr.
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+…
+…
+…
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+…
+…
+…
+78
+79
+80
+81
+82
+83
+84
+85
+86
+87
+88
+89
+90
+91
+92
+93
+94
+95
+96
+97
+98
+…
+…
+…
+120
+121
+122
+123
+124
+125
+
+D7
+
+D6
+
+VS-0A-LUTC
+VS-0B-LUTC
+VS-0C-LUTC
+VS-0D-LUTC
+
+VS-1A-LUTC
+VS-1B-LUTC
+VS-1C-LUTC
+VS-1D-LUTC
+
+VS-5A-LUTC
+VS-5B-LUTC
+VS-5C-LUTC
+VS-5D-LUTC
+
+VS-0A-LUTWW
+VS-0B-LUTWW
+VS-0C-LUTWW
+VS-0D-LUTWW
+
+VS-1A-LUTWW
+VS-1B-LUTWW
+VS-1C-LUTWW
+VS-1D-LUTWW
+
+VS-5A-LUTWW
+VS-5B-LUTWW
+VS-5C-LUTWW
+VS-5D-LUTWW
+
+VS-0A-LUTBW
+VS-0B-LUTBW
+VS-0C-LUTBW
+VS-0D-LUTBW
+
+VS-1A-LUTBW
+VS-1B-LUTBW
+VS-1C-LUTBW
+VS-1D-LUTBW
+
+VS-5A-LUTBW
+VS-5B-LUTBW
+VS-5C-LUTBW
+VS-5D-LUTBW
+
+D5
+
+D4
+D3
+D2
+RP LUTC 0
+TP LUTC 0A
+TP LUTC 0B
+TP LUTC 0C
+TP LUTC 0D
+SR LUTC 0AB
+SR LUTC 0CD
+RP LUTC 1
+TP LUTC 1A
+TP LUTC 1B
+TP LUTC 1C
+TP LUTC 1D
+SR LUTC 1AB
+SR LUTC 1CD
+RP LUTC 2
+…
+…
+…
+TP LUTC 5A
+TP LUTC 5B
+TP LUTC 5C
+TP LUTC 5D
+SR LUTC 5AB
+SR LUTC 5CD
+RP LUTWW 0
+TP LUTWW 0A
+TP LUTWW 0B
+TP LUTWW 0C
+TP LUTWW 0D
+SR LUTWW 0AB
+SR LUTWW 0CD
+RP LUTWW 1
+TP LUTWW 1A
+TP LUTWW 1B
+TP LUTWW 1C
+TP LUTWW 1D
+SR LUTWW 1AB
+SR LUTWW 1CD
+RP LUTWW 2
+…
+…
+…
+TP LUTWW 5A
+TP LUTWW 5B
+TP LUTWW 5C
+TP LUTWW 5D
+SR LUTWW 5AB
+SR LUTWW 5CD
+RP LUTBW 0
+TP LUTBW 0A
+TP LUTBW 0B
+TP LUTBW 0C
+TP LUTBW 0D
+SR LUTBW 0AB
+SR LUTBW 0CD
+RP LUTBW 1
+TP LUTBW 1A
+TP LUTBW 1B
+TP LUTBW 1C
+TP LUTBW 1D
+SR LUTBW 1AB
+SR LUTBW 1CD
+RP LUTBW 2
+…
+…
+…
+TP LUTBW 5A
+TP LUTBW 5B
+TP LUTBW 5C
+TP LUTBW 5D
+SR LUTBW 5AB
+SR LUTBW 5CD
+
+D1
+
+D0
+
+addr.
+126
+127
+128
+129
+130
+131
+132
+133
+134
+135
+136
+137
+138
+139
+140
+…
+…
+…
+162
+163
+164
+165
+166
+167
+168
+169
+170
+171
+172
+173
+174
+175
+176
+177
+178
+179
+180
+181
+182
+…
+…
+…
+204
+205
+206
+207
+208
+209
+210
+…
+223
+224
+225
+226
+227
+228
+229
+230
+231
+232
+
+D7
+
+D6
+
+D5
+
+VS-0A-LUTWB
+VS-0B-LUTWB
+VS-0C-LUTWB
+VS-0D-LUTWB
+
+VS-1A-LUTWB
+VS-1B-LUTWB
+VS-1C-LUTWB
+VS-1D-LUTWB
+
+VS-5A-LUTWB
+VS-5B-LUTWB
+VS-5C-LUTWB
+VS-5D-LUTWB
+
+VS-0A-LUTBB
+VS-0B-LUTBB
+VS-0C-LUTBB
+VS-0D-LUTBB
+
+VS-1A-LUTBB
+VS-1B-LUTBB
+VS-1C-LUTBB
+VS-1D-LUTBB
+
+VS-5A-LUTBB
+VS-5B-LUTBB
+VS-5C-LUTBB
+VS-5D-LUTBB
+
+XON3CD
+
+XON3AB
+
+XON2CD
+0
+
+D4
+D3
+D2
+RP LUTWB 0
+TP LUTWB 0A
+TP LUTWB 0B
+TP LUTWB 0C
+TP LUTWB 0D
+SR LUTWB 0AB
+SR LUTWB 0CD
+RP LUTWB 1
+TP LUTWB 1A
+TP LUTWB 1B
+TP LUTWB 1C
+TP LUTWB 1D
+SR LUTWB 1AB
+SR LUTWB 1CD
+RP LUTWB 2
+…
+…
+…
+TP LUTWB 5A
+TP LUTWB 5B
+TP LUTWB 5C
+TP LUTWB 5D
+SR LUTWB 5AB
+SR LUTWB 5CD
+RP LUTBB 0
+TP LUTBB 0A
+TP LUTBB 0B
+TP LUTBB 0C
+TP LUTBB 0D
+SR LUTBB 0AB
+SR LUTBB 0CD
+RP LUTBB 1
+TP LUTBB 1A
+TP LUTBB 1B
+TP LUTBB 1C
+TP LUTBB 1D
+SR LUTBB 1AB
+SR LUTBB 1CD
+RP LUTBB 2
+…
+…
+…
+TP LUTBB 5A
+TP LUTBB 5B
+TP LUTBB 5C
+TP LUTBB 5D
+SR LUTBB 5AB
+SR LUTBB 5CD
+0
+…
+0
+FR
+XON2AB
+XON1CD
+XON1AB
+XON5CD
+XON5AB
+EOPT
+VGH
+VSH1
+VSH2
+VSL
+VCOM
+
+D1
+
+D0
+
+XON0CD
+XON4CD
+
+XON0AB
+XON4AB
+
+Figure 6-7 : Waveform Setting format for black/white mode
+
+6.8
+
+Temperature Searching
+The SSD1683 has internal temperature sensor to detect the environment temperature or can communicate with
+the external temperature sensor by I2C single master interface or can communicate with the external MCU to get
+the temperature value through SPI. In the SSD1683, there is a dedicated format for the temperature value so
+that the driver IC can understand it. The format of temperature value is described in Section 6.8.3.
+
+SSD1683
+
+Rev 1.0
+
+P 17/49
+
+Jan 2021
+
+Solomon Systech
+
+6.8.1 Internal Temperature Sensor
+The internal temperature sensor can be selected by command register. The accuracy of it is ±2degC from 25degC to 50degC.
+
+6.8.2 External Temperature Sensor I2C Single Master Interface
+The driver IC can communicate with the external temperature sensor through I2C single master interface (TSDA
+and TSCL). TSDA will be SDA and TSCL will be SCL. TSDA and TSCL are required to connect with external pullup resistor. Temperature register value of external temperature sensor can be read by command register.
+
+6.8.3 Format of temperature value
+The temperature value is defined by 8-bit binary. The rules are shown as below.
+ If the Temperature value MSByte bit D11 = 0, then
+the temperature is positive and value (DegC) = + (Temperature value)
+ If the Temperature value MSByte bit D11 = 1, then
+the temperature is negative and value (DegC) = - (2’s complement of Temperature value)
+Table 6-8 shows some examples of 8-bit binary temperature value:
+Table 6-8 : Example of 8-bit binary temperature settings for temperature ranges
+
+8-bit binary
+(2's complement)
+0111 1111
+0110 0100
+0101 0000
+0100 1011
+0011 0010
+0001 1001
+0000 0000
+1111 1111
+1110 0111
+1100 1001
+
+SSD1683
+
+Rev 1.0
+
+P 18/49
+
+Jan 2021
+
+Hexadecimal
+Value
+7F
+64
+50
+4B
+32
+19
+00
+FF
+E7
+C9
+
+TR Value
+[DegC]
+12B
+100
+80
+75
+50
+25
+0
+-1
+-25
+-55
+
+Solomon Systech
+
+6.9
+
+Waveform Setting searching mechanism
+As mentioned in Section 6.7, the SSD1683 OTP can store waveform setting and temperature range. If waveform
+setting and temperature range are programmed in OTP memory, corresponding waveform LUT can be selected
+according to the sensed temperature to drive the display. The Waveform Setting searching mechanism by driver
+IC is as follows.
+1) Read temperature value by command register in the format of 8-bit binary.
+2) According to read temperature and color mode selection, search LUT in OTP from TR0 to TR23 in sequence.
+The last match will be selected, then, the corresponding WS will be loaded in the LUT register to drive the
+display.
+Remark: Waveform LUT selection criteria is “Lower temperature bound < Sensed temperature ≤ Upper
+temperature bound”.
+Table 6-9 shows an example for the waveform LUT searching from OTP:
+ If the read temperature is 25degC, then, WS4 will be selected.
+ If the read temperature is 34degC, then, WS7 will be selected. Although 34degC is also in the temperature
+range TR6, according to searching mechanism, the last match should be selected. Therefore, WS7 is
+selected.
+Table 6-9 : Example of waveform settings selection based on temperature ranges.
+
+Waveform
+LUT in OTP
+WS0
+WS1
+WS2
+WS3
+WS4
+WS5
+WS6
+WS7
+Others
+
+Temperature
+Range in OTP
+TR0
+TR1
+TR2
+TR3
+TR4
+TR5
+TR6
+TR7
+Others
+
+TR Lower Limit TR Upper Limit
+[Hex]
+[Hex]
+80
+05
+05
+0A
+0A
+0F
+0F
+14
+14
+19
+19
+1E
+1E
+23
+21
+7F
+00
+00
+
+Temperature range in OTP
+-128 DegC < Temperature ≤ 5 DegC
+5 DegC < Temperature ≤ 10DegC
+10 DegC < Temperature ≤ 15DegC
+15 DegC < Temperature ≤ 20DegC
+20 DegC < Temperature ≤ 25DegC
+25 DegC < Temperature ≤ 30DegC
+30 DegC < Temperature ≤ 35DegC
+33 DegC < Temperature ≤ 127DegC
+
+Precaution:
+Please ensure the temperature range covers whole range of application temperatures, display will not be
+updated if no suitable temperature range matches the sensed temperature.
+
+SSD1683
+
+Rev 1.0
+
+P 19/49
+
+Jan 2021
+
+Solomon Systech
+
+6.10 One Time Programmable (OTP) Memory
+In the SSD1683, there is an embedded OTP memory which is designed to store the waveform settings of different
+temperature range and some variables/parameters. The OTP memory can store 24 sets of waveform LUT settings
+(WS), 24 sets of temperature range (TR), VCOM value, color mode selection, waveform version and user ID. Figure
+6 7 shows the address mapping of the 24 waveform setting (WS0 to WS23) and temperature range (TR0 to TR23).
+addr.
+0
+…
+232
+233
+…
+465
+466
+…
+698
+699
+…
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+D0
+
+WS0
+
+WS1
+
+WS2
+
+WS3
+
+931
+932
+…
+1164
+
+WS4
+
+…
+5126
+…
+5358
+5359
+…
+5591
+5592
+5593
+5594
+5595
+5596
+5597
+5598
+5599
+5600
+5601
+
+WS22
+
+WS23
+TR0
+TR1
+TR2
+TR3
+TR4
+…
+
+5636
+5637
+5638
+5639
+
+TR22
+TR23
+
+Figure 6-8 : The Waveform setting mapping in OTP for waveform setting and temperature range
+
+6.11 The Format for Temperature Range (TR)
+The format of TR Lower limit and Upper limit as shown in Figure 6-8 which temp_L[7:0] is the lower limit and
+temp_H[7:0] is the upper limit of the temperature range. There has 24sets of TR for waveform LUT searching.
+D7
+
+D6
+
+D5
+
+D4
+D3
+temp_L[7:0]
+temp_H[7:0]
+
+D2
+
+D1
+
+D0
+
+Figure 6-9 : Format of Temperature Range (TR) in OTP
+
+SSD1683
+
+Rev 1.0
+
+P 20/49
+
+Jan 2021
+
+Solomon Systech
+
+6.12 Cascade Mode
+The SSD1683 has a cascade mode that can cascade 2 chips to achieve the display resolution up to 800 (sources) x
+300 (gates). The pin M/S# is used to configure the chip. When M/S# is connected to VDDIO, the chip is configured as
+a master chip. When M/S# is connected to VSS, the chip is configured as a slave chip.
+When the chip is configured as a master chip, it will be the same as a single chip application, ie, all circuit blocks will
+be worked as usual. When the chip is configured as a slave chip, its oscillator and booster & regulator circuit will be
+disabled. The oscillator clock and all booster voltages will be come from the master chip. Therefore, the
+corresponding pins including CL, VDD, VGH, VGL, VSH1, VSH2, VSL, VGL and VCOM must be connected to the
+master chip.
+
+6.13 VCI Detection
+The VCI detection function is used to detect the VCI level when it is lower than Vlow, threshold voltage set by register.
+In SSD1683, there is a command to execute the VCI detection function. When the VCI detection command is issued,
+the VCI detection will be executed. During the detection period, BUSY output is at high level. BUSY output is at low
+level when the detection is completed. Then, user can issue the Status Bit Read command to check the status bit for
+the result of VCI, which 0 is normal, 1 is VCI<Vlow.
+
+6.14 HV Ready Detection
+The HV Ready detection function is used to detect whether the analog block is ready.
+In SSD1683, there is a command to execute the HV Ready detection function. When the HV Ready detection command
+is issued, the HV Ready will be executed. During the detection period, BUSY output is at high level. BUSY output is at
+low level when the detection is completed. Then, user can issue the Status Bit Read command to check the status bit
+for the result of HV Ready, which 0 is normal, 1 indicate HV is not ready.
+
+SSD1683
+
+Rev 1.0
+
+P 21/49
+
+Jan 2021
+
+Solomon Systech
+
+7
+
+COMMAND TABLE
+
+Table 7-1: Command Table
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+0
+0
+
+0
+1
+1
+1
+
+01
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+A7
+0
+0
+
+0
+A6
+0
+0
+
+0
+A5
+0
+0
+
+0
+A4
+0
+0
+
+0
+A3
+0
+0
+
+0
+A2
+0
+B2
+
+0
+A1
+0
+B1
+
+Command
+1 Driver Output control
+A0
+A8
+B0
+D0
+
+Description
+Gate setting
+A[8:0]= 12Bh [POR], 300 MUX
+MUX Gate lines setting as (A[8:0] + 1).
+B [2:0] = 000 [POR].
+Gate scanning sequence and direction
+B[2]: GD
+Selects the 1st output Gate
+GD=0 [POR],
+G0 is the 1st gate output channel, gate
+output sequence is G0,G1, G2, G3, …
+GD=1,
+G1 is the 1st gate output channel, gate
+output sequence is G1, G0, G3, G2, …
+B[1]: SM
+Change scanning order of gate driver.
+SM=0 [POR],
+G0, G1, G2, G3…299 (left and right gate
+interlaced)
+SM=1,
+G0, G2, G4 …G294, G1, G3, …G299
+B[0]: TB
+TB = 0 [POR], scan from G0 to G299
+TB = 1, scan from G299 to G0.
+
+0
+0
+
+0
+1
+
+SSD1683
+
+03
+
+0
+0
+
+0
+0
+
+Rev 1.0
+
+0
+0
+
+0
+A4
+
+P 22/49
+
+0
+A3
+
+0
+A2
+
+1
+A1
+
+Jan 2021
+
+1 Gate Driving voltage
+A0 Control
+
+Set Gate driving voltage
+A[4:0] = 00h [POR]
+VGH setting from 10V to 20V
+A[4:0]
+VGH
+A[4:0]
+VGH
+00h
+20
+0Dh
+15
+03h
+10
+0Eh
+15.5
+04h
+10.5
+0Fh
+16
+05h
+11
+10h
+16.5
+06h
+11.5
+11h
+17
+07h
+12
+12h
+17.5
+08h
+12.5
+13h
+18
+07h
+12
+14h
+18.5
+08h
+12.5
+15h
+19
+09h
+13
+16h
+19.5
+0Ah
+13.5
+17h
+20
+0Bh
+14
+Other
+NA
+0Ch
+14.5
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+0
+
+0
+1
+1
+
+04
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+0
+A7
+B7
+
+0
+A6
+B6
+
+0
+A5
+B5
+
+0
+A4
+B4
+
+0
+A3
+B3
+
+0
+1
+C7 C 6 C 5 C 4 C 3
+B[7] = 1,
+VSH2 voltage setting from 2.4V to
+8.6V
+
+0
+
+Command
+Description
+1
+0
+0 Source Driving voltage Set Source driving voltage
+A[7:0] = 41h [POR], VSH1 at 15V
+A2 A1 A0 Control
+B [7:0] = A8h [POR], VSH2 at 5V.
+B2 B1 B0
+C[7:0] = 32h [POR], VSL at -15V
+C2 C1 C0
+Remark: VSH1>=VSH2
+A[7]/B[7] = 0,
+C[7] = 0,
+VSH1/VSH2 voltage setting from 8.6V VSL setting from -5V to -17V
+to 17V
+D2
+
+D1
+
+D0
+
+A/B[7:0]
+
+VSH1/VSH2
+
+A/B[7:0]
+
+VSH1/VSH2
+
+A/B[7:0]
+
+VSH1/VSH2
+
+A/B[7:0]
+
+VSH1/VSH2
+
+C[7:0]
+
+8Eh
+
+2.4
+
+AEh
+
+5.6
+
+21h
+
+8.6
+
+37h
+
+13
+
+0Ah
+
+-5
+
+8Fh
+
+2.5
+
+AFh
+
+5.7
+
+22h
+
+8.8
+
+38h
+
+13.2
+
+0Ch
+
+-5.5
+
+90h
+
+2.6
+
+B0h
+
+5.8
+
+23h
+
+9
+
+39h
+
+13.4
+
+0Eh
+
+-6
+
+91h
+
+2.7
+
+B1h
+
+5.9
+
+24h
+
+9.2
+
+3Ah
+
+13.6
+
+10h
+
+-6.5
+
+92h
+
+2.8
+
+B2h
+
+6
+
+25h
+
+9.4
+
+3Bh
+
+13.8
+
+12h
+
+-7
+
+93h
+
+2.9
+
+B3h
+
+6.1
+
+26h
+
+9.6
+
+3Ch
+
+14
+
+14h
+
+-7.5
+
+94h
+
+3
+
+B4h
+
+6.2
+
+27h
+
+9.8
+
+3Dh
+
+14.2
+
+95h
+
+3.1
+
+B5h
+
+6.3
+
+28h
+
+10
+
+3Eh
+
+14.4
+
+96h
+
+3.2
+
+B6h
+
+6.4
+
+29h
+
+10.2
+
+3Fh
+
+14.6
+
+97h
+
+3.3
+
+B7h
+
+6.5
+
+2Ah
+
+10.4
+
+40h
+
+14.8
+
+98h
+
+3.4
+
+B8h
+
+6.6
+
+2Bh
+
+10.6
+
+41h
+
+15
+
+99h
+
+3.5
+
+B9h
+
+6.7
+
+2Ch
+
+10.8
+
+42h
+
+15.2
+
+9Ah
+
+3.6
+
+BAh
+
+6.8
+
+2Dh
+
+11
+
+43h
+
+15.4
+
+9Bh
+
+3.7
+
+BBh
+
+6.9
+
+2Eh
+
+11.2
+
+44h
+
+15.6
+
+VSL
+
+16h
+
+-8
+
+18h
+
+-8.5
+
+1Ah
+
+-9
+
+1Ch
+
+-9.5
+
+1Eh
+
+-10
+
+20h
+
+-10.5
+
+22h
+
+-11
+-11.5
+
+9Ch
+
+3.8
+
+BCh
+
+7
+
+2Fh
+
+11.4
+
+45h
+
+15.8
+
+24h
+
+9Dh
+
+3.9
+
+BDh
+
+7.1
+
+30h
+
+11.6
+
+46h
+
+16
+
+26h
+
+-12
+
+9Eh
+
+4
+
+BEh
+
+7.2
+
+31h
+
+11.8
+
+47h
+
+16.2
+
+28h
+
+-12.5
+
+9Fh
+
+4.1
+
+BFh
+
+7.3
+
+32h
+
+12
+
+48h
+
+16.4
+
+2Ah
+
+-13
+
+A0h
+
+4.2
+
+C0h
+
+7.4
+
+33h
+
+12.2
+
+49h
+
+16.6
+
+2Ch
+
+-13.5
+
+A1h
+
+4.3
+
+C1h
+
+7.5
+
+34h
+
+12.4
+
+4Ah
+
+16.8
+
+2Eh
+
+-14
+
+A2h
+
+4.4
+
+C2h
+
+7.6
+
+35h
+
+12.6
+
+4Bh
+
+17
+
+30h
+
+-14.5
+
+A3h
+
+4.5
+
+C3h
+
+7.7
+
+36h
+
+12.8
+
+Other
+
+NA
+
+32h
+
+-15
+
+A4h
+
+4.6
+
+C4h
+
+7.8
+
+34h
+
+-15.5
+
+A5h
+
+4.7
+
+C5h
+
+7.9
+
+36h
+
+-16
+
+A6h
+
+4.8
+
+C6h
+
+8
+
+38h
+
+-16.5
+
+A7h
+
+4.9
+
+C7h
+
+8.1
+
+3Ah
+
+-17
+
+A8h
+
+5
+
+C8h
+
+8.2
+
+Other
+
+NA
+
+A9h
+
+5.1
+
+C9h
+
+8.3
+
+AAh
+
+5.2
+
+CAh
+
+8.4
+
+ABh
+
+5.3
+
+CBh
+
+8.5
+
+ACh
+
+5.4
+
+CCh
+
+8.6
+
+ADh
+
+5.5
+
+Other
+
+NA
+
+0
+
+08
+
+0
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+0 Initial Code Setting
+OTP Program
+
+Program Initial Code Setting
+The command required CLKEN=1.
+Refer to Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+0
+0
+0
+0
+0
+
+0
+1
+1
+1
+1
+
+09
+
+0
+A7
+B7
+C7
+D7
+
+0
+A6
+B6
+C6
+D6
+
+0
+A5
+B5
+C5
+D5
+
+0
+A4
+B4
+C4
+D4
+
+1
+A3
+B3
+C3
+D3
+
+0
+A2
+B2
+C2
+D2
+
+0
+A1
+B1
+C1
+D1
+
+1 Write Register for Initial Write Register for Initial Code Setting
+Selection
+A0 Code Setting
+A[7:0] ~ D[7:0]: Reserved
+B0
+Details refer to Application Notes of Initial
+C0
+Code Setting
+D0
+
+0
+
+0
+
+0A
+
+0
+
+0
+
+0
+
+0
+
+1
+
+0
+
+1
+
+0 Read Register for Initial Read Register for Initial Code Setting
+Code Setting
+
+0
+
+0
+
+0C
+
+0
+
+0
+
+0
+
+0
+
+1
+
+1
+
+0
+
+0 Booster Soft start
+
+SSD1683
+
+Rev 1.0
+
+P 23/49
+
+Jan 2021
+
+Booster Enable with Phase 1, Phase 2 and Phase 3
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+0
+0
+
+1
+1
+1
+1
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+D0
+
+1
+1
+1
+0
+
+A6
+B6
+C6
+0
+
+A5
+B5
+C5
+D5
+
+A4
+B4
+C4
+D4
+
+A3
+B3
+C3
+D3
+
+A2
+B2
+C2
+D2
+
+A1
+B1
+C1
+D1
+
+A0
+B0
+C0
+D0
+
+Command
+Control
+
+Description
+for soft start current and duration setting.
+A[7:0] -> Soft start setting for Phase1
+= 8Bh [POR]
+B[7:0] -> Soft start setting for Phase2
+= 9Ch [POR]
+C[7:0] -> Soft start setting for Phase3
+= 96h [POR]
+D[7:0] -> Duration setting
+= 0Fh [POR]
+Bit Description of each byte:
+A[6:0] / B[6:0] / C[6:0]:
+Driving Strength
+Bit[6:4]
+Selection
+000
+
+1(Weakest)
+
+001
+
+2
+
+010
+
+3
+
+011
+
+4
+
+100
+
+5
+
+101
+
+6
+
+110
+
+7
+
+111
+
+8(Strongest)
+
+Bit[3:0]
+
+Min Off Time Setting of GDR
+[ Time unit ]
+
+0000
+~
+0011
+0100
+
+NA
+2.6
+
+0101
+
+3.2
+
+0110
+
+3.9
+
+0111
+
+4.6
+
+1000
+
+5.4
+
+1001
+
+6.3
+
+1010
+
+7.3
+
+1011
+
+8.4
+
+1100
+
+9.8
+
+1101
+
+11.5
+
+1110
+
+13.8
+
+1111
+
+16.5
+
+D[5:0]: duration setting of phase
+D[5:4]: duration setting of phase 3
+D[3:2]: duration setting of phase 2
+D[1:0]: duration setting of phase 1
+Duration of Phase
+Bit[1:0]
+[Approximation]
+
+SSD1683
+
+Rev 1.0
+
+P 24/49
+
+Jan 2021
+
+00
+
+10ms
+
+01
+
+20ms
+
+10
+
+30ms
+
+11
+
+40ms
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+
+0
+1
+
+10
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+0
+
+0
+0
+
+0
+0
+
+1
+0
+
+0
+0
+
+0
+0
+
+0
+A1
+
+Command
+0 Deep Sleep mode
+A0
+D0
+
+Description
+Deep Sleep mode Control:
+A[1:0] : Description
+00
+Normal Mode [POR]
+01
+Enter Deep Sleep Mode 1
+11
+
+Enter Deep Sleep Mode 2
+
+After this command initiated, the chip will
+enter Deep Sleep Mode, BUSY pad will
+keep output high.
+Remark:
+*To Exit Deep Sleep mode, User required
+to send HWRESET to the driver
+
+0
+0
+
+0
+1
+
+11
+
+0
+0
+
+0
+0
+
+0
+0
+
+1
+0
+
+0
+0
+
+0
+A2
+
+0
+A1
+
+1 Data Entry mode setting
+A0
+
+Define data entry sequence
+A[2:0] = 011 [POR]
+A [1:0] = ID[1:0]
+Address automatic increment / decrement
+setting
+The setting of incrementing or
+decrementing of the address counter can
+be made independently in each upper and
+lower bit of the address.
+00 –Y decrement, X decrement,
+01 –Y decrement, X increment,
+10 –Y increment, X decrement,
+11 –Y increment, X increment [POR]
+A[2] = AM
+Set the direction in which the address
+counter is updated automatically after data
+are written to the RAM.
+AM= 0, the address counter is updated in
+the X direction. [POR]
+AM = 1, the address counter is updated in
+the Y direction.
+
+0
+
+0
+
+12
+
+0
+
+0
+
+0
+
+1
+
+0
+
+0
+
+1
+
+0 SW RESET
+
+It resets the commands and parameters to
+their S/W Reset default values except
+R10h-Deep Sleep Mode
+During operation, BUSY pad will output
+high.
+Note: RAM are unaffected by this
+command.
+
+SSD1683
+
+Rev 1.0
+
+P 25/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+
+0
+
+0
+
+1
+
+0
+0
+
+0
+1
+
+14
+
+15
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+
+0
+
+0
+
+1
+
+0
+
+1
+
+0
+
+Command
+0 HV Ready Detection
+
+0
+
+A6
+
+A5
+
+A4
+
+0
+
+A2
+
+A1
+
+A0
+
+0
+0
+
+0
+0
+
+0
+0
+
+1
+0
+
+0
+0
+
+1
+A2
+
+0
+A1
+
+1 VCI Detection
+A0
+
+D0
+
+Description
+HV ready detection
+A[7:0] = 00h [POR]
+The command required CLKEN=1 and
+ANALOGEN=1.
+Refer to Register 0x22 for detail.
+After this command initiated, HV Ready
+detection starts.
+BUSY pad will output high during
+detection.
+The detection result can be read from the
+Status Bit Read (Command 0x2F).
+A[6:4]=n for cool down duration:
+10ms x (n+1)
+A[2:0]=m for number of Cool Down Loop to
+detect.
+The max HV ready duration is
+10ms x (n+1) x (m)
+HV ready detection will be trigger after
+each cool down time. The detection will be
+completed when HV is ready.
+For 1 shot HV ready detection, A[7:0] can
+be set as 00h.
+VCI Detection
+A[2:0] = 100 [POR] , Detect level at 2.3V
+A[2:0] : VCI level Detect
+A[2:0]
+VCI level
+100
+2.3V
+101
+2.4V
+110
+2.5V
+111
+2.6V
+Other
+NA
+The command required CLKEN=1 and
+ANALOGEN=1
+Refer to Register 0x22 for detail.
+After this command initiated, VCI detection
+starts.
+BUSY pad will output high during
+detection.
+The detection result can be read from the
+Status Bit Read (Command 0x2F).
+
+SSD1683
+
+Rev 1.0
+
+P 26/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+
+0
+1
+
+16
+
+0
+0
+
+0
+1
+
+17
+
+Command
+
+Description
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+D0
+
+0
+A7
+
+0
+A6
+
+0
+A5
+
+1
+A4
+
+0
+A3
+
+1
+A2
+
+1
+A1
+
+0 Program WS password to
+OTP
+A0
+
+Program R4C Password to OTP.
+Remark: Require clock is active. And Busy = 1 during
+
+0
+A7
+
+0
+A6
+
+0
+A5
+
+1
+A4
+
+0
+A3
+
+1
+A2
+
+1
+A1
+
+1 Program Automated
+A0
+
+Program OTP auto:
+
+operation
+
+A[7:0]
+
+OTP area
+
+Ref to
+
+8
+
+Program Init code
+
+Cmd08
+
+16
+
+Program PW
+
+Cmd16
+
+2a
+
+Program VCOM
+
+Cmd2A
+
+30
+
+Program LUT
+
+Cmd30
+
+36
+
+Program User_ID
+
+Cmd36
+
+Others
+
+Program NA
+
+NA
+
+Remark:
+1. Command 17 only operating in internal program
+mode.
+2. Command 17 action performed: open clock -> analog
+on -> program OTP -> analog off -> clock off. Busy = 1
+during operation
+
+0
+0
+
+0
+1
+
+18
+
+0
+A7
+
+0
+A6
+
+0
+A5
+
+1
+A4
+
+1
+A3
+
+0
+A2
+
+0
+A1
+
+0 Temperature Sensor
+A0 Control
+
+Temperature Sensor Selection
+A[7:0] = 48h [POR], external temperatrure
+sensor
+A[7:0] = 80h Internal temperature sensor
+
+0
+0
+
+0
+1
+
+1A
+
+0
+A7
+
+0
+A6
+
+0
+A5
+
+1
+A4
+
+1
+A3
+
+0
+A2
+
+1
+A1
+
+0 Temperature Sensor
+A0 Control (Write to
+temperature register)
+
+Write to temperature register.
+A[7:0] = 7Fh [POR]
+
+0
+1
+
+0
+1
+
+1B
+
+0
+A7
+
+0
+A6
+
+0
+A5
+
+1
+A4
+
+1
+A3
+
+0
+A2
+
+1
+A1
+
+1 Temperature Sensor
+A0 Control (Read from
+temperature register)
+
+Read from temperature register.
+
+0
+0
+0
+0
+
+0
+1
+1
+1
+
+1C
+
+0
+A7
+B7
+C7
+
+0
+A6
+B6
+C6
+
+0
+A5
+B5
+C5
+
+1
+A4
+B4
+C4
+
+1
+A3
+B3
+C3
+
+1
+A2
+B2
+C2
+
+0
+A1
+B1
+C1
+
+0 Temperature Sensor
+Write Command to External temperature
+Control
+(Write
+Command
+sensor.
+A0
+to External temperature A[7:0] = 00h [POR],
+B0 sensor)
+B[7:0] = 00h [POR],
+C0
+C[7:0] = 00h [POR],
+A[7:6]
+A[7:6]
+00
+01
+10
+11
+
+Select no of byte to be sent
+Address + pointer
+Address + pointer + 1st parameter
+Address + pointer + 1st parameter +
+2nd pointer
+Address
+
+A[5:0] – Pointer Setting
+B[7:0] – 1st parameter
+C[7:0] – 2nd parameter
+The command required CLKEN=1.
+Refer to Register 0x22 for detail.
+After this command initiated, Write
+Command to external temperature sensor
+starts. BUSY pad will output high during
+operation.
+
+SSD1683
+
+Rev 1.0
+
+P 27/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+
+0
+
+20
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+
+0
+
+1
+
+0
+
+0
+
+0
+
+0
+
+Command
+0 Master Activation
+
+D0
+
+Description
+Activate Display Update Sequence
+The Display Update Sequence Option is
+located at R22h.
+BUSY pad will output high during
+operation. User should not interrupt this
+operation to avoid corruption of panel
+images.
+
+0
+0
+
+0
+1
+
+0
+
+1
+
+21
+
+0
+A7
+
+0
+A6
+
+1
+A5
+
+0
+A4
+
+0
+A3
+
+0
+A2
+
+0
+A1
+
+1 Display Update Control
+A0 1
+
+0
+
+0
+
+0
+
+B4
+
+0
+
+0
+
+0
+
+0
+
+RAM content option for Display Update
+A[7:0] = 00h [POR]
+B[7:0] = 00h [POR]
+A[7:4] Red RAM option
+0000
+Normal
+0100
+Bypass RAM content as 0
+1000
+Inverse RAM content
+A[3:0] BW RAM option
+0000
+Normal
+0100
+Bypass RAM content as 0
+1000
+Inverse RAM content
+B[4] ckouten, Cascade selection
+0: Single chip application
+1: Cascade application
+Remark： For cascade mode, connect CL pin
+between Master sample with Slave sample.
+
+SSD1683
+
+Rev 1.0
+
+P 28/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+
+0
+1
+
+22
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+A7
+
+0
+A6
+
+1
+A5
+
+0
+A4
+
+0
+A3
+
+0
+A2
+
+1
+A1
+
+Command
+0 Display Update
+A0 Control 2
+D0
+
+Description
+Display Update Sequence Option:
+Enable the stage for Master Activation
+A[7:0]= FFh (POR)
+Operating sequence
+Enable clock signal
+Disable clock signal
+Enable clock signal
+ Enable Analog
+Disable Analog
+ Disable clock signal
+Enable clock signal
+ Load LUT (3-color mode)
+ Disable clock signal
+Enable clock signal
+ Load LUT (black/white mode)
+ Disable clock signal
+Enable clock signal
+ Load temperature value
+ Load LUT (3-color mode)
+ Disable clock signal
+Enable clock signal
+ Load temperature value
+ Load LUT (black/white mode)
+ Disable clock signal
+Enable clock signal
+ Enable Analog
+ Display (3-color mode)
+ Disable Analog
+ Disable OSC
+Enable clock signal
+ Enable Analog
+ Display (black/white mode)
+ Disable Analog
+Disable OSC
+Enable clock signal
+Enable Analog
+ Load temperature value
+ Load LUT (3-color mode)
+ DISPLAY (3-color mode)
+ Disable Analog
+ Disable OSC
+Enable clock signal
+Enable Analog
+ Load temperature value
+ Load LUT (black/white mode)
+ DISPLAY (black/white mode)
+ Disable Analog
+ Disable OSC
+
+0
+
+0
+
+24
+
+0
+
+0
+
+1
+
+0
+
+0
+
+1
+
+0
+
+Rev 1.0
+
+P 29/49
+
+Jan 2021
+
+C0
+03
+
+91
+
+99
+
+B1
+
+B9
+
+C7
+
+CF
+
+F7
+
+FF
+
+0 Write RAM (Black White) After this command, data entries will be
+/ RAM 0x24
+written into the BW RAM until another
+command is written. Address pointers will
+advance accordingly
+For Write pixel:
+Content of Write RAM(BW) = 1
+For Black pixel:
+Content of Write RAM(BW) = 0
+
+SSD1683
+
+Parameter
+(in Hex)
+80
+01
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+
+0
+
+26
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+
+0
+
+1
+
+0
+
+0
+
+1
+
+1
+
+Command
+0 Write RAM (RED)
+/ RAM 0x26
+
+D0
+
+Description
+After this command, data entries will be
+written into the RED RAM until another
+command is written. Address pointers will
+advance accordingly.
+For Red pixel:
+Content of Write RAM(RED) = 1
+For non-Red pixel [Black or White]:
+Content of Write RAM(RED) = 0
+
+0
+
+0
+
+27
+
+0
+
+0
+
+1
+
+0
+
+0
+
+1
+
+1
+
+1 Read RAM
+
+After this command, data read on the MCU
+bus will fetch data from RAM. According to
+parameter of Register 41h to select
+reading RAM0x24/ RAM0x26, until another
+command is written. Address pointers will
+advance accordingly.
+The 1st byte of data read is dummy data.
+
+0
+
+0
+
+28
+
+0
+
+0
+
+1
+
+0
+
+1
+
+0
+
+0
+
+0 VCOM Sense
+
+Enter VCOM sensing conditions and hold
+for duration defined in 29h before reading
+VCOM value.
+The sensed VCOM voltage is stored in
+register
+The command required ENABLE CLOCK
+SIGNAL and ENABLE ANALOG. Refer to
+Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+0
+0
+
+0
+1
+
+29
+
+0
+0
+
+0
+1
+
+1
+0
+
+0
+0
+
+1
+A3
+
+0
+A2
+
+0
+A1
+
+1 VCOM Sense Duration
+A0
+
+Stabling time between entering VCOM
+sensing mode and reading acquired.
+A[3:0] = 9h, duration = 10s.
+VCOM sense duration = (A[3:0]+1) sec
+
+0
+
+0
+
+2A
+
+0
+
+0
+
+1
+
+0
+
+1
+
+0
+
+1
+
+0 Program VCOM OTP
+
+Program VCOM register into OTP
+The command required ENABLE CLOCK.
+Refer to Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+SSD1683
+
+Rev 1.0
+
+P 30/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+
+0
+1
+
+2C
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+A7
+
+0
+A6
+
+1
+A5
+
+0
+A4
+
+1
+A3
+
+1
+A2
+
+0
+A1
+
+Command
+0 Write VCOM register
+A0
+D0
+
+Description
+Write VCOM register from MCU interface
+A[7:0] = 00h [POR]
+A[7:0]
+08h
+0Ch
+10h
+14h
+18h
+1Ch
+20h
+24h
+28h
+2Ch
+30h
+34h
+38h
+3Ch
+40h
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+2D
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+2E
+
+SSD1683
+
+VCOM
+-0.2
+-0.3
+-0.4
+-0.5
+-0.6
+-0.7
+-0.8
+-0.9
+-1
+-1.1
+-1.2
+-1.3
+-1.4
+-1.5
+-1.6
+
+A[7:0]
+44h
+48h
+4Ch
+50h
+54h
+58h
+5Ch
+60h
+64h
+68h
+6Ch
+70h
+74h
+78h
+Other
+
+VCOM
+-1.7
+-1.8
+-1.9
+-2
+-2.1
+-2.2
+-2.3
+-2.4
+-2.5
+-2.6
+-2.7
+-2.8
+-2.9
+-3
+NA
+
+0
+0
+A7 A6
+B7 B6
+C7 C 6
+D7 D 6
+E7 E6
+F7 F6
+G7 G6
+H7 H 6
+I7
+I6
+J7 J6
+K7 K6
+
+1
+A5
+B5
+C5
+D5
+E5
+F5
+G5
+H5
+I5
+J5
+K5
+
+0
+A4
+B4
+C4
+D4
+E4
+F4
+G4
+H4
+I4
+J4
+K4
+
+1
+1
+A3 A2
+B3 B2
+C 3 C2
+D 3 D2
+E3 E2
+F 3 F2
+G 3 G2
+H 3 H2
+I3
+I2
+J 3 J2
+K3 K2
+
+0
+A1
+B1
+C1
+D1
+E1
+F1
+G1
+H1
+I1
+J1
+K1
+
+1 OTP Register Read for
+A0 Display Option
+B0
+C0
+D0
+E0
+F0
+G0
+H0
+I0
+J0
+K0
+
+Read Register for Display Option:
+
+0
+0
+A7 A6
+B7 B6
+C7 C 6
+D7 D 6
+E7 E6
+F7 F6
+G7 G6
+H7 H 6
+I7
+I6
+J7 J6
+
+1
+A5
+B5
+C5
+D5
+E5
+F5
+G5
+H5
+I5
+J5
+
+0
+A4
+B4
+C4
+D4
+E4
+F4
+G4
+H4
+I4
+J4
+
+1
+1
+A3 A2
+B3 B2
+C 3 C2
+D 3 D2
+E3 E2
+F 3 F2
+G 3 G2
+H 3 H2
+I3
+I2
+J 3 J2
+
+1
+A1
+B1
+C1
+D1
+E1
+F1
+G1
+H1
+I1
+J1
+
+0 User ID Read
+A0
+B0
+C0
+D0
+E0
+F0
+G0
+H0
+I0
+J0
+
+Read 10 Byte User ID stored in OTP:
+A[7:0]] ~J[7:0]: User ID (R38, Byte A and
+Byte J) [10 bytes]
+
+Rev 1.0
+
+P 31/49
+
+Jan 2021
+
+A[7:0]: VCOM OTP Selection
+(Command 0x37, Byte A)
+B[7:0]: VCOM Register
+(Command 0x2C)
+C[7:0] ~G[7:0]: Display Mode
+(Command 0x37, Byte B to Byte F)
+[5 bytes]
+H[7:0] ~K[7:0]: Waveform Version
+(Command 0x37, Byte G to Byte J)
+[4 bytes]
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+1
+
+0
+1
+
+2F
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+0
+
+0
+0
+
+1
+A5
+
+0
+A4
+
+1
+0
+
+1
+0
+
+1
+A1
+
+Command
+1 Status Bit Read
+A0
+D0
+
+Description
+Read IC status Bit [POR 0x01]
+A[5]: HV Ready Detection flag [POR=0]
+0: Ready
+1: Not Ready
+A[4]: VCI Detection flag [POR=0]
+0: Normal
+1: VCI lower than the Detect level
+A[3]: [POR=0]
+A[2]: Busy flag [POR=0]
+0: Normal
+1: BUSY
+A[1:0]: Chip ID [POR=01]
+Remark:
+A[5] and A[4] status are not valid after
+RESET, they need to be initiated by
+command 0x14 and command 0x15
+respectively.
+
+0
+
+0
+
+30
+
+0
+
+0
+
+1
+
+1
+
+0
+
+0
+
+0
+
+0 Program WS OTP
+
+Program OTP of Waveform Setting
+The contents should be written into RAM
+before sending this command.
+The command required CLKEN=1.
+Refer to Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+0
+
+0
+
+31
+
+0
+
+0
+
+1
+
+1
+
+0
+
+0
+
+0
+
+1 Load WS OTP
+
+Load OTP of Waveform Setting
+The command required CLKEN=1.
+Refer to Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+0
+0
+0
+0
+0
+
+0
+1
+1
+1
+1
+
+32
+
+0
+A7
+B7
+:
+.
+
+0
+A6
+B6
+:
+..
+
+1
+A5
+B5
+:
+.
+
+1
+A4
+B4
+:
+.
+
+0
+A3
+B3
+:
+.
+
+0
+A2
+B2
+:
+.
+
+1
+A1
+B1
+:
+.
+
+0 Write LUT register
+A0
+B0
+:
+.
+
+Write LUT register from MCU interface
+[227 bytes], which contains the content of
+VS[nX-LUTm], TP[nX], RP[n], SR[nXY],
+FR and XON[nXY]
+Refer to Session 6.7 WAVEFORM
+SETTING
+
+0
+
+0
+
+34
+
+0
+
+0
+
+1
+
+1
+
+0
+
+1
+
+0
+
+0 CRC calculation
+
+CRC calculation command
+For details, please refer to SSD1683
+application note.
+BUSY pad will output high during
+operation.
+
+0
+1
+1
+
+0
+1
+1
+
+SSD1683
+
+35
+
+0
+0
+1
+1
+0
+1
+0
+A15 A14 A13 A12 A11 A10 A9
+A7 A6 A5 A4 A3 A2 A1
+
+Rev 1.0
+
+P 32/49
+
+1 CRC Status Read
+A8
+A0
+
+Jan 2021
+
+CRC Status Read
+A[15:0] is the CRC read out value
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+
+0
+
+36
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+
+0
+
+1
+
+1
+
+0
+
+1
+
+1
+
+Command
+0 Program OTP selection
+
+D0
+
+Description
+Program OTP Selection according to the
+OTP Selection Control [R37h and R38h]
+The command required ENABLE CLOCK.
+Refer to Register 0x22 for detail.
+BUSY pad will output high during
+operation.
+
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+37
+
+0
+0
+A7 0
+B7 B6
+C7 C 6
+D7 D 6
+E7 E6
+0 F6
+G7 G6
+H7 H 6
+I7
+I6
+J7 J6
+
+1
+0
+B5
+C5
+D5
+E5
+0
+G5
+H5
+I5
+J5
+
+1
+0
+B4
+C4
+D4
+E4
+0
+G4
+H4
+I4
+J4
+
+0
+1
+0
+0
+B3 B2
+C 3 C2
+D 3 D2
+E3 E2
+F 3 F2
+G 3 G2
+H 3 H2
+I3
+I2
+J 3 J2
+
+1
+0
+B1
+C1
+D1
+E1
+F1
+G1
+H1
+I1
+J1
+
+1 Write Register for Display Write Register for Display Option
+A[7] Spare VCOM OTP selection
+0 Option
+0: Default [POR]
+B0
+1: Spare
+C0
+B[7:0] Display Mode for WS[7:0]
+D0
+C[7:0] Display Mode for WS[15:8]
+E0
+D[7:0] Display Mode for WS[23:16]
+F0
+0: Display Mode 1(3-color mode)
+1: Display Mode 2(black/white mode)
+G0
+H0
+F[6]:
+Ping-Pong for black/white mode
+I0
+0: RAM Ping-Pong disable [POR]
+J0
+1: RAM Ping-Pong enable
+G[7:0]~J[7:0] module ID /waveform
+version.
+Remarks:
+1) A[7:0]~J[7:0] can be stored in OTP by
+command 0x36
+2) RAM Ping-Pong function is not support
+for 3-color mode
+
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+38
+
+0
+0
+A7 A6
+B7 B6
+C7 C 6
+D7 D 6
+E7 E6
+F7 F6
+G7 G6
+H7 H 6
+I7
+I6
+J7 J6
+
+1
+A5
+B5
+C5
+D5
+E5
+F5
+G5
+H5
+I5
+J5
+
+1
+A4
+B4
+C4
+D4
+E4
+F4
+G4
+H4
+I4
+J4
+
+1
+0
+A3 A2
+B3 B2
+C 3 C2
+D 3 D2
+E3 E2
+F 3 F2
+G 3 G2
+H 3 H2
+I3
+I2
+J 3 J2
+
+0
+A1
+B1
+C1
+D1
+E1
+F1
+G1
+H1
+I1
+J1
+
+0 Write Register for User ID Write Register for User ID
+A[7:0]]~J[7:0]: UserID [10 bytes]
+A0
+B0
+Remarks: A[7:0]~J[7:0] can be stored in
+C0
+OTP
+D0
+E0
+F0
+G0
+H0
+I0
+J0
+
+0
+0
+
+0
+1
+
+39
+
+0
+0
+
+1
+0
+
+1
+0
+
+1
+0
+
+0
+A1
+
+1 OTP program mode
+A0
+
+0
+0
+
+0
+0
+
+OTP program mode
+A[1:0] = 00: Normal Mode [POR]
+A[1:0] = 11: Internal generated OTP
+programming voltage
+Remark: User is required to EXACTLY
+follow the reference code sequences
+
+SSD1683
+
+Rev 1.0
+
+P 33/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+
+0
+1
+
+3C
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+A7
+
+0
+A6
+
+1
+A5
+
+1
+A4
+
+1
+0
+
+1
+0
+
+0
+A1
+
+Command
+Description
+0 Border Waveform Control Select border waveform for VBD
+A[7:0] = C0h [POR], set VBD as HIZ.
+A0
+A [7:6] :Select VBD option
+A[7:6]
+Select VBD as
+00
+GS Transition,
+Defined in A[2] and A[1:0]
+01
+Fix Level,
+Defined in A[5:4]
+10
+VCOM
+11[POR]
+HiZ
+D0
+
+A [5:4] Fix Level Setting for VBD
+A[5:4]
+VBD level
+00
+VSS
+01
+VSH1
+10
+VSL
+11
+VSH2
+A [1:0] GS Transition setting for VBD
+VBD Level Selection:
+00b: VCOM ; 01b: VSH1;
+10b: VSL; 11b: VSH2
+A[1:0]
+VBD Transition
+00
+LUT0
+01
+LUT1
+10
+LUT2
+11
+LUT3
+0
+0
+
+0
+1
+
+3F
+
+0
+A7
+
+0
+A6
+
+1
+A5
+
+1
+A4
+
+1
+A3
+
+1
+A2
+
+1
+A1
+
+1 End Option (EOPT)
+A0
+
+Option for LUT end
+Set this byte to 22h
+
+0
+0
+0
+0
+
+0
+1
+1
+1
+
+41
+
+0
+0
+B7
+C7
+
+1
+0
+B6
+C6
+
+0
+0
+B5
+C5
+
+0
+A4
+B4
+C4
+
+0
+0
+B3
+C3
+
+0
+0
+B2
+C2
+
+0
+0
+B1
+C1
+
+1 Read RAM Option
+A0
+B0
+C0
+
+Read RAM Option
+A[0]= 0 [POR]
+0 : Read RAM corresponding to RAM0x24
+1 : Read RAM corresponding to RAM0x26
+A[4] =0: select CRC check mode to
+window mode by C44/C45 window set.
+A[4] =1: select CRC check mode to
+Counter mode follow {C[7:0], B[7:0]} set
+values .
+{C[7:0], B[7:0]} : default is 0x1608, as the
+LUT bytes is 5640 bytes.
+
+0
+0
+0
+
+0
+1
+1
+
+44
+
+0
+0
+0
+
+1
+0
+0
+
+0
+A5
+B5
+
+0
+A4
+B4
+
+0
+A3
+B3
+
+1
+A2
+B2
+
+0
+A1
+B1
+
+0 Set RAM X - address
+A0 Start / End position
+B0
+
+Specify the start/end positions of the
+window address in the X direction by an
+address unit for RAM
+A[5:0]: XSA[5:0], XStart, POR = 00h
+B[5:0]: XEA[5:0], XEnd, POR = 31h
+
+SSD1683
+
+Rev 1.0
+
+P 34/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+R/W# D/C# Hex
+
+0
+0
+0
+0
+0
+0
+0
+
+0
+1
+1
+1
+1
+0
+1
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+0
+A7
+0
+B7
+0
+46 0
+A7
+
+1
+A6
+0
+B6
+0
+1
+A6
+
+0
+A5
+0
+B5
+0
+0
+A5
+
+0
+A4
+0
+B4
+0
+0
+A4
+
+0
+A3
+0
+B3
+0
+0
+0
+
+1
+A2
+0
+B2
+0
+1
+A2
+
+0
+A1
+0
+B1
+0
+1
+A1
+
+45
+
+Command
+1 Set Ram Y- address
+A0 Start / End position
+A8
+B0
+B8
+0 Auto Write RED RAM for
+A0 Regular Pattern
+D0
+
+Description
+Specify the start/end positions of the
+window address in the Y direction by an
+address unit for RAM
+A[8:0]: YSA[8:0], YStart, POR = 000h
+B[8:0]: YEA[8:0], YEnd, POR = 12Bh
+Auto Write RED RAM for Regular Pattern
+A[7:0] = 00h [POR]
+A[7]: The 1st step value, POR = 0
+A[6:4]: Step Height, POR= 000
+Step of alter RAM in Y-direction according
+to Gate
+A[6:4]
+Height
+A[6:4]
+Height
+000
+8
+100
+128
+001
+16
+101
+256
+010
+32
+110
+300
+011
+64
+111
+NA
+A[2:0]: Step Width, POR= 000
+Step of alter RAM in X-direction according
+to Source
+A[2:0]
+Width
+A[2:0]
+Width
+000
+8
+100
+128
+001
+16
+101
+256
+010
+32
+110
+400
+011
+64
+111
+NA
+BUSY pad will output high during
+operation.
+
+0
+0
+
+0
+1
+
+47
+
+0
+A7
+
+1
+A6
+
+0
+A5
+
+0
+A4
+
+0
+0
+
+1
+A2
+
+1
+A1
+
+1 Auto Write B/W RAM for Auto Write B/W RAM for Regular Pattern
+A[7:0] = 00h [POR]
+A0 Regular Pattern
+A[7]: The 1st step value, POR = 0
+A[6:4]: Step Height, POR= 000
+Step of alter RAM in Y-direction according
+to Gate
+A[6:4]
+Height
+A[6:4]
+Height
+000
+8
+100
+128
+001
+16
+101
+256
+010
+32
+110
+300
+011
+64
+111
+NA
+A[2:0]: Step Width, POR= 000
+Step of alter RAM in X-direction according
+to Source
+A[2:0]
+Width
+A[2:0]
+Width
+000
+8
+100
+128
+001
+16
+101
+256
+010
+32
+110
+400
+011
+64
+111
+NA
+During operation, BUSY pad will output
+high.
+
+SSD1683
+
+Rev 1.0
+
+P 35/49
+
+Jan 2021
+
+Solomon Systech
+
+Command Table
+0
+0
+
+0
+1
+
+4E
+
+0
+0
+
+1
+0
+
+0
+A5
+
+0
+A4
+
+1
+A3
+
+1
+A2
+
+1
+A1
+
+Command
+0 Set RAM X address
+A0 counter
+
+0
+0
+0
+
+0
+1
+1
+
+4F
+
+0
+A7
+0
+
+1
+A6
+0
+
+0
+A5
+0
+
+0
+A4
+0
+
+1
+A3
+0
+
+1
+A2
+0
+
+1
+A1
+0
+
+1 Set RAM Y address
+A0 counter
+A8
+
+Make initial settings for the RAM Y
+address in the address counter (AC)
+A[8:0]: 000h [POR].
+
+0
+
+0
+
+7F
+
+0
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1
+
+1 NOP
+
+This command is an empty command; it
+does not have any effect on the display
+module.
+However it can be used to terminate
+Frame Memory Write or Read Commands.
+
+R/W# D/C# Hex
+
+SSD1683
+
+D7
+
+D6
+
+D5
+
+D4
+
+D3
+
+D2
+
+D1
+
+Rev 1.0
+
+P 36/49
+
+D0
+
+Description
+Make initial settings for the RAM X
+address in the address counter (AC)
+A[5:0]: 00h [POR].
+
+Jan 2021
+
+Solomon Systech
+
+8 COMMAND DESCRIPTION
+8.1 Driver Output Control (01h)
+This triple byte command has multiple configurations and each bit setting is described as follows:
+R/W DC IB7
+IB6
+IB5
+IB4
+IB3
+IB2
+IB1
+IB0
+W
+1 MUX7 MUX6 MUX5 MUX4 MUX3 MUX2 MUX1 MUX0
+POR
+0
+0
+1
+0
+1
+0
+1
+1
+W
+1
+MUX8
+POR
+1
+W
+1
+GD
+SM
+TB
+POR
+0
+0
+0
+
+MUX[8:0]: Specify number of lines for the driver: MUX[8:0] + 1. Multiplex ratio (MUX ratio) from 16 MUX to 300MUX.
+GD: Selects the 1st output Gate
+This bit is made to match the GATE layout connection on the panel. It defines the first scanning line.
+SM: Change scanning order of gate driver.
+When SM is set to 0, left and right interlaced is performed.
+When SM is set to 1, no splitting odd / even of the GATE signal is performed,
+Output pin assignment sequence is shown as below (for 300 MUX ratio):
+
+Driver
+G0
+G1
+G2
+G3
+:
+G148
+G149
+G150
+G151
+:
+G296
+G297
+G298
+G299
+
+SM=0
+GD=0
+ROW0
+ROW1
+ROW2
+ROW3
+:
+ROW148
+ROW149
+ROW150
+ROW151
+:
+ROW296
+ROW297
+ROW298
+ROW299
+
+SM=0
+GD=1
+ROW1
+ROW0
+ROW3
+ROW2
+:
+ROW149
+ROW148
+ROW151
+ROW150
+:
+ROW297
+ROW296
+ROW299
+ROW298
+
+SM=1
+GD=0
+ROW0
+ROW150
+ROW1
+ROW151
+:
+ROW74
+ROW224
+ROW75
+ROW225
+:
+ROW148
+ROW298
+ROW149
+ROW299
+
+SM=1
+GD=1
+ROW150
+ROW0
+ROW151
+ROW1
+:
+ROW224
+ROW74
+ROW225
+ROW75
+:
+ROW298
+ROW148
+ROW299
+ROW149
+
+See “Scan Mode Setting” on next page.
+TB: Change scanning direction of gate driver.
+This bit defines the scanning direction of the gate for flexible layout of signals in module either from up to down (TB
+= 0) or from bottom to up (TB = 1).
+
+SSD1683
+
+Rev 1.0
+
+P 37/49
+
+Jan 2021
+
+Solomon Systech
+
+Figure 8-1: Output pin assignment on different Scan Mode Setting
+
+SM = 0
+GD = 0
+
+SM = 1
+
+ROW0
+ROW1
+
+ROW0
+ROW1
+
+...
+
+...
+...
+
+ROW148
+ROW149
+
+ROW148
+ROW149
+
+ROW150
+ROW151
+...
+
+ROW150
+ROW151
+...
+...
+...
+
+ROW298
+ROW299
+
+Pad 1, 2, 3,…
+Gold Bumps face up
+
+GD = 1
+
+ROW299
+
+Pad 1,2,3,…
+Gold Bumps face up
+
+ROW0
+ROW1
+
+ROW0
+ROW1
+
+...
+
+...
+...
+
+ROW148
+ROW149
+
+ROW148
+ROW149
+
+ROW150
+ROW151
+...
+
+ROW150
+ROW151
+...
+...
+...
+
+ROW298
+ROW299
+
+Pad 1,2,3,…
+Gold Bumps face up
+
+SSD1683
+
+Rev 1.0
+
+P 38/49
+
+Jan 2021
+
+ROW299
+
+Pad 1,2,3,…
+Gold Bumps face up
+
+Solomon Systech
+
+8.2 Data Entry Mode Setting (11h)
+This command has multiple configurations and each bit setting is described as follows:
+R/W
+DC
+W
+1
+POR
+
+IB7
+
+IB6
+
+IB5
+
+IB4
+
+IB3
+
+0
+
+0
+
+0
+
+0
+
+0
+
+IB2
+AM
+0
+
+IB1
+ID1
+1
+
+IB0
+ID0
+1
+
+ID[1:0]: The address counter is automatically incremented by 1, after data is written to the RAM
+when ID[1:0] = “01”. The address counter is automatically decremented by 1, after data is written
+to the RAM when ID[1:0] = “00”. The setting of incrementing or decrementing of the address
+counter can be made independently in each upper and lower bit of the address. The direction of
+the address when data is written to the RAM is set by AM bits.
+AM: Set the direction in which the address counter is updated automatically after data are written to
+the RAM. When AM = “0”, the address counter is updated in the X direction. When AM = “1”, the
+address counter is updated in the Y direction. When window addresses are selected, data are written
+to the RAM area specified by the window addresses in the manner specified with ID[1:0] and AM
+bits.
+ID [1:0]="00”
+X: decrement
+Y: decrement
+
+ID [1:0]="01”
+X: increment
+Y: decrement
+
+ID [1:0]="10”
+X: decrement
+Y: increment
+
+ID [1:0]="11”
+X: increment
+Y: increment
+
+00,00h
+
+00,00h
+
+00,00h
+
+00,00h
+
+AM="0”
+X-mode
+31,12Bh
+
+31,12Bh
+00,00h
+
+00,00h
+
+00,00h
+
+31,12Bh
+
+31,12Bh
+00,00h
+
+AM="1”
+Y-mode
+31,12Bh
+
+31,12Bh
+
+31,12Bh
+
+31,12Bh
+
+The pixel sequence is defined by the ID [0],
+ID[1:0]="00”
+X: decrement
+Y: decrement
+
+ID[1:0]="01”
+X: increment
+Y: decrement
+
+00,00h
+
+00,00h
+
+AM="0”
+X-mode
+
+4, 3, 2, 1
+
+1, 2, 3, 4
+
+31,12Bh
+
+SSD1683
+
+Rev 1.0
+
+P 39/49
+
+Jan 2021
+
+Solomon Systech
+
+8.3
+
+Set RAM X - Address Start / End Position (44h)
+R/W DC
+W
+1
+POR
+W
+1
+POR
+
+IB7
+
+IB6
+
+0
+
+0
+
+0
+
+0
+
+IB5
+IB4
+IB3
+IB2
+IB1
+IB0
+XSA5 XSA4 XSA3 XSA2 XSA1 XSA0
+0
+0
+0
+0
+0
+0
+XEA5 XEA4 XEA3 XEA2 XEA1 XEA0
+1
+1
+0
+0
+0
+1
+
+XSA[5:0]/XEA[5:0]: Specify the start/end positions of the window address in the X direction by 8 times address unit.
+Data is written to the RAM within the area determined by the addresses specified by XSA [5:0] and XEA [5:0]. These
+addresses must be set before the RAM write.
+It allows on XEA [5:0] ≤ XSA [5:0]. The settings follow the condition on 00h ≤ XSA [5:0], XEA [5:0] ≤ 31h. The windows
+is followed by the control setting of Data Entry Setting (R11h)
+
+8.4
+
+Set RAM Y - Address Start / End Position (45h)
+R/W DC
+W
+1
+POR
+W
+1
+POR
+W
+1
+POR
+W
+1
+POR
+
+IB7
+IB6
+IB5
+IB4
+IB3
+IB2
+IB1
+IB0
+YSA7 YSA6 YSA5 YSA4 YSA3 YSA2 YSA1 YSA0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+0
+YSA8
+0
+0
+0
+0
+0
+0
+0
+0
+YEA7 YEA6 YEA5 YEA4 YEA3 YEA2 YEA1 YEA0
+0
+0
+1
+0
+1
+0
+1
+1
+0
+0
+0
+0
+0
+0
+0
+YEA8
+0
+0
+0
+0
+0
+0
+0
+1
+
+YSA[8:0]/YEA[8:0]: Specify the start/end positions of the window address in the Y direction by an address unit. Data is
+written to the RAM within the area determined by the addresses specified by YSA [8:0] and YEA [8:0]. These addresses
+must be set before the RAM write.
+It allows YEA [8:0] ≤ YSA [8:0]. The settings follow the condition on 00h ≤ YSA [8:0], YEA [8:0] ≤ 12Bh. The windows
+is followed by the control setting of Data Entry Setting (R11h)
+
+8.5
+
+Set RAM Address Counter (4Eh-4Fh)
+Reg# R/W
+
+DC
+
+W
+
+1
+
+IB7
+
+IB6
+
+IB5
+
+IB4
+
+IB3
+
+IB2
+
+IB1
+
+IB0
+
+XAD5 XAD4 XAD3 XAD2 XAD1 XAD0
+
+4Eh
+POR
+W
+
+0
+1
+
+POR
+4Fh
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+YAD7 YAD6 YAD5 YAD4 YAD3 YAD2 YAD1 YAD0
+0
+
+0
+
+0
+
+0
+
+0
+
+0
+
+W
+1
+POR
+
+0
+
+0
+YAD8
+0
+
+XAD[5:0]: Make initial settings for the RAM X address in the address counter (AC).
+YAD[8:0]: Make initial settings for the RAM Y address in the address counter (AC).
+After RAM data is written, the address counter is automatically updated according to the settings with AM, ID bits and
+setting for a new RAM address is not required in the address counter. Therefore, data is written consecutively without
+setting an address. The address counter is not automatically updated when data is read out from the RAM. RAM address
+setting cannot be made during the standby mode. The address setting should be made within the area designated with
+window addresses which is controlled by the Data Entry Setting (R11h) {AM, ID[1:0]} ; RAM Address XStart / XEnd
+Position (R44h) and RAM Address Ystart /Yend Position (R45h). Otherwise undesirable image will be displayed on the
+Panel.
+
+SSD1683
+
+Rev 1.0
+
+P 40/49
+
+Jan 2021
+
+Solomon Systech
+
+9
+
+Operation Flow and Code Sequence
+
+In this section, two SSD1683 operation flows with loading waveform LUT from OTP are introduced. The flows are
+shown in section 9.1 and section 9.2.
+
+9.1
+
+SSD1683 operation flow to drive display panel with power on/off
+
+Figure 9-1 shows the SSD1683 operation flow to drive display panel with power on and off. In this flow, the driver IC
+will be off after display panel is update.
+
+1. Power On
+•
+•
+
+Supply VCI
+Wait 10ms
+
+•
+•
+•
+•
+
+2. Set Initial Configuration
+Define SPI interface to communicate with MCU
+HW Reset
+SW Reset by Command 0x12
+Wait 10ms
+
+•
+•
+•
+
+3. Send Initialization Code
+Set gate driver output by Command 0x01
+Set display RAM size by Command 0x11, 0x44, 0x45
+Set panel border by Command 0x3C
+
+4. Load Waveform LUT
+Sense temperature by int/ext TS by Command 0x18
+Load waveform LUT from OTP by Command 0x22,
+0x20 or by MCU
+Wait BUSY Low
+
+•
+•
+•
+
+5. Write Image and Drive Display Panel
+Write image data in RAM by Command 0x4E, 0x4F,
+0x24, 0x26
+Set softstart setting by Command 0x0C
+Drive display panel by Command 0x22, 0x20
+Wait BUSY Low
+
+•
+•
+•
+•
+
+•
+
+6. Power Off
+Turn off VCI supply
+
+Figure 9-1: Operation flow to drive display panel power on/off
+
+SSD1683
+
+Rev 1.0
+
+P 41/49
+
+Jan 2021
+
+Solomon Systech
+
+9.2
+
+SSD1683 operation flow to enter deep sleep mode 2 after display update
+
+Figure 9-2 shows the SSD1683 operation flow to enter deep sleep mode2 after display update. In this flow, the driver
+IC will enter the deep sleep mode 2 after display update.
+1. Power On
+•
+•
+
+Supply VCI
+Wait 10ms
+
+•
+•
+•
+•
+
+2. Set Initial Configuration
+Define SPI interface to communicate with MCU
+HW Reset
+SW Reset by Command 0x12
+Wait 10ms
+
+•
+•
+•
+
+3. Send Initialization Code
+Set gate driver output by Command 0x01
+Set display RAM size by Command 0x11, 0x44, 0x45
+Set panel border by Command 0x3C
+
+•
+•
+•
+
+4. Load Waveform LUT
+Sense temperature by int/ext TS by Command 0x18
+Load waveform LUT from OTP by Command 0x22,
+0x20 or by MCU
+Wait BUSY Low
+
+•
+•
+•
+
+5. Write Image and Drive Display Panel
+Write image data in RAM by Command 0x4E, 0x4F,
+0x24, 0x26
+Set softstart setting by Command 0x0C
+Drive display panel by Command 0x22, 0x20
+Wait BUSY Low
+
+•
+
+6. Enter Deep sleep mode 2 without RAM retention
+Deep sleep by Command 0x10, data 0x03
+
+•
+
+Figure 9-2: Operation flow to enter deep sleep mode 2 after display update
+
+SSD1683
+
+Rev 1.0
+
+P 42/49
+
+Jan 2021
+
+Solomon Systech
+
+10 Absolute Maximum Rating
+Table 10-1 : Maximum Ratings
+
+Symbol
+VCI
+VIN
+VOUT
+TOPR
+TSTG
+
+Parameter
+Logic supply voltage
+Logic Input voltage
+Logic Output voltage
+Operation temperature range
+Storage temperature range
+
+Rating
+-0.5 to +6.0
+-0.5 to VDDIO+0.5
+-0.5 to VDDIO+0.5
+-40 to +85
+-65 to +150
+
+Unit
+V
+V
+V
+°C
+°C
+
+Maximum ratings are those values beyond which damages to the device may occur. Functional operation should be
+restricted to the limits in the Electrical Characteristics tables or Pin Description section
+This device contains circuitry to protect the inputs against damage due to high static voltages or electric fields;
+however, it is advised that normal precautions be taken to avoid application of any voltage higher than maximum rated
+voltages to this high impedance circuit. For proper operation it is recommended that V CI be constrained to the range
+VSS < VCI. Reliability of operation is enhanced if unused input is connected to an appropriate logic voltage level (e.g.,
+either VSS or VDDIO). Unused outputs must be left open. This device may be light sensitive. Caution should be taken to
+avoid exposure of this device to any light source during normal operation. This device is not radiation protected.
+
+11 Electrical Characteristics
+The following specifications apply for: VSS=0V, VCI=3.0V, VDD=1.8V, T OPR=25ºC.
+Table 11-1: DC Characteristics
+
+Symbol
+VCI
+VDD
+VCOM_DC
+
+Parameter
+VCI operation voltage
+VDD operation voltage
+VCOM_DC output
+voltage
+VCOM_DC output
+voltage deviation
+VCOM_AC output
+voltage
+Gate output voltage
+Gate output peak to
+peak voltage
+Positive Source output
+voltage
+VSH1 output voltage
+deviation
+Positive Source output
+voltage
+VSH2 output voltage
+deviation
+
+Applicable pin
+VCI
+VDD
+VCOM
+
+Test Condition
+-
+
+Min.
+2.3
+1.7
+-3.0
+
+Typ.
+3.0
+1.8
+-
+
+Max.
+3.7
+1.9
+-0.2
+
+Unit
+V
+V
+V
+
+VCOM
+
+-
+
+-200
+
+-
+
+200
+
+mV
+
+VCOM
+
+-
+
+G0~G299
+G0~G299
+
+-
+
+VSH1
+
+-
+
++8.6
+
++15
+
++17
+
+V
+
+VSH1
+
+From 8.6V to 17V
+
+-200
+
+-
+
+200
+
+mV
+
+VSH2
+
+-
+
++2.4
+
++5
+
++17
+
+V
+
+VSH2
+VSL
+
+-100
+-200
+-17
+
+-15
+
+100
+200
+-5.0
+
+mV
+mV
+V
+
+VSL
+
+-
+
+-200
+
+-
+
+200
+
+mV
+
+VIH
+
+Negative Source output
+voltage
+VSL output voltage
+deviation
+High level input voltage
+
+From 2.4V to 8.6V
+From 8.8V to 17V
+-
+
+-
+
+0.8VDDIO
+
+-
+
+-
+
+V
+
+VIL
+
+Low level input voltage
+
+SDA, SCL, CS#,
+D/C#, RES#, BS1,
+M/S#, CL
+
+-
+
+-
+
+-
+
+0.2VDDIO
+
+V
+
+VOH
+VOL
+VPP
+
+High level output voltage SDA, BUSY, CL
+Low level output voltage
+OTP Program voltage
+VPP
+
+0.9VDDIO
+7.25
+
+7.5
+
+0.1VDDIO
+7.75
+
+V
+V
+V
+
+dVCOM_DC
+VCOM_AC
+VGATE
+VGATE(p-p)
+VSH1
+dVSH1
+VSH2
+dVSH2
+VSL
+dVSL
+
+SSD1683
+
+Rev 1.0
+
+P 43/49
+
+Jan 2021
+
+IOH = -100uA
+IOL = 100uA
+-
+
+VSL + VCOM_DC VSH1+
+VCOM_DC
+VCOM_DC
+-20
++20
+40
+
+Solomon Systech
+
+V
+V
+V
+
+Symbol
+Islp_VCI
+
+Parameter
+Sleep mode current
+
+Applicable pin
+VCI
+
+Idslp_VCI1
+
+Current of deep sleep
+mode 1
+
+VCI
+
+Idslp_VCI2
+
+Current of deep sleep
+mode 2
+
+VCI
+
+Iopr_VCI
+VGH
+
+Operating Mode current VCI
+Operating Mode
+VGH
+Output Voltage
+
+VSH1
+
+VSH1
+
+VSH2
+
+VSH2
+
+VSL
+
+VSL
+
+VCOM
+
+VCOM
+
+Test Condition
+- DC/DC off
+- No clock
+- No output load
+- MCU interface
+access
+- RAM data access
+- DC/DC off
+- No clock
+- No output load
+- No MCU interface
+access
+- Retain RAM data
+but cannot access
+the RAM
+
+Min.
+-
+
+Typ.
+25
+
+Max.
+35
+
+Unit
+uA
+
+-
+
+3
+
+5
+
+uA
+
+- DC/DC off
+- No clock
+- No output load
+- No MCU interface
+access
+- Cannot retain RAM
+data
+VCI=3.0V
+Enable Clock and
+Analog by Master
+Activation Command
+VGH=20V
+VGL=-VGH
+VSH1=15V
+VSH2=5V
+VSL=-15V
+VCOM = -2V
+No waveform
+transitions.
+No loading.
+No RAM read/write
+No OTP read /write
+
+-
+
+1
+
+4
+
+uA
+
+19.5
+
+1000
+20
+
+20.5
+
+uA
+V
+
+14.8
+
+15
+
+15.2
+
+V
+
+4.9
+
+5
+
+5.1
+
+V
+
+-15.2
+
+-15
+
+-14.8
+
+V
+
+-2.2
+
+-2
+
+-1.8
+
+V
+
+Table 11-2: Regulators Characteristics
+
+Symbol
+IVSH
+IVSH1
+IVSL
+IVCOM
+
+SSD1683
+
+Parameter
+VSH1 current
+VSH2 current
+VSL current
+VCOM current
+
+Rev 1.0
+
+P 44/49
+
+Test Condition
+VSH1 = +15V
+VSH2 = +5V
+VSL = -15V
+VCOM = -2V
+
+Jan 2021
+
+Applicable pin
+VSH1
+VSH2
+VSL
+VCOM
+
+Min.
+-
+
+Typ.
+-
+
+Max.
+800
+800
+800
+100
+
+Solomon Systech
+
+Unit
+uA
+uA
+uA
+uA
+
+12 AC Characteristics
+12.1 Serial Peripheral Interface
+The following specifications apply for: VDDIO - VSS = 2.3V to 3.7V, TOPR = 25°C, CL=20pF
+Table 12-1 : Serial Peripheral Interface Timing Characteristics
+
+Write mode
+Symbol
+
+Parameter
+
+Min
+
+Typ
+
+Max
+
+Unit
+
+fSCL
+tCSSU
+tCSHLD
+tCSHIGH
+tSCLHIGH
+tSCLLOW
+tSISU
+
+SCL frequency (Write Mode)
+Time CS# has to be low before the first rising edge of SCLK
+Time CS# has to remain low after the last falling edge of SCLK
+Time CS# has to remain high between two transfers
+Part of the clock period where SCL has to remain high
+Part of the clock period where SCL has to remain low
+Time SI (SDA Write Mode) has to be stable before the next rising edge of SCL
+
+60
+60
+100
+25
+25
+10
+
+-
+
+20
+-
+
+tSIHLD
+
+Time SI (SDA Write Mode) has to remain stable after the rising edge of SCL
+
+40
+
+-
+
+-
+
+MHz
+ns
+ns
+ns
+ns
+ns
+ns
+
+Symbol Parameter
+
+Min
+
+Typ
+
+Max
+
+Unit
+
+fSCL
+SCL frequency (Read Mode)
+tCSSU
+Time CS# has to be low before the first rising edge of SCLK
+tCSHLD Time CS# has to remain low after the last falling edge of SCLK
+tCSHIGH Time CS# has to remain high between two transfers
+tSCLHIGH Part of the clock period where SCL has to remain high
+tSCLLOW Part of the clock period where SCL has to remain low
+tSOSU
+Time SO(SDA Read Mode) will be stable before the next rising edge of SCL
+tSOHLD Time SO (SDA Read Mode) will remain stable after the falling edge of SCL
+
+100
+50
+250
+180
+180
+-
+
+-
+
+2.5
+-
+
+-
+
+-
+
+MHz
+ns
+ns
+ns
+ns
+ns
+ns
+ns
+
+ns
+
+Read mode
+
+50
+0
+
+Note: All timings are based on 20% to 80% of VDDIO-VSS
+Figure 12-1: SPI timing diagram
+
+tCKPER
+
+CS#
+
+tCSHIGH
+t SCLHIGH
+
+tCSSU
+
+t SCLLOW
+
+tCSHLD
+
+SCL
+
+tSISU
+
+t SIHLD
+
+SDA
+(Write
+Mode)
+
+t SOSU
+
+tSOHLD
+
+SDA
+(Read
+Mode)
+
+SSD1683
+
+Rev 1.0
+
+P 45/49
+
+Jan 2021
+
+Solomon Systech
+
+13 Application Circuit
+Figure 13-1: Schematic of SSD1683 application circuit
+
+Table 13-1: Component list for SSD1683 application circuit
+Part Name
+C0-C1
+C2-C7
+C8
+R1
+
+Value
+1uF
+1uF
+1uF
+2.2 ohm
+
+D1-D3
+
+Diode
+
+Q1
+
+NMOS
+
+L1
+
+47uH
+
+U1
+
+0.5mm ZIF socket
+
+Requirements/Reference Part
+X5R/X7R; Voltage Rating : 6V or 25V
+0603/0805; X5R/X7R; Voltage Rating : 25V
+0603/0805; X7R; Voltage Rating : 25V
+0603/0805; 1% variation, 0.05W
+MBR0530
+1) Reverse DC voltage  30V
+2) Io  500mA
+3) Forward voltage ≤ 430mV
+Si1304BDL/NX3008NBK
+1) Drain-Source breakdown voltage  30V
+2) Vgs(th) = 0.9V (Typ), 1.3V (Max)
+3) Rds on ≤ 2.1Ω @ Vgs = 2.5V
+CDRH2D18 / LDNP-470NC
+Io= 500mA (Max)
+24pins, 0.5mm pitch
+
+Remarks:
+1) The recommended component value and reference part in Table 13-1 is subject to change depending on panel
+
+loading.
+2) Customer is required to review if the selected component value and part is suitable for their application.
+
+SSD1683
+
+Rev 1.0
+
+P 46/49
+
+Jan 2021
+
+Solomon Systech
+
+14 PACKAGE INFORMATION
+14.1 Die Tray Dimensions for SSD1683Z
+Figure 14-1 : SSD1683Z die tray information
+
+SSD1683
+
+Rev 1.0
+
+P 47/49
+
+Jan 2021
+
+Solomon Systech
+
+14.2 Die Tray Dimensions for SSD1683Z8
+Figure 14-2 : SSD1683Z8 die tray information (unit: mm)
+
+SSD1683
+
+Rev 1.0
+
+P 48/49
+
+Jan 2021
+
+Solomon Systech
+
+Solomon Systech reserves the right to make changes without notice to any products herein. Solomon Systech makes no warranty, representation
+or guarantee regarding the suitability of its products for any particular purpose, nor does Solomon Systech assume any liability arising out of the
+application or use of any product or circuit, and specifically disclaims any, and all, liability, including without limitation consequential or incidental
+damages. “Typical” parameters can and do vary in different applications. All operating parameters, including “Typical” must be validated for each
+customer application by the customer’s technical experts. Solomon Systech does not convey any license under its patent rights nor the rights of
+others. Solomon Systech products are not designed, intended, or authorized for use as components in systems intended for surgical implant into
+the body, or other applications intended to support or sustain life, or for any other application in which the failure of the Solomon Systech product
+could create a situation where personal injury or death may occur. Should Buyer purchase or use Solomon Systech products for any such unintended
+or unauthorized application, Buyer shall indemnify and hold Solomon Systech and its offices, employees, subsidiaries, affiliates, and distributors
+harmless against all claims, costs, damages, and expenses, and reasonable attorney fees arising out of, directly or indirectly, any claim of personal
+injury or death associated with such unintended or unauthorized use, even if such claim alleges that Solomon Systech was negligent regarding the
+design or manufacture of the part.
+
+The product(s) listed in this datasheet comply with Directive (EU) 2015/863 of 31 March 2015 amending Annex II to Directive 2011/65/EU of the
+European Parliament and of the Council as regards the list of restricted substances and People’s Republic of China Electronic Industry Standard GB/T
+26572-2011 “Requirements for concentration limits for certain hazardous substances in electronic information products (电子电器产品中限用物質的
+限用要求)”. Hazardous Substances test report is available upon request.
+http://www.solomon-systech.com
+
+SSD1683
+
+Rev 1.0
+
+P 49/49
+
+Jan 2021
+
+Solomon Systech
+
+

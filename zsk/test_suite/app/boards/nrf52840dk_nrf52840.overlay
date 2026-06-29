@@ -63,18 +63,18 @@ enables {
 };
 
 
-	
-&spi1 {	
+
+&spi1 {
 	status="disabled";
-};	
-	
-&qspi {	
+};
+
+&qspi {
 	status="disabled";
-};	
-	
-&pwm0 {	
+};
+
+&pwm0 {
 	status="disabled";
-};	
+};
 
 
 /* ---------- PINCTRL configuration ---------- */
@@ -126,7 +126,7 @@ enables {
 	cs-gpios = <&arduino_header 13 GPIO_ACTIVE_LOW>, /* LoRa CS - P1.08 */
 	           <&gpio1 12 GPIO_ACTIVE_LOW>;           /* EPD CS - P1.12 */
 
-	       
+
 	// SX1262 SHIELD
 	// lora_semtech_sx1262mb2das: sx1262@0 {
 	// 	compatible = "semtech,sx1262";
@@ -142,35 +142,35 @@ enables {
 	// };
 
 	// LR62E
-	// lora_semtech_sx1262mb2das: sx1262@0 {
-	// compatible = "semtech,sx1262";
-	// reg = <0>;
-	// spi-max-frequency = <7000000>;
-	// label = "SX1262";
-	// reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
-	// busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
-	// antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10 
-	// dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
-	// dio2-tx-enable;
-	// tcxo-power-startup-delay-ms = <5>;
+	lora_semtech_sx1262mb2das: sx1262@0 {
+	compatible = "semtech,sx1262";
+	reg = <0>;
+	spi-max-frequency = <7000000>;
+	label = "SX1262";
+	reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; // 0,3
+	busy-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>; // 0,31
+	antenna-enable-gpios = <&arduino_header 14 GPIO_ACTIVE_HIGH>; // 1,10
+	dio1-gpios = <&gpio0 19 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+	dio2-tx-enable;
+	tcxo-power-startup-delay-ms = <5>;
 
 	// // SEEED WIO
-	lora_semtech_sx1262mb2das: sx1262@0 {
-    compatible = "semtech,sx1262";
-    reg = <0>;
-    /* SPI */
-    spi-max-frequency = <8000000>;
-    label = "SX1262";
-    /* Control signals */
-    reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; /* P0.03 */
-    busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;        /* P0.31 */
-    dio1-gpios  = <&gpio0 19 GPIO_ACTIVE_HIGH>;        /* P0.19 */
-    /* TCXO (Wio-SX1262 uses DIO3 @ 1.8V) */
-    dio3-tcxo-voltage = <0x02>;
-    tcxo-power-startup-delay-ms = <10>;
-    /* RF switch handled internally via DIO2 */
-    dio2-tx-enable;
-    status = "okay";
+// lora_semtech_sx1262mb2das: sx1262@0 {
+// compatible = "semtech,sx1262";
+// reg = <0>;
+// /* SPI */
+// spi-max-frequency = <8000000>;
+// label = "SX1262";
+// /* Control signals */
+// reset-gpios = <&arduino_header 0 GPIO_ACTIVE_LOW>; /* P0.03 */
+// busy-gpios  = <&gpio0 31 GPIO_ACTIVE_HIGH>;        /* P0.31 */
+// dio1-gpios  = <&gpio0 19 GPIO_ACTIVE_HIGH>;        /* P0.19 */
+// /* TCXO (Wio-SX1262 uses DIO3 @ 1.8V) */
+// dio3-tcxo-voltage = <0x02>;
+// tcxo-power-startup-delay-ms = <10>;
+// /* RF switch handled internally via DIO2 */
+// dio2-tx-enable;
+// status = "okay";
 
 	};
 

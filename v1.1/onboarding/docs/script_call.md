@@ -164,7 +164,6 @@ default
 339683755525_iot-config-access
 fbn-admin
 quiretech
-fbnow-admin
 fbn-prod-eu
 
 

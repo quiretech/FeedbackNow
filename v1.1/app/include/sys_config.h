@@ -119,7 +119,7 @@
 #define COMBO_JOIN_HOLD_MS 2000
 #define COMBO_REBOOT_HOLD_MS 5000
 /** All six buttons (Staff mode) — devnonce + join state wipe; counters kept. */
-#define COMBO_FACTORY_RESET_HOLD_MS 7000
+#define COMBO_FACTORY_RESET_HOLD_MS 1000
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS 20000
 /** Max wait for LinkCheckAns after user opens device info (joined). Covers
@@ -158,7 +158,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // UTC-7h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 

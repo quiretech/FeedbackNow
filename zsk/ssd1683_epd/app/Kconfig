@@ -1,0 +1,29 @@
+mainmenu "SSD1683 EPD Application"
+
+source "Kconfig.zephyr"
+
+config APP_EPD_CUT_RAILS_AFTER_STATIC_FLUSH
+	bool "Cut 3V3/3V3A after a successful static full flush"
+	default y
+	help
+	  When showing a static screen (full refresh, not a 1 Hz partial
+	  tick), cut the panel power rails once ssd1683_flush() succeeds
+	  and BUSY is low.  Partial timer updates keep rails enabled.
+
+config APP_EPD_STATIC_FLUSH_INTERVAL_SEC
+	int "Demo: seconds between static flush + rail-cut tests"
+	default 30
+	range 5 3600
+	depends on APP_EPD_CUT_RAILS_AFTER_STATIC_FLUSH
+	help
+	  During the demo loop, every N seconds perform a static full
+	  flush and cut rails, then hold rails off before resuming partials.
+
+config APP_EPD_RAIL_OFF_HOLD_SEC
+	int "Demo: seconds to hold rails off before resuming partials"
+	default 10
+	range 1 300
+	depends on APP_EPD_CUT_RAILS_AFTER_STATIC_FLUSH
+	help
+	  After cutting rails, wait this long (e-ink holds the image with
+	  no power) before turning rails back on for partial updates.
