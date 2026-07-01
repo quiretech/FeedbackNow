@@ -121,7 +121,7 @@
 /** All six buttons (Staff mode) — devnonce + join state wipe; counters kept. */
 #define COMBO_FACTORY_RESET_HOLD_MS 1000
 #define STAFF_TIMEOUT_MS 20000
-#define DEVICE_INFO_TIMEOUT_MS 20000
+#define DEVICE_INFO_TIMEOUT_MS 10000
 /** Max wait for LinkCheckAns after user opens device info (joined). Covers
  * lora_pace_uplink_spacing (up to LORA_UPLINK_MIN_INTERVAL_MS) plus RX windows. */
 #define DEVICE_INFO_LINK_PROBE_TIMEOUT_MS                                        \
@@ -158,10 +158,9 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // UTC-7h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-360) // Monterrey (UTC-6)
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
-
 /* =============================================================================
  * RTC / time sync
  * =============================================================================
@@ -239,8 +238,9 @@
 #define EPD_LOCALE_EN 0
 #define EPD_LOCALE_FR 1
 #define EPD_LOCALE_DE 2
+#define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 0
+#define EPD_LOCALE 3
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
@@ -251,8 +251,8 @@
 #endif
 
 #if EPD_LOCALE != EPD_LOCALE_EN && EPD_LOCALE != EPD_LOCALE_FR &&         \
-    EPD_LOCALE != EPD_LOCALE_DE
-#error "EPD_LOCALE must be EPD_LOCALE_EN, EPD_LOCALE_FR, or EPD_LOCALE_DE"
+    EPD_LOCALE != EPD_LOCALE_DE && EPD_LOCALE != EPD_LOCALE_ES
+#error "EPD_LOCALE must be EPD_LOCALE_EN, EPD_LOCALE_FR, EPD_LOCALE_DE, or EPD_LOCALE_ES"
 #endif
 
 #include "display_strings.h"

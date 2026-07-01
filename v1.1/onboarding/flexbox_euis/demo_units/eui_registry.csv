@@ -1,2 +1,5 @@
 "asset_id","dev_eui","join_eui","app_key","provision_utc","fw_version","hw_version","hw_profile","name_prefix","tag_client","decal_type"
 "DEMO-0001","464C5830CD7AD663","9A7F1C528F8F92E8","12B215A5DAB88333858BF0BB17A28902","2026-06-25T18:02:20Z","1.5.0","1.4.1","FLEXBOX_PLUS","SFO","San Francisco International Airport","Restroom"
+"DEMO-0002","464C580457B03FAC","BA5B4DC16D5508B3","E446D99750F101FFCB2D7D535F48B00E","2026-07-01T21:10:27Z","1.5.0","1.4.1","FLEXBOX_PLUS","MTY","General Mariano Escobedo International Airport - OMA","Restroom"
+"DEMO-0003","464C58BF3CA8632D","92F1C2D8E960DF71","0B01801C209724900E928F88C674AA0C","2026-07-01T21:10:46Z","1.5.0","1.4.1","FLEXBOX_PLUS","MTY","General Mariano Escobedo International Airport - OMA","Restroom"
+"DEMO-0004","464C58222929BA24","FE5F3FC048381ACE","94C6845964C684F919D4936654776B3B","2026-07-01T21:11:37Z","1.5.0","1.4.1","FLEXBOX_PLUS","MTY","General Mariano Escobedo International Airport - OMA","Restroom"

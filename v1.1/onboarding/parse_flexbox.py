@@ -114,8 +114,15 @@ def _decode_input(s: str, fmt: str) -> tuple[bytes, str]:
     if fmt != "auto":
         raise ValueError(f"Unsupported format: {fmt}")
 
+    # A '=' character can only appear in base64 padding — never in hex.
+    # Also, if the raw (non-hex-stripped) string length matches 22 hex chars for
+    # an 11-byte payload, treat as hex. Otherwise fall through to base64.
+    stripped = _clean_wrapped(s)
+    if "=" in stripped or "+" in stripped or "/" in stripped:
+        return _parse_b64(s), "b64"
     cleaned = _clean_hex(s)
-    if cleaned:
+    if cleaned and len(cleaned) == len(stripped.replace(" ", "").replace(":", "")):
+        # All chars were valid hex — no letters were silently dropped
         try:
             return _parse_hex(s), "hex"
         except ValueError:

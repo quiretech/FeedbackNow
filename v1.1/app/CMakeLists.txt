@@ -87,9 +87,11 @@ if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")
     assets/display_screens/thanks_en.c
     assets/display_screens/thanks_fr.c
     assets/display_screens/thanks_de.c
+    assets/display_screens/thanks_es.c
     assets/display_screens/cleaning_en.c
     assets/display_screens/cleaning_fr.c
     assets/display_screens/cleaning_de.c
+    assets/display_screens/cleaning_es.c
   )
 endif()
 

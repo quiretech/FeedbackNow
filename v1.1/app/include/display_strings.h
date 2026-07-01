@@ -5,13 +5,15 @@
  * EPD on-screen copy and install-screen labels (compile-time locale).
  * Included from sys_config.h when EPD_ENABLED=1.
  *
- * Full-screen bitmaps: EPD_LOCALE in sys_config.h (EN / FR / DE).
+ * Full-screen bitmaps: EPD_LOCALE in sys_config.h (EN / FR / DE / ES).
  */
 
 #if EPD_LOCALE == EPD_LOCALE_FR
 #define EPD_TEXT_LAST_CLEANED_HEADLINE "DERNIER NETTOYAGE"
 #elif EPD_LOCALE == EPD_LOCALE_DE
 #define EPD_TEXT_LAST_CLEANED_HEADLINE "LETZTE REINIGUNG"
+#elif EPD_LOCALE == EPD_LOCALE_ES
+#define EPD_TEXT_LAST_CLEANED_HEADLINE "ÚLTIMA LIMPIEZA"
 #else
 #define EPD_TEXT_LAST_CLEANED_HEADLINE "LAST CLEANED"
 #endif

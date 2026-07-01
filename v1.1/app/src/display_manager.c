@@ -43,6 +43,9 @@
 #elif EPD_LOCALE == EPD_LOCALE_DE
   LV_IMG_DECLARE(thanks_de);
   LV_IMG_DECLARE(cleaning_de);
+#elif EPD_LOCALE == EPD_LOCALE_ES
+  LV_IMG_DECLARE(thanks_es);
+  LV_IMG_DECLARE(cleaning_es);
 #else
   LV_IMG_DECLARE(thanks_en);
   LV_IMG_DECLARE(cleaning_en);
@@ -400,13 +403,15 @@
     lv_img_set_src(img_thanks, &thanks_fr);
 #elif EPD_LOCALE == EPD_LOCALE_DE
     lv_img_set_src(img_thanks, &thanks_de);
+#elif EPD_LOCALE == EPD_LOCALE_ES
+    lv_img_set_src(img_thanks, &thanks_es);
 #else
     lv_img_set_src(img_thanks, &thanks_en);
 #endif
     lv_obj_center(img_thanks);
     lv_obj_add_flag(screen_thanks, LV_OBJ_FLAG_HIDDEN);
 
-    /* Screen: CLEANING — full-screen bitmap (cleaning_en / cleaning_fr / cleaning_de) */
+    /* Screen: CLEANING — full-screen bitmap (cleaning_en / cleaning_fr / cleaning_de / cleaning_es) */
     screen_cleaning = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_cleaning, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_cleaning, LV_OPA_COVER, LV_PART_MAIN);
@@ -415,6 +420,8 @@
     lv_img_set_src(img_cleaning, &cleaning_fr);
 #elif EPD_LOCALE == EPD_LOCALE_DE
     lv_img_set_src(img_cleaning, &cleaning_de);
+#elif EPD_LOCALE == EPD_LOCALE_ES
+    lv_img_set_src(img_cleaning, &cleaning_es);
 #else
     lv_img_set_src(img_cleaning, &cleaning_en);
 #endif
