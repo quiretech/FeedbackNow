@@ -108,16 +108,16 @@
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
 #if EPD_ENABLED
-#define BUTTON_COOLDOWN_MS 15000
+#define BUTTON_COOLDOWN_MS 13000
 #else
 #define BUTTON_COOLDOWN_MS 5000
 #endif
 /* Combo hold + session recovery deadlines: k_work_delayable in button_thread.c */
 #define INPUT_SESSION_RECOVERY_MS 250
 #define COMBO_STAFF_HOLD_MS 1000
-#define COMBO_DEVICE_INFO_HOLD_MS 2000
-#define COMBO_JOIN_HOLD_MS 2000
-#define COMBO_REBOOT_HOLD_MS 5000
+#define COMBO_DEVICE_INFO_HOLD_MS 1000
+#define COMBO_JOIN_HOLD_MS 1000
+#define COMBO_REBOOT_HOLD_MS 3000
 /** All six buttons (Staff mode) — devnonce + join state wipe; counters kept. */
 #define COMBO_FACTORY_RESET_HOLD_MS 1000
 #define STAFF_TIMEOUT_MS 20000
@@ -240,7 +240,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 3
+#define EPD_LOCALE 0
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS

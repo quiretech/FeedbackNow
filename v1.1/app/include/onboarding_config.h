@@ -24,7 +24,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "DEMO-0004"
+#define DEVICE_UNIT_ID_STRING "UNIT-0352"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -32,8 +32,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1782940297ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-07-01T21:11:37Z"
+#define DEVICE_PROVISION_UNIX_UTC 1783684279ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-07-10T11:51:19Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -41,9 +41,9 @@
  * name_prefix → CSV name_prefix; client → tag_client; decal → decal_type (AWS Decal).
  * =============================================================================
  */
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "MTY"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "SWRLD"
 
-#define DEVICE_REGISTRY_CLIENT_NAME "General Mariano Escobedo International Airport - OMA"
+#define DEVICE_REGISTRY_CLIENT_NAME "Seaworld"
 
 #define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
 

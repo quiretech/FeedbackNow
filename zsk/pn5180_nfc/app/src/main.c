@@ -283,9 +283,9 @@ static void wake_up_nfc_system(void) {
 static void power_down_nfc_system(void) {
   LOG_INF("Powering down NFC system");
 
-  /* Disable RF field */
+  /* Clean RF off / idle before returning to sleep */
   k_mutex_lock(&nfc_mutex, K_FOREVER);
-  pn5180_configure(pn5180_dev, PN5180_PROTOCOL_ISO15693); // Reset to idle
+  (void)pn5180_prepare_poweroff(pn5180_dev);
   k_mutex_unlock(&nfc_mutex);
 }
 

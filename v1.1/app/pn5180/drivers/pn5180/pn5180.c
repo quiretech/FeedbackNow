@@ -32,6 +32,8 @@ struct pn5180_config {
 /* Forward declarations */
 static int pn5180_read_reception_buffer(const struct device *dev,
                                         uint8_t *buffer, int16_t len);
+static int pn5180_read_register(const struct device *dev, uint8_t reg_addr,
+                                uint32_t *reg_value);
 
 /* Helper Functions */
 static inline void cs_low(const struct device *dev) {
@@ -55,14 +57,34 @@ static int pn5180_reset(const struct device *dev) {
   return PN5180_OK;
 }
 
-static k_timeout_t pn5180_op_timeout(const struct device *dev) {
-  const struct pn5180_config *config = dev->config;
-  uint32_t ms = config->timeout_ms;
+/*
+ * Hard-reset the PN5180 after a BUSY/SPI hang so later commands can recover.
+ * Always drives NSS inactive first.
+ */
+static int pn5180_recover(const struct device *dev) {
+  LOG_WRN("PN5180 recovery: hard reset");
+  cs_high(dev);
+  return pn5180_reset(dev);
+}
 
-  if (ms < 100U) {
-    ms = 100U;
+/* Wait until RX_IRQ_STAT is set, or slot timeout elapses (not an error). */
+static int pn5180_wait_rx_irq_slot(const struct device *dev) {
+  int64_t deadline = k_uptime_get() + PN5180_SLOT_RX_WAIT_MS;
+  uint32_t irq_status = 0;
+  int ret;
+
+  while (k_uptime_get() < deadline) {
+    ret = pn5180_read_register(dev, IRQ_STATUS, &irq_status);
+    if (ret) {
+      return ret;
+    }
+    if (irq_status & RX_IRQ_STAT) {
+      return PN5180_OK;
+    }
+    k_msleep(PN5180_SLOT_POLL_MS);
   }
-  return K_MSEC(ms);
+
+  return PN5180_OK; /* empty slot is normal during 16-slot inventory */
 }
 
 static bool wait_until_available(const struct device *dev,
@@ -100,7 +122,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
   const struct pn5180_config *config = dev->config;
   int ret;
 
-  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_available(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -116,7 +138,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
     return PN5180_ERR_SPI;
   }
 
-  if (!wait_until_busy(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_busy(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -124,7 +146,7 @@ static int pn5180_spi_send_bytes(const struct device *dev,
   cs_high(dev);
   k_msleep(PN5180_CS_GUARD_DELAY_MS);
 
-  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_available(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -140,7 +162,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
 
   memset(recv_buf, 0x00, recv_len);
 
-  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_available(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -156,7 +178,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
     return PN5180_ERR_SPI;
   }
 
-  if (!wait_until_busy(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_busy(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -164,7 +186,7 @@ static int pn5180_spi_read_bytes(const struct device *dev, uint8_t *recv_buf,
   cs_high(dev);
   k_msleep(PN5180_CS_GUARD_DELAY_MS);
 
-  if (!wait_until_available(dev, pn5180_op_timeout(dev))) {
+  if (!wait_until_available(dev, K_MSEC(50))) {
     cs_high(dev);
     return PN5180_ERR_TIMEOUT;
   }
@@ -905,6 +927,7 @@ static int pn5180_driver_get_inventory(const struct device *dev, uint8_t *uid,
   struct pn5180_data *data = dev->data;
   uint8_t buffer[PN5180_READ_BUFFER_SIZE];
   bool tag_detected = false;
+  bool need_recover = false;
   int ret;
 
   if (!data->initialized || !uid || uid_len < 8) {
@@ -916,30 +939,58 @@ static int pn5180_driver_get_inventory(const struct device *dev, uint8_t *uid,
   /* Load protocol configuration */
   ret = pn5180_load_iso15693_config(dev);
   if (ret) {
-    k_mutex_unlock(&data->mutex);
-    return ret;
+    need_recover = true;
+    goto inventory_done;
   }
 
   /* Activate RF */
   ret = pn5180_activate_rf(dev);
   if (ret) {
-    k_mutex_unlock(&data->mutex);
-    return ret;
+    need_recover = true;
+    goto inventory_done;
   }
 
-  /* Clear IRQ and set up for inventory */
-  pn5180_clear_irq(dev);
-  pn5180_set_idle(dev);
-  pn5180_activate_transceive(dev);
-  pn5180_send_inventory_cmd(dev);
+  /* Let the RF field stabilize before inventory (matches working rwPi path) */
+  k_msleep(PN5180_RF_SETTLE_MS);
 
-  /* Loop over time slots */
+  /* Clear IRQ and set up for inventory */
+  ret = pn5180_clear_irq(dev);
+  if (ret) {
+    need_recover = true;
+    goto inventory_done;
+  }
+  ret = pn5180_set_idle(dev);
+  if (ret) {
+    need_recover = true;
+    goto inventory_done;
+  }
+  ret = pn5180_activate_transceive(dev);
+  if (ret) {
+    need_recover = true;
+    goto inventory_done;
+  }
+  ret = pn5180_send_inventory_cmd(dev);
+  if (ret) {
+    need_recover = true;
+    goto inventory_done;
+  }
+
+  /* Allow TX to finish and tags to process the inventory request */
+  k_msleep(PN5180_INVENTORY_TX_WAIT_MS);
+
+  /* Loop over 16 ISO15693 slots */
   for (int slot = 0; slot < 16 && !tag_detected; slot++) {
-    k_yield();
+    /* Wait for RX complete before touching RX_STATUS / READ_DATA */
+    ret = pn5180_wait_rx_irq_slot(dev);
+    if (ret) {
+      need_recover = true;
+      break;
+    }
 
     uint32_t rx_status = 0;
     ret = pn5180_read_register(dev, RX_STATUS, &rx_status);
     if (ret) {
+      need_recover = true;
       break;
     }
 
@@ -951,33 +1002,70 @@ static int pn5180_driver_get_inventory(const struct device *dev, uint8_t *uid,
     if (len > 0) {
       ret = pn5180_read_reception_buffer(dev, buffer, len);
       if (ret) {
-        continue;
+        /* Do not keep polling while BUSY is stuck — recover instead */
+        need_recover = true;
+        break;
       }
 
-      if (buffer[0] == 0x00) {
+      if (len >= 10 && buffer[0] == 0x00) {
         /* Copy UID (reverse bytes for MSB-first) */
         uint8_t *raw_uid = &buffer[2];
-        for (int i = 0; i < 8 && i < uid_len; i++) {
+        for (int i = 0; i < 8 && i < (int)uid_len; i++) {
           uid[i] = raw_uid[7 - i];
         }
         tag_detected = true;
         break;
       }
+
+      /* Clear RX_IRQ after consuming a non-match response */
+      pn5180_clear_irq(dev);
     }
 
     /* Prepare for next slot */
-    if (slot < 15) {
-      pn5180_set_idle(dev);
-      pn5180_activate_transceive(dev);
-      pn5180_clear_irq(dev);
-      pn5180_send_end_of_frame(dev);
+    if (slot < 15 && !tag_detected) {
+      ret = pn5180_set_idle(dev);
+      if (ret) {
+        need_recover = true;
+        break;
+      }
+      ret = pn5180_activate_transceive(dev);
+      if (ret) {
+        need_recover = true;
+        break;
+      }
+      ret = pn5180_clear_irq(dev);
+      if (ret) {
+        need_recover = true;
+        break;
+      }
+      ret = pn5180_send_end_of_frame(dev);
+      if (ret) {
+        need_recover = true;
+        break;
+      }
     }
   }
 
-  /* Disable RF */
-  pn5180_disable_rf(dev);
+inventory_done:
+  if (need_recover) {
+    pn5180_recover(dev);
+  } else {
+    /* Disable RF after a normal inventory cycle */
+    int rf_ret = pn5180_disable_rf(dev);
+    if (rf_ret) {
+      LOG_WRN("RF_OFF failed after inventory (%d), recovering", rf_ret);
+      pn5180_recover(dev);
+      if (!ret) {
+        ret = rf_ret;
+      }
+    }
+  }
 
   k_mutex_unlock(&data->mutex);
+
+  if (need_recover && ret) {
+    return ret;
+  }
   return tag_detected ? PN5180_OK : PN5180_ERR_TIMEOUT;
 }
 
