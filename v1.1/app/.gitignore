@@ -6,8 +6,7 @@ build/
 *.hex
 *.map
 
-# Zephyr specific
-zephyr/
+# Zephyr/CMake build artifacts (build/ already covers build/zephyr/)
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake

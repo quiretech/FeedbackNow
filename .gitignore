@@ -1,8 +1,7 @@
 # Build directories (anywhere in repo)
 **/build/
 
-# Zephyr/CMake build artifacts
-**/zephyr/
+# Zephyr/CMake build artifacts (not out-of-tree module dirs like pn5180/zephyr/)
 **/CMakeFiles/
 **/CMakeCache.txt
 **/cmake_install.cmake
