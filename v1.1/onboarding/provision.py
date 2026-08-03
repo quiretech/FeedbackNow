@@ -8,6 +8,8 @@ Examples (from repo root v1.1):
   python onboarding/provision.py keys --preset seeed-eu868 --test
   python onboarding/provision.py all --preset lr-us915 --target qt-us915 --dry-run
   python onboarding/provision.py all --preset seeed-eu868 --target fbn-main --flash
+  python onboarding/provision.py all --preset seeed-us915 --flash --test
+  python onboarding/provision.py all --preset seeed-eu868 --flash
   python onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --unit UNIT-0042
   python onboarding/provision.py sync --unit UNIT-0322 --preset lr-us915 --target fbn-admin --reprov --flash
   python onboarding/provision.py sync --unit 194 --preset lr-us915 --from-config --target fbn-admin --reprov --flash

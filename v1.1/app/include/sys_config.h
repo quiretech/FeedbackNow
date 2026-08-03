@@ -158,7 +158,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-360) // Monterrey (UTC-6)
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -240,7 +240,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 0
+#define EPD_LOCALE 2
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
