@@ -109,8 +109,9 @@
 #define BUTTON_DEBOUNCE_MS 50
 #if EPD_ENABLED
 #define BUTTON_COOLDOWN_MS 13000
+//#define BUTTON_COOLDOWN_MS 5000 // nk_co1: reduced the cooldown to 5s to make the display more responsive
 #else
-#define BUTTON_COOLDOWN_MS 5000
+#define BUTTON_COOLDOWN_MS 5000 
 #endif
 /* Combo hold + session recovery deadlines: k_work_delayable in button_thread.c */
 #define INPUT_SESSION_RECOVERY_MS 250
@@ -229,9 +230,13 @@
  * EPD timings and locale (EPD_ENABLED set above from DEVICE_HW_VARIANT)
  * =============================================================================
  */
+
 #define EPD_THANKS_DISPLAY_MS 3000
 #define EPD_CLEANING_REVERT_MINUTES 45U
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
+#define EPD_ClEANING_DUE_TIMEOUT_HOURS 12U // nk_co1
+#define EPD_CLEANING_DUE_TIMEOUT_MS 25000//(EPD_ClEANING_DUE_TIMEOUT_HOURS * 60U  * 1000U) //nk_co1
+
 
 #if EPD_ENABLED
 /** Compile-time EPD locale — set EPD_LOCALE below (default EN if unset). */
@@ -240,7 +245,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 2
+#define EPD_LOCALE 0
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
@@ -259,13 +264,14 @@
 #endif
 
 #ifndef EPD_DEVICE_STATUS_COMMISSION_BOOT
-#define EPD_DEVICE_STATUS_COMMISSION_BOOT 0
+#define EPD_DEVICE_STATUS_COMMISSION_BOOT 0 // set to 1 to show device reason for boot (EPD_ENABLED only)
 #endif
 #if EPD_DEVICE_STATUS_COMMISSION_BOOT
 #define EPD_DEVICE_STATUS_COMMISSION_MS 10000
 #endif
 
 #define DISPLAY_WORK_DELAY_MS 5000
+//#define DISPLAY_WORK_DELAY_MS 1000 //nk_co1: redduced the delay to 1s to make the display more responsive
 
 /* =============================================================================
  * Thread and message queue sizing

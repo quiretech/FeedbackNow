@@ -18,6 +18,24 @@
 #define EPD_TEXT_LAST_CLEANED_HEADLINE "LAST CLEANED"
 #endif
 
+// Room Turnaround text for the display screen
+#define EPD_TEXT_NEXT_ACTION_HEADLINE    "NEXT: "
+#define EPD_TEXT_PREPPING_PT_EXIT        "Prepping patient exit"
+#define EPD_TEXT_2_CASE_CART_OUT         "2 Case cart out"
+#define EPD_TEXT_CASE_CART_IS_OUT        "Case cart is out"
+#define EPD_TEXT_3_EVS_IN                "3 EVS in"
+#define EPD_TEXT_EVS_IS_IN               "EVS is in"
+#define EPD_TEXT_4_BED_IS_BEING_WIPED    "4 Bed is being wiped"
+#define EPD_TEXT_BED_HAS_BEEN_WIPED      "Bed has been wiped"
+#define EPD_TEXT_5_EVS_OUT               "5 EVS out"
+#define EPD_TEXT_EVS_IS_OUT              "EVS is out"
+#define EPD_TEXT_6_PATIENT_IN            "6 Patient in"
+#define EPD_TEXT_PATIENT_HAS_EXITED      "Patient has exited"
+#define EPD_TEXT_PATIENT_IS_IN           "Patient is in"
+#define EPD_TEXT_CYCLE                   "CYCLE"
+#define EPD_TEXT_COMPLETED               "COMPLETED"
+
+
 #define EPD_TEXT_CONNECTING "Connecting..."
 #define EPD_TEXT_BRAND_TITLE "flexbox"
 #define EPD_TEXT_MANUFACTURER "quire.tech"

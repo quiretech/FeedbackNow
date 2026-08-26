@@ -12,6 +12,7 @@ From repo root or `app/`:
 
 ```text
 west build -b nrf52840dk/nrf52840
+west build -p always -b nrf52840dk/nrf52840
 west flash --runner nrfjprog
 ```
 

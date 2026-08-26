@@ -205,8 +205,15 @@ int main(void) {
   (void)nfc_service_wait_until_ready(K_SECONDS(1));
 #endif
 #if EPD_ENABLED
+  uint32_t epoch = 0;
+  //epoch = 1778665556; // hardcoded epoch for testing
+  rtc_get_epoch_seconds(&epoch);
   /* Logo uses long EPD SPI; finish before LoRa thread joins (same SPI bus). */
-  display_show_logo_sync();
+  #ifndef ROOM_ALERT_IMPLEMENTATION
+  display_show_logo();
+  #else
+  display_show_room_alert_status_sync(5, epoch);
+  #endif
 #endif
   k_thread_start(lora_thread_id);
   (void)lora_wait_until_ready(K_SECONDS(1));
@@ -221,6 +228,8 @@ int main(void) {
   k_thread_start(button_uplink_thread_id);
   (void)button_thread_wait_until_ready(K_SECONDS(1));
 
+  LOG_STATE("House Keeing Started 1");
+  
   (void)housekeeping_init();
   (void)housekeeping_wait_until_ready(K_SECONDS(1));
 

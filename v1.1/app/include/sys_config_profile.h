@@ -15,9 +15,12 @@
 #define SYS_CONFIG_PROFILE_DESK       1
 #define SYS_CONFIG_PROFILE_LAB        2
 
+#define ROOM_ALERT_IMPLEMENTATION     1
+
 /** Active profile — set exactly one of the SYS_CONFIG_PROFILE_* values above. */
 #ifndef SYS_CONFIG_PROFILE
 #define SYS_CONFIG_PROFILE SYS_CONFIG_PROFILE_PRODUCTION
+//#define SYS_CONFIG_PROFILE SYS_CONFIG_PROFILE_LAB  //added for nk_co1
 #endif
 
 #if SYS_CONFIG_PROFILE == SYS_CONFIG_PROFILE_PRODUCTION

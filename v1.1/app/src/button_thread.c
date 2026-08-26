@@ -25,15 +25,14 @@ typedef struct {
   uint8_t ev_type;
 } combo_def_t;
 
+// Combo table: mask, hold_ms, event type. Order matters: first match wins.
+// This table is used to for combo event creation
+// The button combinations and their corresponding hold times and event types are defined here
 static const combo_def_t combo_table[] = {
-    {BUTTON_MASK_ALL, COMBO_FACTORY_RESET_HOLD_MS,
-     SMF_EVT_COMBO_FACTORY_RESET},
-    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2) | BUTTON_MASK(3),
-     COMBO_REBOOT_HOLD_MS, SMF_EVT_COMBO_REBOOT},
-    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(5),
-     COMBO_DEVICE_INFO_HOLD_MS, SMF_EVT_COMBO_DEVICE_INFO},
-    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2), COMBO_JOIN_HOLD_MS,
-     SMF_EVT_COMBO_JOIN},
+    {BUTTON_MASK_ALL, COMBO_FACTORY_RESET_HOLD_MS,SMF_EVT_COMBO_FACTORY_RESET},
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2) | BUTTON_MASK(3), COMBO_REBOOT_HOLD_MS, SMF_EVT_COMBO_REBOOT},
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(5), COMBO_DEVICE_INFO_HOLD_MS, SMF_EVT_COMBO_DEVICE_INFO},
+    {BUTTON_MASK(0) | BUTTON_MASK(1) | BUTTON_MASK(2), COMBO_JOIN_HOLD_MS, SMF_EVT_COMBO_JOIN},
     {BUTTON_MASK(0) | BUTTON_MASK(1), COMBO_STAFF_HOLD_MS, SMF_EVT_COMBO_STAFF},
 };
 

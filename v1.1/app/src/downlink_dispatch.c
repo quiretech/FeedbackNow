@@ -265,7 +265,7 @@ void downlink_dispatch(uint8_t port, uint8_t len, const uint8_t *frmpayload,
       if (ret == 0) {
         LOG_DBG("cmd 0x%02X timezone offset %d min", (unsigned)cmd,
                 (int)offset_min);
-        display_show_last_cleaned();
+        display_show_last_cleaned(); // This is to ensure that the display reflects the new timezone offset immediately after it is set.
         downlink_queue_housekeeping_state_snapshot();
       } else {
         LOG_WRN("cmd 0x%02X timezone store failed: %d",

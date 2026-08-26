@@ -11,6 +11,10 @@
 #include "rtc.h"
 #include "sys_config.h"
 
+#ifdef ROOM_ALERT_IMPLEMENTATION
+#include "last_cleaned_store.h" // nk_co1
+#endif
+
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -24,7 +28,7 @@ static uint32_t last_accepted_any_press_ms;
 
 void app_logic_public_vote(uint8_t button_id) {
   uint32_t now_ms = (uint32_t)k_uptime_get_32();
-
+  
   if (button_id >= NUM_BUTTONS) {
     LOG_WRN("Invalid button_id=%u (>= NUM_BUTTONS=%u)", button_id,
             NUM_BUTTONS);
@@ -43,15 +47,19 @@ void app_logic_public_vote(uint8_t button_id) {
 
   /* Public lockout: 5s after any accepted press (per FRD) */
   if ((now_ms - last_accepted_any_press_ms) < BUTTON_COOLDOWN_MS) {
-      LOG_DBG("vote blocked cooldown %ums",
+    //LOG_STATE("App logic Mode ");
+      LOG_STATE("vote blocked cooldown %ums",
               (uint32_t)(BUTTON_COOLDOWN_MS -
                          (now_ms - last_accepted_any_press_ms)));
     return;
   }
-
+  LOG_STATE("led_manager_show ");
   (void)led_manager_show(0, LED_PATTERN_BUTTON_ACCEPTED);
   /* EPD first: finish THANKS render (SPI), then LoRa/EEPROM with clear RX. */
+
+#ifndef ROOM_ALERT_IMPLEMENTATION //nk_co1
   display_show_thanks_sync();
+#endif
 
   uint32_t epoch_s = 0;
   int ret = rtc_get_epoch_seconds(&epoch_s);
@@ -59,6 +67,19 @@ void app_logic_public_vote(uint8_t button_id) {
     epoch_s = (uint32_t)(k_uptime_get() / 1000U);
     LOG_DBG("RTC read failed (%d); using uptime s=%u", ret, epoch_s);
   }
+  
+#ifdef ROOM_ALERT_IMPLEMENTATION
+
+  rail_manager_request_3v3a();
+  //(void)last_cleaned_store_set(epoch_s); // we are pass the epoch directly to the display function
+#if EPD_ENABLED
+  //epoch_s = 1778665556; // hardcoded epoch for testing
+  rtc_get_epoch_seconds(&epoch_s);
+  display_show_room_alert_status_sync(button_id, epoch_s);
+#endif
+  rail_manager_release_3v3a();
+
+#endif
 
   uint8_t payload_button_id = button_id_map[button_id];
   uint8_t payload[PAYLOAD_LEN_BYTES] = {0};

@@ -16,6 +16,8 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
+//#include "last_cleaned_store.h" // added for nk_co1
+//#include "display_manager.h" // added for nk_co1
 
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -116,9 +118,11 @@ static void hk_status_handler(struct k_work *work) {
 int housekeeping_init(void) {
   static const uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 
+  LOG_STATE("House Keeing Started 2");
+
   hk_offset_minutes =
       (uint32_t)(dev_eui[7] * 256U + dev_eui[6]) % (uint32_t)MINUTES_PER_DAY;
-  LOG_DBG("HK jitter=%d offset_min=%u", HEARTBEAT_USE_DEVEUI_JITTER,
+  LOG_STATE("HK jitter=%d offset_min=%u", HEARTBEAT_USE_DEVEUI_JITTER,
           (unsigned)hk_offset_minutes);
 
   k_sem_give(&housekeeping_ready_sem);
@@ -152,6 +156,9 @@ void housekeeping_reschedule_after_rtc(void) {
 }
 
 static void housekeeping_run_core(bool counter_sync_burst) {
+
+  LOG_STATE("House Keeing Run Core");
+
   if (k_mutex_lock(&housekeeping_run_mtx, K_SECONDS(2)) != 0) {
     LOG_WRN("run skipped (lock busy)");
     return;
@@ -177,7 +184,7 @@ static void housekeeping_run_core(bool counter_sync_burst) {
   int32_t battery_mv = 0;
   uint32_t app_uplinks = 0U;
   if (battery_adc_read_mv(&battery_mv) == 0 && battery_mv > 0) {
-    LOG_EVT("HK bat=%dmV epoch=%u", (int)battery_mv, (unsigned)epoch_s);
+    LOG_STATE("HK bat=%dmV epoch=%u", (int)battery_mv, (unsigned)epoch_s);
 
     uint8_t payload[PAYLOAD_LEN_BYTES];
     int pret = payload_gen_build_battery_status(
@@ -204,6 +211,36 @@ static void housekeeping_run_core(bool counter_sync_burst) {
     LOG_DBG("counter sync burst (%u buttons)", (unsigned)NUM_BUTTONS);
     app_uplinks += counter_sync_run(epoch_s, LORA_COUNTER_SYNC_CONFIRMED);
   }
+ 
+/*added for nk_co1 ---------------------
+
+  // Compare the last cleaned epoch with the current epoch and  update screen with logo if more that 24 hr
+
+  LOG_STATE("Last cleaned check");
+  uint32_t last_cleaned_epoch = 0;
+  if (last_cleaned_store_get(&last_cleaned_epoch) != 0 && last_cleaned_epoch != 0) {
+    
+    LOG_STATE("Entered last cleaned check");
+    uint32_t elapsed = epoch_s - last_cleaned_epoch;
+    static bool default_logo_shown = true;
+     
+    if (elapsed > HOUSEKEEPING_INTERVAL_SECONDS && !default_logo_shown) {
+      LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo", (unsigned)last_cleaned_epoch, (unsigned)elapsed);
+      rail_manager_request_3v3a();
+      display_show_logo_sync();
+      rail_manager_release_3v3a();
+      default_logo_shown = true; // Set the flag to true after showing the logo to avoid logo screen refreshing multiple times
+    } 
+    // Below condition is to insure the screen wait to be refresh to logo screen
+    if(elapsed < HOUSEKEEPING_INTERVAL_SECONDS && default_logo_shown) {
+      LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo", (unsigned)last_cleaned_epoch, (unsigned)elapsed);
+      LOG_STATE("Cleaning performed within 24 hr; showing last cleaned screen");
+      default_logo_shown = false;
+    }
+  }
+  *///------------------added for nk_co1
+  
+
 
   lora_schedule_time_sync_after_app_uplinks(app_uplinks);
 

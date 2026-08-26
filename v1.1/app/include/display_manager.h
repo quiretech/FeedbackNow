@@ -21,7 +21,14 @@ enum display_screen_id {
   DISPLAY_SCREEN_CONNECTING,
   DISPLAY_SCREEN_DEVICE_STATUS,
   DISPLAY_SCREEN_DL_CUSTOM,
-  DISPLAY_SCREEN_COUNT
+  DISPLAY_SCREEN_COUNT,
+  DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE,
+  DISPLAY_SCREEN_ROOM_PREP_PATIENT_EXIT,
+  DISPLAY_SCREEN_ROOM_CASE_CART_OUT,
+  DISPLAY_SCREEN_ROOM_EVS_IN,
+  DISPLAY_SCREEN_ROOM_BED_WIPE,
+  DISPLAY_SCREEN_ROOM_EVS_OUT
+
 };
 
 /** Call once after last_cleaned_store and (if EPD) display driver are ready. */
@@ -51,7 +58,10 @@ void display_show_last_cleaned(void);
  * Use after NFC check-out (and similar) so the panel updates immediately before
  * LoRa uplink on the shared SPI bus.
  */
-void display_show_last_cleaned_sync(void);
+void display_show_last_cleaned_sync(bool scan_event); /* nk_co1: added scan_event 
+param to indicate if this is a scan event or not. If it is a scan event, 
+we want to show the last cleaned time display till set next clean due 
+timeout expires set by EPD_CLEANING_DUE_TIMEOUT_HOURS */
 
 /** Show thanks; starts timer then transitions to last cleaned. */
 void display_show_thanks(void);
@@ -59,6 +69,10 @@ void display_show_thanks(void);
 /** Show thanks and block until EPD render completes. Use for button: EPD first,
  * then LoRa/EEPROM (clear SPI for downlinks). */
 void display_show_thanks_sync(void);
+
+// nk_co1: added function to show room alert status screen
+// Show room alert status and block until EPD render completes. 
+void display_show_room_alert_status_sync(int button_in, uint32_t epoch_s);
 
 /** Show cleaning; starts 45min auto-revert timer. */
 void display_show_cleaning(void);

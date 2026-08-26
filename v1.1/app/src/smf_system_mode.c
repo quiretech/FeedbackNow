@@ -50,7 +50,7 @@ enum system_mode
   MODE_DEVICE_INFO,
   MODE_REBOOT,
   MODE_PROCESS_ACTION,
-  MODE_COUNT
+  MODE_COUNT,
 };
 
 /* Use sys_config.h for SMF_MSGQ_SIZE, SMF_MSGQ_ALIGN, SMF_THREAD_STACK_SIZE */
@@ -321,13 +321,14 @@ static void smf_thread_fn(void *a, void *b, void *c)
       LOG_STATE("smf dl_reboot led_ms=%u", (unsigned)REBOOT_LED_MS);
       continue;
     }
-
+    
     switch (mode)
     {
     case MODE_NORMAL:
       if (msg.ev_type >= SMF_EVT_BUTTON_SINGLE_0 &&
           msg.ev_type <= SMF_EVT_BUTTON_SINGLE_5)
       {
+        
         if (!system_ready)
         {
           LOG_DBG("Normal: button %u ignored (system not ready yet)",
@@ -339,6 +340,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
            * schedules display_work on the system workqueue and blocks on a
            * sem — same thread would deadlock until thanks sync timeout.
            */
+
           LOG_DBG("state=Normal -> app_logic_public_vote(button_id=%u)",
                   msg.button_id);
           rail_manager_request_3v3a();
@@ -372,12 +374,12 @@ static void smf_thread_fn(void *a, void *b, void *c)
           device_status_shown_this_boot = true;
           LOG_DBG("smf device_status cause=%s", boot_info_cause_str());
           smf_show_device_status_with_dwell(smf_joined_overlap_work);
-          display_show_last_cleaned_sync();
+          display_show_last_cleaned_sync(false);
         }
         else
 #endif
         {
-          display_show_last_cleaned_sync();
+          display_show_last_cleaned_sync(false);
         }
 
         if (!commission_epd)
@@ -403,7 +405,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
                   boot_info_cause_str());
           rail_manager_request_3v3a();
           smf_show_device_status_with_dwell(NULL);
-          display_show_last_cleaned_sync();
+          display_show_last_cleaned_sync(false);
           display_request_full_refresh();
           rail_manager_release_3v3a();
         }
@@ -551,7 +553,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         LOG_STATE("smf DevInfo->Norm timeout");
-        display_show_last_cleaned_sync();
+        display_show_last_cleaned_sync(false);
         /* No rail to release: we released 3.3A when leaving Staff for
          * DeviceInfo */
       }
@@ -616,7 +618,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
             rail_manager_request_3v3a();
             (void)last_cleaned_store_set(epoch_s);
 #if EPD_ENABLED
-            display_show_last_cleaned_sync();
+            display_show_last_cleaned_sync(true /* scan event = true, cleaning due reset */);
 #endif
             rail_manager_release_3v3a();
           }

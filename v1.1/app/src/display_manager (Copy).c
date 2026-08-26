@@ -14,6 +14,7 @@
   #include "sys_config.h"
   #include "tz_offset_store.h"
 
+  
   #include <ctype.h>
   #include <stdio.h>
   #include <string.h>
@@ -88,7 +89,7 @@
   /* Timer vs work queue: use atomic for thread safety */
   static atomic_t cleaning_timer_active_atomic = ATOMIC_INIT(0);
   static atomic_t cleaning_timer_expired_atomic = ATOMIC_INIT(0);
-  static atomic_t cleaning_due_atomic = ATOMIC_INIT(1); // nk co1
+  static atomic_t cleaning_due_atomic = ATOMIC_INIT(0); // nk co1
   static enum display_screen_id current_screen = DISPLAY_SCREEN_LOGO;
 
   /* Public vote: block new votes from THANKS (queued) until LAST_CLEANED render
@@ -109,15 +110,12 @@
   static lv_obj_t *dl_custom_msg_label;
   static lv_obj_t *last_cleaned_label;
 
-  static lv_obj_t *next_label; // nk_co1
+  static lv_obj_t *label_next; // nk_co1
   static lv_obj_t *next_action_label; // nk_co1
   static lv_obj_t *last_job_timestamp_label; // nk_co1
   static lv_obj_t *last_job_label; // nk_co1
-  static lv_obj_t *sep_line; // nk_co1
-  static lv_point_precise_t line_points[] = { {25, 0}, {375,  0} };
   static lv_obj_t *screen_room_turnaround; // nk_co1
   
-
   /* Device status screen */
   static lv_obj_t *ds_brand;
   static lv_obj_t *ds_unit_ra;
@@ -155,20 +153,6 @@
 
   static void enqueue_job(enum display_job_type type, uint32_t epoch);
 
-    // nk_co1 ============
-  static void last_cleaned_timeout_timer_expiry(struct k_timer *timer) {
-    ARG_UNUSED(timer);
-    /* Timer context — set flag for clean is due based on accepted length of time since last cleaned
-    set by EPD_CLEANING_DUE_TIMEOUT_HOURS */
-    enqueue_job(JOB_SHOW_LOGO, 0);
-    atomic_set(&cleaning_due_atomic, 1);
-    LOG_STATE("LAST CLEANED TIMER EXPIRED");
-
-  }
-  // =============== nk_co1
-  K_TIMER_DEFINE(last_cleaned_timeout_timer, last_cleaned_timeout_timer_expiry, NULL); // nk co1
-
-
   /**
   * Force LVGL to render and flush. In DIRECT render mode, a single
   * lv_task_handler() call may not flush (LVGL can defer rendering to the next
@@ -187,20 +171,22 @@
     if (atomic_get(&cleaning_timer_active_atomic)) {
       enqueue_job(JOB_SHOW_CLEANING, 0);
       return;
-    }
-    //enqueue_job(JOB_SHOW_LAST_CLEANED, 0);        
-    //nk_co1 ===========
-    if (atomic_get(&cleaning_due_atomic) == 1) {      
+    } 
+    
+    //enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
+    
+    
+    // nk_co1 ===========
+    else if (atomic_get(&cleaning_due_atomic) == 1) { 
       
+      display_show_logo_sync();
       //enqueue_job(JOB_SHOW_LOGO, 0);
-      enqueue_job(JOB_SHOW_CLEANING, 0);
     } 
     else {
       enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
     }
-    //===============nk_co1
-    
-
+    // ===============nk_co1
+    return; 
   }
 
   static void cleaning_timer_expiry(struct k_timer *timer) {
@@ -210,27 +196,50 @@
     atomic_set(&cleaning_timer_active_atomic, 0);
     atomic_set(&cleaning_timer_expired_atomic, 1);
     enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
-    
-    //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
-    atomic_set(&cleaning_due_atomic, 0); // nk_co1
 
+    atomic_set(&cleaning_due_atomic, 0);
+
+    // nk_co1 ===========
+    // //enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
+    // if (atomic_get(&cleaning_due_atomic) == 1) {      
+    //   enqueue_job(JOB_SHOW_LOGO, 0);
+    // } 
+    // else {
+    //   enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
+    // }
+    // ===============nk_co1 
   }
 
+  // nk_co1 ============
 
+  static void last_cleaned_timeout_timer_expiry(struct k_timer *timer) {
+    ARG_UNUSED(timer);
+    /* Timer context — set flag for clean is due based on accepted length of time since last cleaned
+    set by EPD_CLEANING_DUE_TIMEOUT_HOURS */
+
+    atomic_set(&cleaning_due_atomic, 1);
+  }
+  // =============== nk_co1
 
   static void dl_custom_revert_timer_expiry(struct k_timer *timer) {
     ARG_UNUSED(timer);
     /* Match thanks_timer: reopen cleaning session if cleaner timer runs. */
 
     if (atomic_get(&cleaning_timer_active_atomic)) {
+
       enqueue_job(JOB_SHOW_CLEANING, 0);
+
       return;
+
     }
+    // nk_co1 need to check logic with client if to reset cleaning due timer
     enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
+
   }
 
   K_TIMER_DEFINE(thanks_timer, thanks_timer_expiry, NULL);
   K_TIMER_DEFINE(cleaning_timer, cleaning_timer_expiry, NULL);
+  K_TIMER_DEFINE(last_cleaned_timeout_timer, last_cleaned_timeout_timer_expiry, NULL); // nk co1
   K_TIMER_DEFINE(dl_custom_revert_timer, dl_custom_revert_timer_expiry, NULL);
 
   static char dl_custom_msg_buf[DISPLAY_DL_CUSTOM_TEXT_MAX + 1];
@@ -256,11 +265,9 @@
   K_SEM_DEFINE(cleaning_done_sem, 0, 1);
   static atomic_t cleaning_sync_waiting = ATOMIC_INIT(0);
 
-  #ifdef ROOM_ALERT_IMPLEMENTATION
-  /* For display_show_last_room_job_sync: immediate last room job. */ // nk_co1
+   /* For display_show_last_room_job_sync: immediate last room job. */ // nk_co1
   K_SEM_DEFINE(last_room_job_done_sem, 0, 1);
   static atomic_t last_room_job_done_sync_waiting = ATOMIC_INIT(0);
-  #endif
 
   K_SEM_DEFINE(device_status_done_sem, 0, 1);
   static atomic_t device_status_sync_waiting = ATOMIC_INIT(0);
@@ -388,7 +395,7 @@
   /* Create LVGL screens for each display state */
   static void create_lvgl_screens(void) {
     lv_obj_t *label;
-
+    
     /* Screen: LOGO – boot logo image centered */
     screen_logo = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_logo, lv_color_white(), LV_PART_MAIN);
@@ -439,8 +446,7 @@
 
     lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-  #ifdef ROOM_ALERT_IMPLEMENTATION
-   ///* nk_co1=========================
+    ///* nk_co1=========================
 
     /* Screen: Room Turnaround Alert System (400x300): top space, heading, gap, timestamp, bottom
     * space */
@@ -462,34 +468,12 @@
     lv_obj_set_flex_flow(cont_room, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(cont_room, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(cont_room, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(cont_room, 40, LV_PART_MAIN);
 
-    
-    last_job_label = lv_label_create(cont_room);
-    lv_label_set_text(last_job_label, EPD_TEXT_6_PATIENT_IN); // Default text; can be updated dynamically
-    lv_obj_set_style_text_font(last_job_label, &roboto_36, LV_PART_MAIN);
-    lv_obj_set_style_text_color(last_job_label, lv_color_black(),
-                                LV_PART_MAIN);
-
-    last_job_timestamp_label = lv_label_create(cont_room);
-    lv_label_set_text(last_job_timestamp_label, "2026/01/01 00:00");
-    lv_obj_set_style_text_font(last_job_timestamp_label, &roboto_36, LV_PART_MAIN);
-    lv_obj_set_style_text_color(last_job_timestamp_label, lv_color_black(),
-                                LV_PART_MAIN);
-
-    // Define the starting (0,0) and ending (300,0) horizontal points for the line    
-    sep_line = lv_line_create(cont_room);
-    lv_line_set_points(sep_line, line_points, 2);     // Set the coordinates
-    lv_obj_set_style_line_width(sep_line, 2, LV_PART_MAIN); // 2 pixels thick
-    lv_obj_set_width(sep_line, LV_PCT(100)); 
-    lv_obj_set_height(sep_line, 2); // Set the height of the line object to 2 pixels
-    lv_obj_set_style_line_color(sep_line, lv_color_black(), LV_PART_MAIN); // Black line
-
-
-    next_label = lv_label_create(cont_room);
-    lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE); // Default text; can be updated dynamically
-    lv_obj_set_style_text_font(next_label, &roboto_bold_36, LV_PART_MAIN);
-    lv_obj_set_style_text_color(next_label, lv_color_black(), LV_PART_MAIN);
+    label_next = lv_label_create(cont_room);
+    lv_label_set_text(label_next, EPD_TEXT_CYCLE); // Default text; can be updated dynamically
+    lv_obj_set_style_text_font(label_next, &roboto_bold_42, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label_next, lv_color_black(), LV_PART_MAIN);
 
 
     // Next action text label
@@ -497,12 +481,32 @@
     lv_label_set_text(next_action_label, EPD_TEXT_COMPLETED); // Default text; can be updated dynamically
     lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
     lv_obj_set_style_text_color(next_action_label, lv_color_black(),
-                                LV_PART_MAIN);    
+                                LV_PART_MAIN);
+
+    // Define the starting (0,0) and ending (300,0) horizontal points for the line
+    static lv_point_precise_t line_points[] = { {0, 0}, {300, 0} }; 
+
+    lv_obj_t * sep_line = lv_line_create(cont_room);
+    lv_line_set_points(sep_line, line_points, 2);     // Set the coordinates
+    lv_obj_set_style_line_width(sep_line, 2, LV_PART_MAIN); // 2 pixels thick
+    lv_obj_set_style_line_color(sep_line, lv_color_black(), LV_PART_MAIN); // Black line
+
+
+    last_job_timestamp_label = lv_label_create(cont_room);
+    lv_label_set_text(last_job_timestamp_label, "2026/01/01 00:00");
+    lv_obj_set_style_text_font(last_job_timestamp_label, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_color(last_job_timestamp_label, lv_color_black(),
+                                LV_PART_MAIN);
+
+    last_job_label = lv_label_create(cont_room);
+    (last_job_label, EPD_TEXT_PATIENT_IN); // Default text; can be updated dynamically
+    lv_obj_set_style_text_font(last_job_label, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_color(last_job_label, lv_color_black(),
+                                LV_PART_MAIN);
 
     lv_obj_add_flag(screen_room_turnaround, LV_OBJ_FLAG_HIDDEN);
 
     // ============================ nk_co1 */
-  #endif
 
     /* Screen: THANKS — full-screen bitmap; locale via EPD_LOCALE */
     screen_thanks = lv_obj_create(NULL);
@@ -934,25 +938,6 @@
                   tm_utc.tm_hour, tm_utc.tm_min);
   }
 
-  /* Format epoch as yyyy/mm/dd hh:mm (UTC). Buffer at least 17 bytes. */
-  static void format_epoch_mmdd_hhmm(uint32_t epoch_s, char *buf,
-                                        size_t buf_len) {
-    if (buf == NULL || buf_len < 17) {
-      if (buf && buf_len > 0) {
-        buf[0] = '\0';
-      }
-      return;
-    }
-    time_t tt = (time_t)epoch_s;
-    struct tm tm_utc = {0};
-    if (gmtime_r(&tt, &tm_utc) == NULL) {
-      buf[0] = '\0';
-      return;
-    }
-    (void)snprintf(buf, buf_len, "%02d/%02d %02d:%02d",
-                  tm_utc.tm_mon + 1, tm_utc.tm_mday, tm_utc.tm_hour, tm_utc.tm_min);
-  }
-
   static void do_render(const struct device *display, enum display_job_type type,
                         uint32_t epoch) {
     int ret;
@@ -1012,11 +997,10 @@
     if (screen_dl_custom) {
       lv_obj_add_flag(screen_dl_custom, LV_OBJ_FLAG_HIDDEN);
     }
-    #ifdef ROOM_ALERT_IMPLEMENTATION
-    if (screen_room_turnaround) { // nk_co1
+     if (screen_room_turnaround) { // nk_co1
       lv_obj_add_flag(screen_room_turnaround, LV_OBJ_FLAG_HIDDEN);
     }
-    #endif
+
     /* Show the requested screen */
     switch (type) {
     case JOB_SHOW_LOGO:
@@ -1064,10 +1048,8 @@
         k_mutex_lock(&dl_custom_msg_mutex, K_FOREVER);
         lv_label_set_text(dl_custom_msg_label, dl_custom_msg_buf);
         k_mutex_unlock(&dl_custom_msg_mutex);
-
       }
       scr_to_show = screen_dl_custom;
-
       break;
 
     case JOB_FULL_REFRESH:
@@ -1095,12 +1077,14 @@
       case DISPLAY_SCREEN_DL_CUSTOM:
         scr_to_show = screen_dl_custom;
         break;
+      case DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE: //nk_co1
+        scr_to_show = screen_room_turnaround;
+        break;
       default:
         break;
       }
       break;
-#ifdef ROOM_ALERT_IMPLEMENTATION
-    // nk_co1: Room Turnaround Alert System  
+
     case JOB_SHOW_ROOM_ALERT_STATUS: {
       /* Apply timezone offset for display only (all internals stay UTC). */
       int16_t tz_min_room = 0;
@@ -1112,16 +1096,15 @@
       if (display_epoch_room > (int64_t)UINT32_MAX) {
         display_epoch_room = (int64_t)UINT32_MAX;
       }
-      format_epoch_mmdd_hhmm((uint32_t)display_epoch_room, ts, sizeof(ts));
+      format_epoch_yyyymmdd_hhmm((uint32_t)display_epoch_room, ts, sizeof(ts));
       LOG_STATE("epd screen LAST_JOB_TIMESTAMP %s", ts);
       if (last_job_timestamp_label) {
         lv_label_set_text(last_job_timestamp_label, ts);
       }
       scr_to_show = screen_room_turnaround;
       }
-      break;
-    // =================== nk_co1
-#endif
+      break;  
+    
     default:
       break;
     }
@@ -1179,15 +1162,12 @@
         k_sem_give(&device_status_done_sem);
       }
       break;
-
-#ifdef ROOM_ALERT_IMPLEMENTATION
-    case JOB_SHOW_ROOM_ALERT_STATUS: //nk_co1
+    case JOB_SHOW_ROOM_ALERT_STATUS:
       if (atomic_get(&last_room_job_done_sync_waiting) != 0) {
         atomic_set(&last_room_job_done_sync_waiting, 0);
         k_sem_give(&last_room_job_done_sem);
       }
-      break;
-#endif
+      break; 
     default:
       break;
     }
@@ -1218,159 +1198,149 @@
 
     uint32_t epoch = 0;
     switch (job.type) {
-
-    case JOB_SHOW_LOGO:
-      k_timer_stop(&dl_custom_revert_timer);
-      current_screen = DISPLAY_SCREEN_LOGO;
-      do_render(display, JOB_SHOW_LOGO, 0);
-      break;
-
-    case JOB_SHOW_LAST_CLEANED: {
-      k_timer_stop(&dl_custom_revert_timer);
-      /* EPD fast update often doesn't fully switch when changing to different
-      * content (LOGO or CONNECTING -> LAST_CLEANED); force full refresh. */
-      bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
-                                current_screen == DISPLAY_SCREEN_CONNECTING ||
-                                current_screen == DISPLAY_SCREEN_DL_CUSTOM);
-      if (need_full_refresh) {
-        ssd1683_set_fast_update(display, false);
-      }
-      current_screen = DISPLAY_SCREEN_LAST_CLEANED;
-      if (atomic_get(&cleaning_timer_active_atomic)) {
-        k_timer_stop(&cleaning_timer);
-        atomic_set(&cleaning_timer_active_atomic, 0);
-      }
-      /* If cleaning timer expired, update last cleaned time from RTC */
-      if (atomic_get(&cleaning_timer_expired_atomic)) {
-        atomic_set(&cleaning_timer_expired_atomic, 0);
-        if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
-          (void)last_cleaned_store_set(epoch);
-          LOG_DBG("epd cleaning_revert epoch=%u", epoch);
-        } else {
-          (void)last_cleaned_store_get(&epoch);
-          LOG_WRN("epd cleaning_revert no_rtc");
+      case JOB_SHOW_LOGO:
+        k_timer_stop(&dl_custom_revert_timer);
+        current_screen = DISPLAY_SCREEN_LOGO;
+        do_render(display, JOB_SHOW_LOGO, 0);
+        break;
+      case JOB_SHOW_LAST_CLEANED: {
+        k_timer_stop(&dl_custom_revert_timer);
+        /* EPD fast update often doesn't fully switch when changing to different
+        * content (LOGO or CONNECTING -> LAST_CLEANED); force full refresh. */
+        bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
+                                  current_screen == DISPLAY_SCREEN_CONNECTING ||
+                                  current_screen == DISPLAY_SCREEN_DL_CUSTOM);
+        if (need_full_refresh) {
+          ssd1683_set_fast_update(display, false);
         }
-      } else {
-        k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
-        epoch = pending_last_cleaned_epoch;
-        pending_last_cleaned_epoch = 0;
-        k_mutex_unlock(&pending_epoch_mutex);
-        if (epoch != 0) {
-          (void)last_cleaned_store_set(epoch);
+        current_screen = DISPLAY_SCREEN_LAST_CLEANED;
+        if (atomic_get(&cleaning_timer_active_atomic)) {
+          k_timer_stop(&cleaning_timer);
+          atomic_set(&cleaning_timer_active_atomic, 0);
+        }
+        /* If cleaning timer expired, update last cleaned time from RTC */
+        if (atomic_get(&cleaning_timer_expired_atomic)) {
+          atomic_set(&cleaning_timer_expired_atomic, 0);
+          if (rtc_get_epoch_seconds(&epoch) == 0 && epoch != 0) {
+            (void)last_cleaned_store_set(epoch);
+            LOG_DBG("epd cleaning_revert epoch=%u", epoch);
+          } else {
+            (void)last_cleaned_store_get(&epoch);
+            LOG_WRN("epd cleaning_revert no_rtc");
+          }
         } else {
-          (void)last_cleaned_store_get(&epoch);
-          if (epoch == 0) {
-            (void)rtc_get_epoch_seconds(&epoch);
+          k_mutex_lock(&pending_epoch_mutex, K_FOREVER);
+          epoch = pending_last_cleaned_epoch;
+          pending_last_cleaned_epoch = 0;
+          k_mutex_unlock(&pending_epoch_mutex);
+          if (epoch != 0) {
+            (void)last_cleaned_store_set(epoch);
+          } else {
+            (void)last_cleaned_store_get(&epoch);
+            if (epoch == 0) {
+              (void)rtc_get_epoch_seconds(&epoch);
+            }
           }
         }
-      }
-
-      // if(atomic_get(&cleaning_due_atomic) != 0){
-      //   current_screen = DISPLAY_SCREEN_LOGO;
-      //   do_render(display, JOB_SHOW_LOGO, 0);
-      // }
-      // else {
         do_render(display, JOB_SHOW_LAST_CLEANED, epoch);
-      // }
-      if (need_full_refresh) {
-        ssd1683_set_fast_update(display, true);
-      }
-      break;
-    }
-
-    case JOB_SHOW_THANKS:
-      k_timer_stop(&dl_custom_revert_timer);
-      current_screen = DISPLAY_SCREEN_THANKS;
-      k_timer_stop(&thanks_timer);
-      do_render(display, JOB_SHOW_THANKS, 0);
-      k_timer_start(&thanks_timer, K_MSEC(EPD_THANKS_DISPLAY_MS), K_NO_WAIT);
-      break;
-    case JOB_SHOW_CLEANING: {
-      k_timer_stop(&dl_custom_revert_timer);
-      current_screen = DISPLAY_SCREEN_CLEANING;
-      bool timer_was_running = (atomic_get(&cleaning_timer_active_atomic) != 0);
-      atomic_set(&cleaning_timer_active_atomic, 1);
-      do_render(display, JOB_SHOW_CLEANING, 0);
-      if (!timer_was_running) {
-        k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
-                      K_NO_WAIT);
-        LOG_DBG("epd cleaning_tmr %umin", EPD_CLEANING_REVERT_MINUTES);
-      } else {
-        LOG_DBG("Cleaning screen reshown, timer kept running");
-      }
-      break;
-    }
-
-    case JOB_SHOW_CONNECTING:
-      k_timer_stop(&dl_custom_revert_timer);
-      current_screen = DISPLAY_SCREEN_CONNECTING;
-      do_render(display, JOB_SHOW_CONNECTING, 0);
-      break;
-    case JOB_SHOW_DL_CUSTOM_MESSAGE: {
-      k_timer_stop(&dl_custom_revert_timer);
-
-      current_screen = DISPLAY_SCREEN_DL_CUSTOM;
-
-      do_render(display, JOB_SHOW_DL_CUSTOM_MESSAGE, 0);
-
-      uint32_t hold = job.epoch;
-
-      if (hold == 0U) {
-
-        hold = DL_CUSTOM_TEXT_DEFAULT_MINUTES;
-
+        if (need_full_refresh) {
+          ssd1683_set_fast_update(display, true);
+        }
+        break;
       }
 
-      if (hold > 1440U) {
-
-        hold = 1440U;
-
-      }
-
-      k_timer_start(&dl_custom_revert_timer, K_MINUTES(hold), K_NO_WAIT);
-
-      LOG_DBG("epd dl_custom hold_min=%u", (unsigned)hold);
-
+      case JOB_SHOW_THANKS:
+        k_timer_stop(&dl_custom_revert_timer);
+        current_screen = DISPLAY_SCREEN_THANKS;
+        k_timer_stop(&thanks_timer);
+        do_render(display, JOB_SHOW_THANKS, 0);
+        k_timer_start(&thanks_timer, K_MSEC(EPD_THANKS_DISPLAY_MS), K_NO_WAIT);
       break;
 
-    }
+      case JOB_SHOW_CLEANING: {
+        k_timer_stop(&dl_custom_revert_timer);
+        current_screen = DISPLAY_SCREEN_CLEANING;
+        bool timer_was_running = (atomic_get(&cleaning_timer_active_atomic) != 0);
+        atomic_set(&cleaning_timer_active_atomic, 1);
+        do_render(display, JOB_SHOW_CLEANING, 0);
+        if (!timer_was_running) {
+          k_timer_start(&cleaning_timer, K_MSEC(EPD_CLEANING_AUTO_REVERT_MS),
+                        K_NO_WAIT);
+          LOG_DBG("epd cleaning_tmr %umin", EPD_CLEANING_REVERT_MINUTES);
+        } else {
+          LOG_DBG("Cleaning screen reshown, timer kept running");
+        }
+      break;
+      }
+      
+      case JOB_SHOW_CONNECTING:
+        k_timer_stop(&dl_custom_revert_timer);
+        current_screen = DISPLAY_SCREEN_CONNECTING;
+        do_render(display, JOB_SHOW_CONNECTING, 0);
+      break;
 
-    case JOB_SHOW_DEVICE_STATUS: {
-      /* Commission boot: full refresh when coming from logo/connecting. */
-      k_timer_stop(&dl_custom_revert_timer);
-      bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
-                                current_screen == DISPLAY_SCREEN_CONNECTING ||
-                                current_screen == DISPLAY_SCREEN_DL_CUSTOM);
-      if (need_full_refresh) {
+      case JOB_SHOW_DL_CUSTOM_MESSAGE: {
+        k_timer_stop(&dl_custom_revert_timer);
+
+        current_screen = DISPLAY_SCREEN_DL_CUSTOM;
+
+        do_render(display, JOB_SHOW_DL_CUSTOM_MESSAGE, 0);
+
+        uint32_t hold = job.epoch;
+
+        if (hold == 0U) {
+
+          hold = DL_CUSTOM_TEXT_DEFAULT_MINUTES;
+
+        }
+
+        if (hold > 1440U) {
+
+          hold = 1440U;
+
+        }
+
+        k_timer_start(&dl_custom_revert_timer, K_MINUTES(hold), K_NO_WAIT);
+
+        LOG_DBG("epd dl_custom hold_min=%u", (unsigned)hold);
+
+      break;
+      }
+
+      case JOB_SHOW_DEVICE_STATUS: {
+        /* Commission boot: full refresh when coming from logo/connecting. */
+        k_timer_stop(&dl_custom_revert_timer);
+        bool need_full_refresh = (current_screen == DISPLAY_SCREEN_LOGO ||
+                                  current_screen == DISPLAY_SCREEN_CONNECTING ||
+                                  current_screen == DISPLAY_SCREEN_DL_CUSTOM);
+        if (need_full_refresh) {
+          ssd1683_set_fast_update(display, false);
+        }
+        current_screen = DISPLAY_SCREEN_DEVICE_STATUS;
+        do_render(display, JOB_SHOW_DEVICE_STATUS, 0);
+        if (need_full_refresh) {
+          ssd1683_set_fast_update(display, true);
+        }
+      break;
+      }
+
+      case JOB_FULL_REFRESH:
         ssd1683_set_fast_update(display, false);
-      }
-      current_screen = DISPLAY_SCREEN_DEVICE_STATUS;
-      do_render(display, JOB_SHOW_DEVICE_STATUS, 0);
-      if (need_full_refresh) {
-        ssd1683_set_fast_update(display, true);
-      }
+        do_render(display, JOB_FULL_REFRESH, 0);
       break;
-    }
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
-    case JOB_SHOW_ROOM_ALERT_STATUS:         
+      case JOB_SHOW_ROOM_ALERT_STATUS:         
       /*  current_screen = DISPLAY_SCREEN_LAST_CLEANED;
         if (atomic_get(&cleaning_timer_active_atomic)) {
           k_timer_stop(&cleaning_timer);
           atomic_set(&cleaning_timer_active_atomic, 0);
-        } */ 
-        rtc_get_epoch_seconds(&epoch);       
+        } */        
         current_screen = DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE;         
         do_render(display, JOB_SHOW_ROOM_ALERT_STATUS, epoch);
       break;
-#endif
-
-    case JOB_FULL_REFRESH:
-      ssd1683_set_fast_update(display, false);
-      do_render(display, JOB_FULL_REFRESH, 0);
-      break;
-    default:
-      do_render(display, (enum display_job_type)job.type, job.epoch);
+      
+      default:
+        do_render(display, (enum display_job_type)job.type, job.epoch);
       break;
     }
 
@@ -1402,39 +1372,35 @@
       atomic_set(&thanks_sync_waiting, 0);
       k_sem_give(&thanks_done_sem);
     }
-
     if (job.type == JOB_SHOW_LOGO && atomic_get(&logo_sync_waiting)) {
       atomic_set(&logo_sync_waiting, 0);
       k_sem_give(&logo_done_sem);
     }
-
-    if (job.type == JOB_SHOW_LAST_CLEANED && atomic_get(&last_cleaned_sync_waiting)) {
+    if (job.type == JOB_SHOW_LAST_CLEANED &&
+        atomic_get(&last_cleaned_sync_waiting)) {
       atomic_set(&last_cleaned_sync_waiting, 0);
       k_sem_give(&last_cleaned_done_sem);
     }
-
-    if (job.type == JOB_SHOW_CONNECTING && atomic_get(&connecting_sync_waiting)) {
+    if (job.type == JOB_SHOW_CONNECTING &&
+        atomic_get(&connecting_sync_waiting)) {
       atomic_set(&connecting_sync_waiting, 0);
       k_sem_give(&connecting_done_sem);
     }
-
-    if (job.type == JOB_SHOW_CLEANING && atomic_get(&cleaning_sync_waiting)) {
+    if (job.type == JOB_SHOW_CLEANING &&
+        atomic_get(&cleaning_sync_waiting)) {
       atomic_set(&cleaning_sync_waiting, 0);
       k_sem_give(&cleaning_done_sem);
     }
-
-    if (job.type == JOB_SHOW_DEVICE_STATUS && atomic_get(&device_status_sync_waiting)) {
+    if (job.type == JOB_SHOW_DEVICE_STATUS &&
+        atomic_get(&device_status_sync_waiting)) {
       atomic_set(&device_status_sync_waiting, 0);
       k_sem_give(&device_status_done_sem);
     }
-
-#ifdef ROOM_ALERT_IMPLEMENTATION
-    if (job.type == JOB_SHOW_ROOM_ALERT_STATUS && // nk_co1
-        atomic_get(&last_room_job_done_sync_waiting)) {
-      atomic_set(&last_room_job_done_sync_waiting, 0);
-      k_sem_give(&last_room_job_done_sem);
-    }
-#endif
+    // if (job.type == JOB_SHOW_ROOM_ALERT_STATUS && // nk_co1
+    //     atomic_get(&last_room_job_done_sync_waiting)) {
+    //   atomic_set(&last_room_job_done_sync_waiting, 0);
+    //   k_sem_give(&last_room_job_done_sem);
+    // }
 
     atomic_set(&display_epd_spi_busy, 0);
 
@@ -1470,18 +1436,15 @@
     uint32_t delay_ms;
     if (type == JOB_SHOW_LOGO || type == JOB_SHOW_CONNECTING ||
         type == JOB_SHOW_DEVICE_STATUS) {
-      delay_ms = 0U;//nk_co1
+      delay_ms = 0U;
     } else {
       /* THANKS from button uses display_show_thanks_sync (0 delay, blocks).
       * Async THANKS (if used) and others use DISPLAY_WORK_DELAY_MS. */
-      delay_ms = DISPLAY_WORK_DELAY_MS;      
+      delay_ms = DISPLAY_WORK_DELAY_MS;
+      LOG_STATE("Delay in ms = %u, Job type = %u",delay_ms,type);
     }
-    
     int ret = k_work_schedule(&display_work, K_MSEC(delay_ms));
-
-    LOG_STATE("Job type %u, Work delay in ms %u, work sheduled ret%u", type, delay_ms, ret);
     if (ret == 0 && !k_work_delayable_is_pending(&display_work)) {
-      LOG_STATE("Work is Pending");
       /* Work is running right now and has not yet re-scheduled itself. Force
       * reschedule with the FULL delay so LAST_CLEANED / CLEANING don't fire
       * at the 200ms fallback and land in LoRa RX windows. */
@@ -1499,7 +1462,6 @@
     pending_last_cleaned_epoch = 0;
     atomic_set(&cleaning_timer_active_atomic, 0);
     atomic_set(&cleaning_timer_expired_atomic, 0);
-    //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
     atomic_set(&cleaning_due_atomic, 0); // nk_co1
 
     /* Get display device */
@@ -1590,7 +1552,7 @@
     }
     atomic_set(&logo_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
-    if (k_sem_take(&logo_done_sem, K_MSEC(30000)) != 0) { 
+    if (k_sem_take(&logo_done_sem, K_MSEC(30000)) != 0) {
       LOG_WRN("logo sync timeout");
     }
     atomic_set(&logo_sync_waiting, 0);
@@ -1622,37 +1584,31 @@
   #endif
   }
 
+
   void display_show_last_cleaned_sync(bool scan_event) {
-    //ARG_UNUSED(scan_event);
   #if EPD_ENABLED
     // nk_co1 ================
-    if (scan_event == true) {
-      /* If this is a scan event, we want to show the last cleaned time display 
-      till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
+    // if (scan_event == true) {
+    //   /* If this is a scan event, we want to show the last cleaned time display 
+    //   till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
       
-      LOG_DBG("last_cleaned sync: scan event but cleaning not due");
-      //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
-      atomic_set(&cleaning_due_atomic, 0);
-    }
+    //   LOG_DBG("last_cleaned sync: scan event but cleaning not due");
+    //   k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
+    //   atomic_set(&cleaning_due_atomic, 0);
+    // }
     // ======================= nk_co1
 
-    if(atomic_get(&cleaning_due_atomic) == 0){ //nk_co1
-      struct display_job job = {.type = JOB_SHOW_LAST_CLEANED, .epoch = 0};
-      if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
-        LOG_WRN("last_cleaned sync: job queue full");
-        return;
-      }
-      atomic_set(&last_cleaned_sync_waiting, 1);
-      (void)k_work_schedule(&display_work, K_MSEC(0));
-      if (k_sem_take(&last_cleaned_done_sem, K_MSEC(10000)) != 0) {
-        LOG_WRN("last_cleaned sync timeout");
-      }
-      atomic_set(&last_cleaned_sync_waiting, 0);
-     }
-     else{
-       enqueue_job(JOB_SHOW_LOGO, 0);
-     }
-
+    struct display_job job = {.type = JOB_SHOW_LAST_CLEANED, .epoch = 0};
+    if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+      LOG_WRN("last_cleaned sync: job queue full");
+      return;
+    }
+    atomic_set(&last_cleaned_sync_waiting, 1);
+    (void)k_work_schedule(&display_work, K_MSEC(0));
+    if (k_sem_take(&last_cleaned_done_sem, K_MSEC(10000)) != 0) {
+      LOG_WRN("last_cleaned sync timeout");
+    }
+    atomic_set(&last_cleaned_sync_waiting, 0);
   #endif
   }
 
@@ -1683,67 +1639,22 @@
   #endif
   }
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
   void display_show_room_alert_status_sync(int button_in, uint32_t epoch_s) {
   #if EPD_ENABLED
-
-  if(next_label){
-    switch (button_in)
-      {
-      case 0:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_2_CASE_CART_OUT);
-        lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_HAS_EXITED); 
-        break;
-      case 1:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_3_EVS_IN);
-        lv_label_set_text(last_job_label, EPD_TEXT_CASE_CART_IS_OUT); 
-        break;  
-      case 2:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_4_BED_IS_BEING_WIPED);
-        lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_IN); 
-        break;
-      case 3:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_5_EVS_OUT);
-        lv_label_set_text(last_job_label, EPD_TEXT_BED_HAS_BEEN_WIPED);
-        break;
-      case 4:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_6_PATIENT_IN);
-        lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_OUT); 
-        break;
-      case 5:
-        lv_label_set_text(next_label, EPD_TEXT_CYCLE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_bold_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_COMPLETED);
-        lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_IS_IN);   
-      default:
-        break;
-      }
-  } 
     //enqueue_job(JOB_SHOW_ROOM_ALERT_STATUS, 0);
     struct display_job job = {.type = JOB_SHOW_ROOM_ALERT_STATUS, .epoch = epoch_s};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
       return;
     }
+
     atomic_set(&last_room_job_done_sync_waiting, 1);
     (void)k_work_schedule(&display_work, K_MSEC(0));
-    if (k_sem_take(&last_room_job_done_sem, K_MSEC(10000)) != 0) {
+    if (k_sem_take(&last_cleaned_done_sem, K_MSEC(10000)) != 0) {
       LOG_WRN("last room job done sync timeout");
     }
     atomic_set(&last_room_job_done_sync_waiting, 0);
   #endif
   }
-#endif
-
 
   void display_show_cleaning(void) {
   #if EPD_ENABLED
@@ -1753,11 +1664,10 @@
 
   void display_show_cleaning_sync(void) {
   #if EPD_ENABLED
-
     /* This is a cleaning scan event, we want to show the last cleaned time display 
-    till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
+      till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
     LOG_DBG("cleaning event, scan event but cleaning not due");
-    //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
+    k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
     atomic_set(&cleaning_due_atomic, 0);
 
     struct display_job job = {.type = JOB_SHOW_CLEANING, .epoch = 0};
@@ -1863,6 +1773,7 @@
     pending_last_cleaned_epoch = epoch;
     k_mutex_unlock(&pending_epoch_mutex);
     if (current_screen != DISPLAY_SCREEN_THANKS) {
+      // nk_co1 need to check logic with client if to reset cleaning due timer
       enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
     }
   #endif
