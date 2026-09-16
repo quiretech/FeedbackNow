@@ -143,6 +143,14 @@ static int system_init(void) {
 }
 
 int main(void) {
+
+// This is part of testing enableing NFC between MED and Non MED device
+#ifdef NFC_ENABLED
+    printk("Macro is DEFINED. Value: %d\n", NFC_ENABLED);
+#else
+    printk("Macro is NOT defined.\n");
+#endif
+
   int ret;
 
   LOG_SECTION_INF("FlexBox+ v" FW_VERSION_STRING " starting");
@@ -209,12 +217,13 @@ int main(void) {
   //epoch = 1778665556; // hardcoded epoch for testing
   rtc_get_epoch_seconds(&epoch);
   /* Logo uses long EPD SPI; finish before LoRa thread joins (same SPI bus). */
-  #ifndef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
   display_show_logo();
-  #else
-  display_show_room_alert_status_sync(5, epoch);
-  #endif
-#endif
+#else
+  room_alert_state_update(SCREEN_STATE_6_PATIENT_IS_IN, epoch); // Initialize the room alert state to last button
+  display_show_room_alert_status_sync();
+#endif /* end FLEXBOX_PLUS_MED */
+#endif /* end EPD_ENABLE */
   k_thread_start(lora_thread_id);
   (void)lora_wait_until_ready(K_SECONDS(1));
   k_thread_start(smf_thread_id);

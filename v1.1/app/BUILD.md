@@ -22,6 +22,7 @@ CMake reads `include/onboarding_config.h` **`DEVICE_HW_VARIANT`** and automatica
 |---------|------------------|------------|---------------------|
 | `FLEXBOX` | `prj_flexbox.conf` (no EPD/NFC/LVGL) | base overlay only | none |
 | `FLEXBOX_PLUS` | `prj_flexbox_plus.conf` | base + `boards/nrf52840dk_nrf52840_flexbox_plus.overlay` | `ssd1683`, `pn5180` |
+| `FLEXBOX_PLUS_MED` | `prj_flexbox_plus_med.conf` | base + `boards/nrf52840dk_nrf52840_flexbox_plus.overlay` | `ssd1683` |
 
 App code uses `EPD_ENABLED` / `NFC_ENABLED` from the same header. `src/hw_variant_guard.c` fails the build if Kconfig and header disagree.
 

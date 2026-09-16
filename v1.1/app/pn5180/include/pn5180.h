@@ -168,6 +168,8 @@ struct pn5180_driver_api {
                   size_t data_len, size_t *bytes_read);
   int (*read_block)(const struct device *dev, uint8_t *uid, uint8_t block_num,
                     uint8_t *block_data, size_t block_size);
+  // int (*read_multiple_blocks)(const struct device *dev, const uint8_t *uid, uint8_t start_block, uint8_t num_blocks,
+  //                            uint8_t *block_data, size_t data_len, size_t *bytes_read);
   int (*write_block)(const struct device *dev, const uint8_t *uid,
                      uint8_t block_num, const uint8_t *block_data,
                      size_t block_size);
@@ -211,6 +213,13 @@ static inline int pn5180_read_block(const struct device *dev, uint8_t *uid,
   return PN5180_API(dev)->read_block(dev, uid, block_num, block_data,
                                      block_size);
 }
+
+// static int pn5180_read_multiple_blocks(const struct device *dev,
+//                                        const uint8_t *uid, uint8_t start_block, uint8_t num_blocks,
+//                                        uint8_t *block_data, size_t data_len, size_t *bytes_read) {
+//   return PN5180_API(dev)->read_multiple_blocks(dev, uid, start_block, 
+//                                         num_blocks, block_data, data_len, bytes_read);
+// }
 
 static inline int pn5180_write_block(const struct device *dev,
                                      const uint8_t *uid, uint8_t block_num,

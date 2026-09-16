@@ -64,12 +64,18 @@ int tz_offset_store_init(void) {
     magic = (uint16_t)init_buf[0] << 8 | (uint16_t)init_buf[1];
     if (magic == TZ_MAGIC) {
       val = (int16_t)((uint16_t)init_buf[2] << 8 | (uint16_t)init_buf[3]);
+      LOG_INF("TZ magic == TZ_MAGIC %u", magic);
     } else {
       val = (int16_t)DEFAULT_TIMEZONE_OFFSET_MINUTES;
+      LOG_INF("TZ magic !=  pre clamp %d", (int)val);
       val = (int16_t)clamp_offset(val);
+      LOG_INF("TZ magic != TZ_MAGIC %d", (int)val);
     }
+    LOG_INF("TZ offset magic %d", (int)val);
   }
+
   if (magic != TZ_MAGIC) {
+    
     /* Uninitialized: write default */
     val = (int16_t)DEFAULT_TIMEZONE_OFFSET_MINUTES;
     val = (int16_t)clamp_offset(val);
@@ -89,6 +95,7 @@ int tz_offset_store_init(void) {
   }
   /* val already set from init_buf when magic was TZ_MAGIC, or from default */
   ctx.cached = val;
+  LOG_INF("TZ offset init cached %d", (int)ctx.cached);
   ctx.cached_valid = true;
   LOG_DBG("TZ offset store init OK, offset=%d min", (int)ctx.cached);
   return 0;
@@ -107,6 +114,7 @@ int tz_offset_store_get(int16_t *out_minutes) {
   }
   if (ctx.cached_valid) {
     *out_minutes = ctx.cached;
+    LOG_INF("TZ offset CACHED %d", (int)ctx.cached);
     return 0;
   }
   uint8_t buf[EEPROM_TZ_OFFSET_SIZE];
@@ -115,6 +123,7 @@ int tz_offset_store_get(int16_t *out_minutes) {
   if (ret != 0) {
     *out_minutes = (int16_t)DEFAULT_TIMEZONE_OFFSET_MINUTES;
     return ret;
+    
   }
   uint16_t magic = (uint16_t)buf[0] << 8 | (uint16_t)buf[1];
   if (magic != TZ_MAGIC) {
@@ -125,6 +134,7 @@ int tz_offset_store_get(int16_t *out_minutes) {
   ctx.cached = val;
   ctx.cached_valid = true;
   *out_minutes = val;
+  //LOG_INF("TZ offset LAST %d", (int)val);
   return 0;
 }
 
@@ -149,6 +159,11 @@ int tz_offset_store_set(int16_t minutes) {
   }
   ctx.cached = minutes;
   ctx.cached_valid = true;
-  LOG_DBG("TZ offset store set %d min (UTC%+d)", (int)minutes, (int)minutes / 60);
+  LOG_INF("TZ offset store set %d min (UTC%+d)", (int)minutes, (int)minutes / 60);
   return 0;
+}
+
+int magic_reset_perform(void){
+  int ret = tz_offset_store_set((int16_t)DEFAULT_TIMEZONE_OFFSET_MINUTES);
+  return ret;
 }

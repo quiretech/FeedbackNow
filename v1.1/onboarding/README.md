@@ -13,24 +13,24 @@ Layout:
 ## Provision CLI (from repo root `v1.1`)
 
 ```bash
-python onboarding/provision.py list
+python3 onboarding/provision.py list
 
 # New unit: keys + headers + registry row + prj.conf/overlay
-python onboarding/provision.py keys --preset lr-us915
-python onboarding/provision.py keys --preset seeed-eu868 --test   # demo_units/ only
+python3 onboarding/provision.py keys --preset lr-us915
+python3 onboarding/provision.py keys --preset seeed-eu868 --test   # demo_units/ only
 
 # One-step: keys → validate → optional flash → AWS (last row when --target set)
-python onboarding/provision.py all --preset seeed-us915 --target quiretech
-python onboarding/provision.py all --preset seeed-eu868 --target fbn-main --flash
-python onboarding/provision.py all --preset lr-us915 --target fbn-eu --dry-run
+python3 onboarding/provision.py all --preset seeed-us915 --target quiretech
+python3 onboarding/provision.py all --preset seeed-eu868 --target fbn-main --flash
+python3 onboarding/provision.py all --preset lr-us915 --target fbn-eu --dry-run
 
 # Re-onboard a specific unit from the registry
-python onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --unit UNIT-0042
+python3 onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --unit UNIT-0042
 
 # Bulk AWS (requires --confirm)
-python onboarding/provision.py aws --target fbn-eu --preset seeed-us915 --all-rows --confirm
+python3 onboarding/provision.py aws --target fbn-eu --preset seeed-us915 --all-rows --confirm
 
-python onboarding/provision.py validate
+python3 onboarding/provision.py validate
 ```
 
 **Presets:** `lr-us915` (LR62E, US915) · `seeed-us915` · `seeed-eu868` (Seeed WIO, US915 or EU868)
@@ -43,9 +43,9 @@ python onboarding/provision.py validate
 
 `gen_euis.py` remains as a deprecated shim; prefer `provision.py`.
 
-## Python (must not be NCS toolchain)
+## python3 (must not be NCS toolchain)
 
-**Do not use the NCS toolchain Python** (`C:\ncs\toolchains\...\bin\python`). It’s incomplete (e.g. no `_socket`) and breaks grpc/chirpstack-api. Use your **system Python** instead.
+**Do not use the NCS toolchain python3** (`C:\ncs\toolchains\...\bin\python`). It’s incomplete (e.g. no `_socket`) and breaks grpc/chirpstack-api. Use your **system Python** instead.
 
 On Windows, force the system Python with the **`py` launcher**:
 
@@ -56,48 +56,48 @@ py -3 -m venv .venv
 pip install -r onboarding\requirements.txt
 
 # Run scripts (venv stays active)
-python onboarding\chirpstack\chirpstack_onboard.py --device-profile-id <UUID>
+python3 onboarding\chirpstack\chirpstack_onboard.py --device-profile-id <UUID>
 ```
 
-If you don’t use a venv, install and run with the same launcher so you don’t pick up NCS’s `python`/`pip`:
+If you don’t use a venv, install and run with the same launcher so you don’t pick up NCS’s `python3`/`pip`:
 
 ```powershell
 py -3 -m pip install -r onboarding\requirements.txt
 py -3 onboarding\chirpstack\chirpstack_onboard.py --device-profile-id <UUID>
 ```
 
-If `py -3` isn’t found, install Python from python.org and use the full path, e.g. `"C:\Users\<you>\AppData\Local\Programs\Python\Python312\python.exe" -m pip install ...`.
+If `py -3` isn’t found, install python3 from python.org and use the full path, e.g. `"C:\Users\<you>\AppData\Local\Programs\Python\Python312\python3.exe" -m pip install ...`.
 
 ## Run from repo root (v1.1)
 
 ```bash
 # Onboard devices from CSV (need --device-profile-id from ChirpStack UI)
-python onboarding/chirpstack/chirpstack_onboard.py --device-profile-id <UUID>
+python3 onboarding/chirpstack/chirpstack_onboard.py --device-profile-id <UUID>
 
 # List then delete all devices in the app (optional --dry-run)
-python onboarding/chirpstack/chirpstack_delete_devices_grpc.py [--dry-run]
+python3 onboarding/chirpstack/chirpstack_delete_devices_grpc.py [--dry-run]
 
 # Queue a downlink to all devices in the app
-python onboarding/chirpstack/chirpstack_downlink_all.py --payload 0102
-python onboarding/chirpstack/chirpstack_downlink_all.py --payload "01 02 03" --f-port 11 --dry-run
+python3 onboarding/chirpstack/chirpstack_downlink_all.py --payload 0102
+python3 onboarding/chirpstack/chirpstack_downlink_all.py --payload "01 02 03" --f-port 11 --dry-run
 
 # Provision new unit: EUIs/keys, eui_keys.h, onboarding_config.h unit id, registry CSV,
 # plus app/prj.conf LoRaWAN region and board overlay (US915+LR62E vs EU868+Seeed WIO)
-python onboarding/provision.py keys --preset lr-us915
-python onboarding/provision.py keys --preset seeed-eu868 --test
+python3 onboarding/provision.py keys --preset lr-us915
+python3 onboarding/provision.py keys --preset seeed-eu868 --test
 
 # Switch build only (no new keys, no CSV): prj.conf + nrf52840dk_nrf52840.overlay
-python onboarding/provision.py build --preset lr-us915
-python onboarding/provision.py build --preset seeed-eu868
+python3 onboarding/provision.py build --preset lr-us915
+python3 onboarding/provision.py build --preset seeed-eu868
 
 # Legacy shim (deprecated)
-python onboarding/gen_euis.py --sync-build-only --region us915
+python3 onboarding/gen_euis.py --sync-build-only --region us915
 
 # AWS IoT Core for LoRaWAN (prefer provision aws / provision all)
-python onboarding/aws/batch_register_lorawan_devices.py \
+python3 onboarding/aws/batch_register_lorawan_devices.py \
   --region us-east-1 --device-profile-id <UUID> --service-profile-id <UUID> --destination-name <Name> \
   --last-only
-python onboarding/aws/eui_collision_check.py
+python3 onboarding/aws/eui_collision_check.py
 ```
 
 ## Files

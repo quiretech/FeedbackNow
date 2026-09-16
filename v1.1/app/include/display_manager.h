@@ -31,6 +31,17 @@ enum display_screen_id {
 
 };
 
+enum Room_Screen_State_Type {
+  SCREEN_STATE_1_PATIENT_EXITED = 1,
+  SCREEN_STATE_2_CART_IS_OUT,
+  SCREEN_STATE_3_EVS_IS_IN,
+  SCREEN_STATE_4_EVS_IS_OUT,
+  SCREEN_STATE_5_ROOM_IS_READY,
+  SCREEN_STATE_6_PATIENT_IS_IN,
+};
+
+void room_alert_state_update(int button_in, uint32_t epoch_s);
+
 /** Call once after last_cleaned_store and (if EPD) display driver are ready. */
 int display_manager_init(void);
 
@@ -72,7 +83,7 @@ void display_show_thanks_sync(void);
 
 // nk_co1: added function to show room alert status screen
 // Show room alert status and block until EPD render completes. 
-void display_show_room_alert_status_sync(int button_in, uint32_t epoch_s);
+void display_show_room_alert_status_sync();
 
 /** Show cleaning; starts 45min auto-revert timer. */
 void display_show_cleaning(void);

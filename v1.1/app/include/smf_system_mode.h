@@ -29,10 +29,11 @@ enum smf_ev_type {
   SMF_EVT_BUTTON_SINGLE_4,
   SMF_EVT_BUTTON_SINGLE_5,
   /* Combo events (from Input layer when hold duration reached) */
-  SMF_EVT_COMBO_STAFF,       /* 0+1 hold 2s */
+  SMF_EVT_COMBO_STAFF,       /* 0+1 hold 2s (Staff mode)*/
   SMF_EVT_COMBO_DEVICE_INFO, /* 0+1+5 hold 3s */
   SMF_EVT_COMBO_JOIN,        /* 0+1+2 hold 3s */
-  SMF_EVT_COMBO_REBOOT,      /* 0+1+2+3 hold 5s (Staff mode) */
+  SMF_EVT_COMBO_REBOOT,      /* 0+1+2+3 hold 5s  */
+  SMF_EVT_COMBO_MAGIC_RESET, /* 0+1+3+4 hold 4s (Reset to preset time zone)*/
   SMF_EVT_COMBO_FACTORY_RESET, /* all six buttons hold 7s (Staff; counters kept) */
   /* Timeouts (Phase 2+) */
   SMF_EVT_STAFF_TIMEOUT,

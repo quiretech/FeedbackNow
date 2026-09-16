@@ -11,9 +11,9 @@
 #include "rtc.h"
 #include "sys_config.h"
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
 #include "last_cleaned_store.h" // nk_co1
-#endif
+#endif /* end FLEXBOX_PLUS_MED */
 
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -28,7 +28,7 @@ static uint32_t last_accepted_any_press_ms;
 
 void app_logic_public_vote(uint8_t button_id) {
   uint32_t now_ms = (uint32_t)k_uptime_get_32();
-  
+
   if (button_id >= NUM_BUTTONS) {
     LOG_WRN("Invalid button_id=%u (>= NUM_BUTTONS=%u)", button_id,
             NUM_BUTTONS);
@@ -38,7 +38,7 @@ void app_logic_public_vote(uint8_t button_id) {
 #if EPD_ENABLED
   /* No new votes while THANKS is showing until LAST_CLEANED render completes. */
   if (display_is_public_vote_ui_busy()) {
-    LOG_DBG("public_vote ignored (vote UI busy)");
+    LOG_INF("public_vote ignored (vote UI busy)");
     return;
   }
 #endif
@@ -53,11 +53,30 @@ void app_logic_public_vote(uint8_t button_id) {
                          (now_ms - last_accepted_any_press_ms)));
     return;
   }
+
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
+  /* Logic for always forward pressing the buttons. 
+     Next button pressed will always be one higher than the last */
+  static uint8_t last_button_pressed = 1;
+  if(button_id >= last_button_pressed - 1){
+    last_button_pressed = button_id + 2;
+    if(button_id >= 5){
+      last_button_pressed = 1;
+    }
+  }
+  else{
+    return;
+  }
+
+#endif /* end FLEXBOX_PLUS_MED */
+
+
+
   LOG_STATE("led_manager_show ");
   (void)led_manager_show(0, LED_PATTERN_BUTTON_ACCEPTED);
   /* EPD first: finish THANKS render (SPI), then LoRa/EEPROM with clear RX. */
 
-#ifndef ROOM_ALERT_IMPLEMENTATION //nk_co1
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED //nk_co1
   display_show_thanks_sync();
 #endif
 
@@ -68,18 +87,18 @@ void app_logic_public_vote(uint8_t button_id) {
     LOG_DBG("RTC read failed (%d); using uptime s=%u", ret, epoch_s);
   }
   
-#ifdef ROOM_ALERT_IMPLEMENTATION
-
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
+  room_alert_state_update(button_id, epoch_s); //update the room alert state with the new button pressed and the epoch timestamp
   rail_manager_request_3v3a();
   //(void)last_cleaned_store_set(epoch_s); // we are pass the epoch directly to the display function
 #if EPD_ENABLED
   //epoch_s = 1778665556; // hardcoded epoch for testing
   rtc_get_epoch_seconds(&epoch_s);
-  display_show_room_alert_status_sync(button_id, epoch_s);
+  display_show_room_alert_status_sync();
 #endif
   rail_manager_release_3v3a();
 
-#endif
+#endif /*end FLEXBOX_PLUS_MED*/
 
   uint8_t payload_button_id = button_id_map[button_id];
   uint8_t payload[PAYLOAD_LEN_BYTES] = {0};
@@ -110,7 +129,7 @@ void app_logic_public_vote(uint8_t button_id) {
   } else {
     last_accepted_any_press_ms =
         now_ms; /* Cooldown same as when joined (no EPD flood). */
-    LOG_DBG("vote skip (not joined) btn=%u ctr=%u", payload_button_id,
+    LOG_INF("vote skip (not joined) btn=%u ctr=%u", payload_button_id,
             new_counter);
   }
 }

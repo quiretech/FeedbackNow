@@ -223,7 +223,7 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
     {
       if (attempt < 4)
       {
-        LOG_DBG("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
+        LOG_INF("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
         k_msleep(500);
       }
       else
@@ -241,7 +241,7 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 
   if (ret == 0)
   {
-    LOG_DBG("UL OK p=%u len=%zu", (unsigned)port, len);
+    LOG_INF("UL OK p=%u len=%zu", (unsigned)port, len);
   }
   else if (ret < 0)
   {

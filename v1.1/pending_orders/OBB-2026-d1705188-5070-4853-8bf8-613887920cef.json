@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "generatedAt": "2026-09-04T18:11:07.395Z",
+    "sourceRowIndex": 2
+  },
+  "data": {
+    "orderId": "OBB-2026-d1705188-5070-4853-8bf8-613887920cef",
+    "internalId": 28,
+    "title": "OBB-2026-d1705188-5070-4853-8bf8-613887920cef",
+    "substring": "OBB",
+    "clientName": "OBB",
+    "clientPrefix": "OBB",
+    "unitType": "Flex+",
+    "totalQuantity": 2,
+    "language": "German",
+    "deliveryDate": "2026-09-11",
+    "timezone": "Central European Time (CET)",
+    "buttonLayout": "GYRRRR - 4 reds (unit 10)",
+    "facePlateNotes": "Hey Nishant, Sam said you should have some spare OBB designs",
+    "decalType": "Restroom"
+  }
+}

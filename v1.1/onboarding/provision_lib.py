@@ -469,6 +469,8 @@ def sync_unit_from_registry(
             decal_type = (
                 row.get("decal_type") or row.get("tag_location") or ""
             ).strip()
+
+            
     except (RuntimeError, ValueError) as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2, None

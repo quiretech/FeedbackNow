@@ -83,7 +83,7 @@ What can I do:
 Next, I ported code to class_a code, now i create random app keys, store on nvs, use the last devNonce value and val++, (so theres no collisison). 
 Next step would be to reduce the nvs partition size
 
-//  nk 08/15
+//  nk 08/15/26
 
 if the last cleaned display is replaced by the logo after preset timeout, it will not be able to display 
 cleaned forced time through downlink, unless I reset the timeout 

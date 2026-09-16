@@ -27,8 +27,11 @@
 #elif DEVICE_HW_VARIANT == FLEXBOX
 #define EPD_ENABLED 0
 #define NFC_ENABLED 0
+#elif DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
+#define EPD_ENABLED 1
+#define NFC_ENABLED 0
 #else
-#error "DEVICE_HW_VARIANT must be FLEXBOX (0) or FLEXBOX_PLUS (1)"
+#error "DEVICE_HW_VARIANT must be FLEXBOX (0) or FLEXBOX_PLUS (1) or FLEXBOX_PLUS_MED(2)"
 #endif
 
 /* =============================================================================
@@ -119,6 +122,7 @@
 #define COMBO_DEVICE_INFO_HOLD_MS 1000
 #define COMBO_JOIN_HOLD_MS 1000
 #define COMBO_REBOOT_HOLD_MS 3000
+#define COMBO_MAGIC_RESET_HOLD_MS 4000
 /** All six buttons (Staff mode) — devnonce + join state wipe; counters kept. */
 #define COMBO_FACTORY_RESET_HOLD_MS 1000
 #define STAFF_TIMEOUT_MS 20000
@@ -159,7 +163,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (60) // UTC+1h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h EDT
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -215,6 +219,12 @@
  * =============================================================================
  */
 #define NFC_READ_BLOCK 5
+#define NFC_READ_BLOCK_5 5
+#define NFC_READ_BLOCK_6 6
+#define NFC_READ_BLOCK_7 7
+#define NFC_READ_BLOCK_8 8
+#define NFC_READ_BLOCK_9 9
+#define NFC_READ_NUM_BLOCKS 5
 #define NFC_SCAN_PHASE1_MS 6000
 #define NFC_SCAN_TOTAL_MS 12000
 #define NFC_POWER_SETTLE_MS 1000
@@ -232,10 +242,10 @@
  */
 
 #define EPD_THANKS_DISPLAY_MS 3000
-#define EPD_CLEANING_REVERT_MINUTES 45U
+#define EPD_CLEANING_REVERT_MINUTES 45u
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 #define EPD_ClEANING_DUE_TIMEOUT_HOURS 12U // nk_co1
-#define EPD_CLEANING_DUE_TIMEOUT_MS 25000//(EPD_ClEANING_DUE_TIMEOUT_HOURS * 60U  * 1000U) //nk_co1
+#define EPD_CLEANING_DUE_TIMEOUT_MS (EPD_ClEANING_DUE_TIMEOUT_HOURS * 60U  * 60U * 1000U) //nk_co1
 
 
 #if EPD_ENABLED
@@ -294,11 +304,11 @@
  */
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 5
-#define FW_VERSION_PATCH 0
-#define FW_VERSION_STRING "1.5.0"
+#define FW_VERSION_PATCH 1
+#define FW_VERSION_STRING "1.5.2"
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4
-#define HW_VERSION_PATCH 1
+#define HW_VERSION_PATCH 2
 #define HW_VERSION_STRING "1.4.1"
 
 #endif /* SYS_CONFIG_H */

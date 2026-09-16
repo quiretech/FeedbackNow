@@ -24,6 +24,7 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
+#include "tz_offset_store.h"
 
 #include <stdbool.h>
 #include <string.h>
@@ -132,7 +133,9 @@ static void smf_join_started_ui_work_handler(struct k_work *work)
 static void smf_join_failed_ui_work_handler(struct k_work *work)
 {
   ARG_UNUSED(work);
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
   display_show_last_cleaned();
+#endif /*end FLEXBOX_PLUS_MED*/
   display_request_full_refresh();
 }
 
@@ -211,6 +214,8 @@ static const char *smf_ev_type_str(uint8_t ev_type)
     return "COMBO_JOIN";
   case SMF_EVT_COMBO_REBOOT:
     return "COMBO_REBOOT";
+  case SMF_EVT_COMBO_MAGIC_RESET:
+    return "COMBO_MAGIC_RESET";
   case SMF_EVT_COMBO_FACTORY_RESET:
     return "COMBO_FACTORY_RESET";
   case SMF_EVT_STAFF_TIMEOUT:
@@ -340,6 +345,10 @@ static void smf_thread_fn(void *a, void *b, void *c)
            * schedules display_work on the system workqueue and blocks on a
            * sem — same thread would deadlock until thanks sync timeout.
            */
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
+
+
+#endif
 
           LOG_DBG("state=Normal -> app_logic_public_vote(button_id=%u)",
                   msg.button_id);
@@ -362,7 +371,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
             !device_status_shown_this_boot && boot_info_is_commission_boot();
 #else
         const bool commission_epd = false;
-#endif
+#endif /* EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT */
         if (msg.button_id != 0)
         {
           k_msleep(POST_JOIN_LED_BEFORE_EPD_MS);
@@ -374,12 +383,20 @@ static void smf_thread_fn(void *a, void *b, void *c)
           device_status_shown_this_boot = true;
           LOG_DBG("smf device_status cause=%s", boot_info_cause_str());
           smf_show_device_status_with_dwell(smf_joined_overlap_work);
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
           display_show_last_cleaned_sync(false);
+#else
+          display_show_room_alert_status_sync();
+#endif /* end FLEXBOX_PLUS_MED*/
         }
         else
-#endif
+#endif /* EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT */
         {
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
           display_show_last_cleaned_sync(false);
+#else
+          display_show_room_alert_status_sync();
+#endif /* end FLEXBOX_PLUS_MED*/
         }
 
         if (!commission_epd)
@@ -405,12 +422,16 @@ static void smf_thread_fn(void *a, void *b, void *c)
                   boot_info_cause_str());
           rail_manager_request_3v3a();
           smf_show_device_status_with_dwell(NULL);
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
           display_show_last_cleaned_sync(false);
+#else
+          display_show_room_alert_status_sync();
+#endif /* end FLEXBOX_PLUS_MED*/
           display_request_full_refresh();
           rail_manager_release_3v3a();
         }
         else
-#endif
+#endif /* EPD_ENABLED && EPD_DEVICE_STATUS_COMMISSION_BOOT */
         {
           (void)k_work_submit(&smf_join_failed_ui_work);
         }
@@ -441,7 +462,8 @@ static void smf_thread_fn(void *a, void *b, void *c)
       else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO ||
                msg.ev_type == SMF_EVT_COMBO_JOIN ||
                msg.ev_type == SMF_EVT_COMBO_REBOOT ||
-               msg.ev_type == SMF_EVT_COMBO_FACTORY_RESET)
+               msg.ev_type == SMF_EVT_COMBO_FACTORY_RESET ||
+               msg.ev_type == SMF_EVT_COMBO_MAGIC_RESET)
       {
         LOG_STATE("smf ignore %s (staff_first)", smf_ev_type_str(msg.ev_type));
       }
@@ -489,6 +511,16 @@ static void smf_thread_fn(void *a, void *b, void *c)
                 (unsigned)COMBO_FACTORY_RESET_HOLD_MS);
         factory_reset_perform(&smf_dl_ops, false);
       }
+      else if (msg.ev_type == SMF_EVT_COMBO_MAGIC_RESET)
+      {
+        mode = MODE_NORMAL;
+        k_timer_stop(&mode_timeout_timer);
+        (void)led_manager_show(0, LED_PATTERN_OFF);
+        rail_manager_release_3v3a(); /* Staff ref; */
+        LOG_WRN("smf Staff->Magic reset to default tz ms=%u", (unsigned)COMBO_MAGIC_RESET_HOLD_MS);
+        magic_reset_perform(); 
+      }
+
       else if (msg.ev_type == SMF_EVT_COMBO_DEVICE_INFO)
       {
         mode = MODE_DEVICE_INFO;
@@ -553,7 +585,12 @@ static void smf_thread_fn(void *a, void *b, void *c)
         mode = MODE_NORMAL;
         k_timer_stop(&mode_timeout_timer);
         LOG_STATE("smf DevInfo->Norm timeout");
-        display_show_last_cleaned_sync(false);
+#if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
+          display_show_last_cleaned_sync(false);
+#else
+          display_show_room_alert_status_sync(); // 100 - show the current screen
+
+#endif/* end FLEXBOX_PLUS_MED*/
         /* No rail to release: we released 3.3A when leaving Staff for
          * DeviceInfo */
       }

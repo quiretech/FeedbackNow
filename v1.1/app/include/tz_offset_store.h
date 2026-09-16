@@ -30,6 +30,12 @@ int tz_offset_store_get(int16_t *out_minutes);
  */
 int tz_offset_store_set(int16_t minutes);
 
+/**
+ * Perform a magic reset, which resets the timezone offset to the default.
+ * @return 0 on success, negative errno on failure.
+ */
+int magic_reset_perform(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,0 +1,15 @@
+# WARNING. THIS FILE IS AUTO-GENERATED. DO NOT MODIFY!
+#
+# This file contains build system settings derived from your modules.
+#
+# Modules may be set via ZEPHYR_MODULES, ZEPHYR_EXTRA_MODULES,
+# and/or the west manifest file.
+#
+# See the Modules guide for more information.
+"BOARD_ROOT":"/home/jpandya/ncs/v3.0.2/nrf"
+"DTS_ROOT":"/home/jpandya/ncs/v3.0.2/nrf"
+"SNIPPET_ROOT":"/home/jpandya/ncs/v3.0.2/nrf"
+"SOC_ROOT":"/home/jpandya/ncs/v3.0.2/nrf"
+"MODULE_EXT_ROOT":"/home/jpandya/ncs/v3.0.2/nrf"
+"DTS_ROOT":"/home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/pn5180"
+"DTS_ROOT":"/home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/ssd1683"

@@ -1,0 +1,22 @@
+cmake:
+  board:
+    name: nrf52840dk
+    path:
+     - /home/jpandya/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk
+    qualifiers: nrf52840
+    revision: 
+  images:
+   - name: app
+     source-dir: /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app
+     type: MAIN
+  kconfig:
+    files:
+     - /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/build_1/_sysbuild/empty.conf
+     - /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/build_1/_sysbuild/empty.conf
+    user-files:
+     - /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/build_1/_sysbuild/empty.conf
+version: 0.1.0
+west:
+  command: /home/jpandya/ncs/toolchains/7cbc0036f4/usr/local/bin/west build --build-dir /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app/build_1 /home/jpandya/Desktop/FBN/fb_now_ir/fb_now/v1.1/app --pristine --board nrf52840dk/nrf52840 -- -DCONF_FILE=prj.conf;prj_flexbox_plus_med.conf -DDTC_OVERLAY_FILE=boards/nrf52840dk_nrf52840_flexbox_plus_med.overlay -DDEBUG_THREAD_INFO=On -DCONFIG_DEBUG_OPTIMIZATIONS=y -DCONFIG_DEBUG_THREAD_INFO=y -Dapp_DEBUG_THREAD_INFO=Off
+  topdir: /home/jpandya/ncs/v3.0.2
+  version: 1.2.0

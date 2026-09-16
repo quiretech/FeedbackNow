@@ -15,7 +15,6 @@
 #define SYS_CONFIG_PROFILE_DESK       1
 #define SYS_CONFIG_PROFILE_LAB        2
 
-#define ROOM_ALERT_IMPLEMENTATION     1
 
 /** Active profile — set exactly one of the SYS_CONFIG_PROFILE_* values above. */
 #ifndef SYS_CONFIG_PROFILE

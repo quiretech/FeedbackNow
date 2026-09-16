@@ -16,6 +16,7 @@
 #include "rail_manager.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
+#include <stdio.h>
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
@@ -107,7 +108,10 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
   ARG_UNUSED(c);
 
   uint8_t uid[8];
-  uint8_t block_data[4];
+  char block_data[28 * 4];
+  uint8_t read_tag_id[8];
+  uint8_t read_tag_hex[4];
+  size_t bytes_read;
   uint32_t deadline_ms;
   uint8_t intent;
   uint8_t button_id;
@@ -159,10 +163,34 @@ static void nfc_worker_thread(void *a, void *b, void *c) {
           deadline_ms = deadline_cap;
         }
       }
-      ret = pn5180_read_block(nfc_dev, uid, NFC_READ_BLOCK, block_data, 4);
+ 
+      ret = pn5180_read_tag(nfc_dev, uid, block_data, sizeof(block_data), &bytes_read);
+
       if (ret == 0) {
-        LOG_STATE("NFC read ok blk=%d", NFC_READ_BLOCK);
-        (void)smf_post_nfc_result(1, intent, button_id, block_data);
+        //LOG_STATE("NFC read ok start_blk=%d", NFC_READ_BLOCK_5);
+
+        //If the first byte of the block data is 0x03, then the tag is a NDEF tag 
+        // and we need to convert the ascii values to hex values stored further down. 
+        // Otherwise, we can just use the hex values directly. 
+
+        if(block_data[20] == 0x03){
+          for(int i=29; i<37; i++) {
+            read_tag_id[i-29] = block_data[i] - '0';
+            //LOG_STATE("NFC read ok blk %i = %x %i, ", i/4, block_data[i], read_tag_id[i]);
+          }
+          for(int i=0; i<4; i++) {
+            read_tag_hex[i] = (read_tag_id[i * 2] << 4) | read_tag_id[i * 2 + 1];
+            LOG_STATE("NFC tag NDEF = %x", read_tag_hex[i]);
+          }
+        }
+        else {
+          for(int i=0; i<4; i++) {
+            read_tag_hex[i] = block_data[i+20];
+            LOG_STATE("NFC tag QT = %x", read_tag_hex[i]);
+          }
+        }
+
+        (void)smf_post_nfc_result(1, intent, button_id, read_tag_hex);
         (void)pn5180_prepare_poweroff(nfc_dev);
         nfc_warm_eligible = true;
         nfc_warm_until_ms = k_uptime_get_32() + RAIL_MANAGER_3V6_KEEPALIVE_MS;

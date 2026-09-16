@@ -10,9 +10,11 @@ if(ONBOARDING_CONFIG_H_CONTENT MATCHES "#define DEVICE_HW_VARIANT FLEXBOX_PLUS")
   set(FB_DEVICE_HW_VARIANT "FLEXBOX_PLUS")
 elseif(ONBOARDING_CONFIG_H_CONTENT MATCHES "#define DEVICE_HW_VARIANT FLEXBOX")
   set(FB_DEVICE_HW_VARIANT "FLEXBOX")
+elseif(ONBOARDING_CONFIG_H_CONTENT MATCHES "#define DEVICE_HW_VARIANT FLEXBOX_PLUS_MED")
+  set(FB_DEVICE_HW_VARIANT "FLEXBOX_PLUS_MED")
 else()
   message(FATAL_ERROR
-    "onboarding_config.h: DEVICE_HW_VARIANT must be FLEXBOX or FLEXBOX_PLUS")
+    "onboarding_config.h: DEVICE_HW_VARIANT must be FLEXBOX or FLEXBOX_PLUS or FLEXBOX_PLUS_MED")
 endif()
 
 list(APPEND CONF_FILE "${APP_DIR}/prj.conf")
@@ -25,6 +27,15 @@ if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")
   list(APPEND DTC_OVERLAY_FILE
     ${APP_DIR}/boards/nrf52840dk_nrf52840.overlay
     ${APP_DIR}/boards/nrf52840dk_nrf52840_flexbox_plus.overlay
+  )
+elseif(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS_MED")
+  list(APPEND CONF_FILE "${APP_DIR}/prj_flexbox_plus_med.conf")
+  list(APPEND ZEPHYR_EXTRA_MODULES
+      ${APP_DIR}/ssd1683
+  )
+  list(APPEND DTC_OVERLAY_FILE
+    ${APP_DIR}/boards/nrf52840dk_nrf52840.overlay
+    ${APP_DIR}/boards/nrf52840dk_nrf52840_flexbox_plus_med.overlay
   )
 else()
   list(APPEND CONF_FILE "${APP_DIR}/prj_flexbox.conf")
@@ -92,6 +103,20 @@ if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")
     assets/display_screens/cleaning_fr.c
     assets/display_screens/cleaning_de.c
     assets/display_screens/cleaning_es.c
+  )
+elseif(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS_MED")
+  target_include_directories(app PRIVATE
+    ${APP_DIR}/assets/fonts
+    ${APP_DIR}/assets/display_screens
+  )
+  list(APPEND APP_SOURCES
+    assets/fonts/roboto_20.c
+    assets/fonts/roboto_32.c
+    assets/fonts/roboto_28.c
+    assets/fonts/roboto_36.c
+    assets/fonts/roboto_bold_36.c
+    assets/fonts/roboto_bold_42.c
+    assets/display_screens/boot_screen.c
   )
 endif()
 

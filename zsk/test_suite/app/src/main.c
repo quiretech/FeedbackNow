@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define BEACON_MODE
+// #define BEACON_MODE
 
 #include <hal/nrf_saadc.h>
 #include <stdbool.h>

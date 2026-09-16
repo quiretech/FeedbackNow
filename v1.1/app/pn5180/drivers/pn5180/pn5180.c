@@ -6,6 +6,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/byteorder.h>
+#include <zephyr/posix/sys/stat.h> 
+
 
 #define DT_DRV_COMPAT nxp_pn5180
 
@@ -529,6 +531,75 @@ static int pn5180_read_single_block(const struct device *dev,
 
   return PN5180_OK;
 }
+
+// This was add in ver 1.5.3 but never tested NK, hence commented out for now. It can be re-enabled later if needed.
+
+// /*
+//  * Read a multiple blocks from an ISO15693 tag.
+//  * uid: 8-byte UID in MSB-first format (as returned by get_inventory)
+//  * block_num: Block number to read (0-27 for SLIX with 28 blocks)
+//  * block_data: Buffer to receive block data (must be at least block_size bytes)
+//  * block_size: Expected block size (4 bytes for SLIX)
+//  */
+// static int pn5180_read_multiple_blocks(const struct device *dev, const uint8_t *uid, 
+//                                         uint8_t start_block, uint8_t num_blocks,
+//                                         uint8_t *block_data, size_t data_len, size_t *bytes_read) {
+
+//   size_t block_size = 4; /* SLIX block size */
+//   size_t expected_tag_data = num_blocks * block_size; 
+//   size_t total_rx_needed = 1 + expected_tag_data;
+                                        
+//   uint8_t response[128]; /* Response: flags(1) + data(up to 32) */
+//   int ret;
+
+  
+//   if (total_rx_needed > sizeof(response)) {
+//       return -ENOMEM;
+//   }
+
+//   /* Build ReadMultipleBlocks command
+//    * Format: [flags, cmd, UID(8 bytes LSB first), block_num]
+//    */
+//   uint8_t cmd[14];
+//   cmd[0] = ISO15693_FLAG_HIGH_DATA_RATE | ISO15693_FLAG_ADDRESS; /* 0x22 */
+//   cmd[1] = ISO15693_CMD_READ_MULTIPLE_BLOCKS;                       /* 0x23 */
+
+//   /* UID must be sent LSB first, but we store it MSB first */
+//   for (int i = 0; i < 8; i++) {
+//     cmd[2 + i] = uid[7 - i];
+//   }
+ 
+//   cmd[12] = start_block; /* Start block */ 
+//   cmd[13] = num_blocks -1; /* Number of blocks to read minus 1 */ 
+
+//   LOG_DBG("ReadMultipleBlocks: start_block=%d num_blocks=%d", start_block, num_blocks);
+  
+
+//   ret = pn5180_issue_iso15693_command(dev, cmd, sizeof(cmd), response,
+//                                       sizeof(response));
+//   if (ret < 0) {
+//     return ret;
+//   }
+
+//   uint8_t iso_response_flag = response[0];
+//   if (iso_response_flag & 0x01) {
+//       printk("pn5180: Multi-block read rejected. Code: 0x%02X\n", response[1]);
+//       return -EIO;
+//   }
+
+//   // Extract the flat block data stream
+//   if (expected_tag_data > data_len) {
+//       expected_tag_data = data_len; // Prevent buffer overflows
+//   }
+
+//   /* Copy block data (skip flags byte) */
+//   memcpy(block_data, &response[1], expected_tag_data);
+//   *bytes_read = expected_tag_data;
+
+//   LOG_DBG("ReadMultipleBlocks: start_block=%d num_blocks=%d bytes_read=%d", start_block, num_blocks, expected_tag_data);
+
+//   return PN5180_OK;
+// }
 
 /*
  * Write a single block to an ISO15693 tag.

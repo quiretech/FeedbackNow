@@ -29,6 +29,11 @@
   #include "ssd1683.h"
   #include <lvgl.h>
 
+  /* After importing your custom generated font */
+#define LV_SYMBOL_LORA_TOWER    "\xEF\x84\xB0" // UTF-8 Hex for U+F130
+#define LV_SYMBOL_LORA_SIGNAL   "\xEF\x82\x9E" // UTF-8 Hex for U+F09E
+
+
   /* Font declarations */
   LV_FONT_DECLARE(roboto_20);
   LV_FONT_DECLARE(roboto_28);
@@ -70,6 +75,9 @@
     JOB_SHOW_ROOM_ALERT_STATUS // nk_co1
   };
 
+  static uint8_t room_screen_state = SCREEN_STATE_6_PATIENT_IS_IN; // Default state
+  uint32_t last_room_state_timestamp = 0; // nk_co1
+  
   struct display_job {
     uint8_t type;
     uint8_t pad[3];
@@ -113,6 +121,8 @@
   static lv_obj_t *next_action_label; // nk_co1
   static lv_obj_t *last_job_timestamp_label; // nk_co1
   static lv_obj_t *last_job_label; // nk_co1
+  static lv_obj_t *wifi_label; // nk_co1
+  
   static lv_obj_t *sep_line; // nk_co1
   static lv_point_precise_t line_points[] = { {25, 0}, {375,  0} };
   static lv_obj_t *screen_room_turnaround; // nk_co1
@@ -192,8 +202,8 @@
     //nk_co1 ===========
     if (atomic_get(&cleaning_due_atomic) == 1) {      
       
-      //enqueue_job(JOB_SHOW_LOGO, 0);
-      enqueue_job(JOB_SHOW_CLEANING, 0);
+      enqueue_job(JOB_SHOW_LOGO, 0);
+      //enqueue_job(JOB_SHOW_CLEANING, 0);
     } 
     else {
       enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
@@ -211,7 +221,7 @@
     atomic_set(&cleaning_timer_expired_atomic, 1);
     enqueue_job(JOB_SHOW_LAST_CLEANED, 0);
     
-    //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
+    k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
     atomic_set(&cleaning_due_atomic, 0); // nk_co1
 
   }
@@ -256,11 +266,11 @@
   K_SEM_DEFINE(cleaning_done_sem, 0, 1);
   static atomic_t cleaning_sync_waiting = ATOMIC_INIT(0);
 
-  #ifdef ROOM_ALERT_IMPLEMENTATION
-  /* For display_show_last_room_job_sync: immediate last room job. */ // nk_co1
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
+  /* For display_show_last_room_job_sync: immediate last med job. */ // nk_co1
   K_SEM_DEFINE(last_room_job_done_sem, 0, 1);
   static atomic_t last_room_job_done_sync_waiting = ATOMIC_INIT(0);
-  #endif
+  #endif /*end FLEXBOX_PLUS_MED*/
 
   K_SEM_DEFINE(device_status_done_sem, 0, 1);
   static atomic_t device_status_sync_waiting = ATOMIC_INIT(0);
@@ -439,7 +449,7 @@
 
     lv_obj_add_flag(screen_last_cleaned, LV_OBJ_FLAG_HIDDEN);
 
-  #ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
    ///* nk_co1=========================
 
     /* Screen: Room Turnaround Alert System (400x300): top space, heading, gap, timestamp, bottom
@@ -448,6 +458,8 @@
     lv_obj_set_style_bg_color(screen_room_turnaround, lv_color_white(),
                               LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_room_turnaround, LV_OPA_COVER, LV_PART_MAIN);
+    
+  
 
     /* Container for flex layout; must have white background so it doesn't draw
     * black */
@@ -464,10 +476,21 @@
                           LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_row(cont_room, 10, LV_PART_MAIN);
 
-    
+    /* --- ADDED: Wi-Fi Symbol in Top-Right Corner --- */
+    wifi_label = lv_label_create(screen_room_turnaround);
+    lv_label_set_text(wifi_label, "NO " LV_SYMBOL_WIFI);
+    /* Align to top right, shifted 10px left and 10px down from the corner */
+    lv_obj_align(wifi_label, LV_ALIGN_TOP_RIGHT, -5, 5);
+    lv_obj_set_style_text_color(wifi_label, lv_color_black(), LV_PART_MAIN);
+    /* Optional: If your default font lacks symbols, explicitly use a standard one (e.g., lv_font_montserrat_16) */
+    // lv_obj_set_style_text_font(wifi_label, &lv_font_montserrat_16, LV_PART_MAIN);
+
+
+
+
     last_job_label = lv_label_create(cont_room);
     lv_label_set_text(last_job_label, EPD_TEXT_6_PATIENT_IN); // Default text; can be updated dynamically
-    lv_obj_set_style_text_font(last_job_label, &roboto_36, LV_PART_MAIN);
+    lv_obj_set_style_text_font(last_job_label, &roboto_bold_36, LV_PART_MAIN);
     lv_obj_set_style_text_color(last_job_label, lv_color_black(),
                                 LV_PART_MAIN);
 
@@ -502,7 +525,7 @@
     lv_obj_add_flag(screen_room_turnaround, LV_OBJ_FLAG_HIDDEN);
 
     // ============================ nk_co1 */
-  #endif
+  #endif /* end FLEXBOX_PLUS_MED */
 
     /* Screen: THANKS — full-screen bitmap; locale via EPD_LOCALE */
     screen_thanks = lv_obj_create(NULL);
@@ -755,7 +778,68 @@
     epd_strtolower(buf, buf, sizeof(buf));
     lv_label_set_text(label, buf);
   }
+  
+  static void refresh_room_status_screen_dynamic(){
+    
+    
+    if(lora_is_joined()){
+      lv_label_set_text(wifi_label, "" LV_SYMBOL_WIFI);
+    }
+    else{
+      lv_label_set_text(wifi_label, "NO " LV_SYMBOL_WIFI);
+    }
+    LOG_STATE("refresh_room_status_screen_dynamic: room_screen_state=%d", room_screen_state);
+    if(next_label && room_screen_state <= SCREEN_STATE_6_PATIENT_IS_IN){ // this is to confirm the obj has been created before trying to set the text
+      switch (room_screen_state){
+        case SCREEN_STATE_1_PATIENT_EXITED:
+          // current_screen = DISPLAY_SCREEN_ROOM_PREP_PATIENT_EXIT;
+          lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
+          lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
+          lv_label_set_text(next_action_label, EPD_TEXT_2_CASE_CART_OUT);
+          lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_HAS_EXITED); 
+          break;
+        case SCREEN_STATE_2_CART_IS_OUT:
+          // current_screen = DISPLAY_SCREEN_ROOM_CASE_CART_OUT;
+          lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
+          lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
+          lv_label_set_text(next_action_label, EPD_TEXT_3_EVS_IN);
+          lv_label_set_text(last_job_label, EPD_TEXT_CASE_CART_IS_OUT); 
+          break;  
+        case SCREEN_STATE_3_EVS_IS_IN:
+          // current_screen = DISPLAY_SCREEN_ROOM_EVS_IN;
+          lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
+          lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
+          lv_label_set_text(next_action_label, EPD_TEXT_4_EVS_OUT);
+          lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_IN); 
+          break;
+        case SCREEN_STATE_4_EVS_IS_OUT:
+          // current_screen = DISPLAY_SCREEN_ROOM_EVS_OUT;
+          lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
+          lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
+          lv_label_set_text(next_action_label, EPD_TEXT_5_ROOM_READY);
+          lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_OUT);
+          break;
+        case SCREEN_STATE_5_ROOM_IS_READY:
+          // current_screen = DISPLAY_SCREEN_ROOM_BED_WIPE;
+          lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
+          lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
+          lv_label_set_text(next_action_label, EPD_TEXT_6_PATIENT_IN);
+          lv_label_set_text(last_job_label, EPD_TEXT_ROOM_IS_READY); 
+          break;
+        case SCREEN_STATE_6_PATIENT_IS_IN:
+          // current_screen = DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE;
+           lv_label_set_text(next_label, EPD_TEXT_CYCLE);
+           //lv_obj_set_style_text_font(next_action_label, &roboto_bold_36, LV_PART_MAIN);           
+           lv_label_set_text(next_action_label, EPD_TEXT_COMPLETED);
+           lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_IS_IN);
+          break;  
+        default:
+          break;
+      }
+    }
 
+    return;
+  }
   static void refresh_device_status_dynamic(void) {
     if (screen_device_status == NULL) {
       return;
@@ -1012,17 +1096,21 @@
     if (screen_dl_custom) {
       lv_obj_add_flag(screen_dl_custom, LV_OBJ_FLAG_HIDDEN);
     }
-    #ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
     if (screen_room_turnaround) { // nk_co1
       lv_obj_add_flag(screen_room_turnaround, LV_OBJ_FLAG_HIDDEN);
     }
-    #endif
+#endif /* end FLEXBOX_PLUS_MED*/
+
+
     /* Show the requested screen */
     switch (type) {
+      
     case JOB_SHOW_LOGO:
       LOG_STATE("epd screen LOGO");
       scr_to_show = screen_logo;
       break;
+
     case JOB_SHOW_LAST_CLEANED: {
       /* Apply timezone offset for display only (all internals stay UTC). */
       int16_t tz_min = 0;
@@ -1042,36 +1130,39 @@
       scr_to_show = screen_last_cleaned;
       break;
     }
+
     case JOB_SHOW_THANKS:
       LOG_STATE("epd screen THANKS");
       scr_to_show = screen_thanks;
       break;
+
     case JOB_SHOW_CLEANING:
       LOG_STATE("epd screen CLEANING");
       scr_to_show = screen_cleaning;
       break;
+
     case JOB_SHOW_CONNECTING:
       LOG_STATE("epd screen CONNECTING");
       scr_to_show = screen_connecting;
       break;
+
     case JOB_SHOW_DEVICE_STATUS:
       LOG_STATE("epd screen DEVICE_STATUS");
       scr_to_show = screen_device_status;
       break;
+
     case JOB_SHOW_DL_CUSTOM_MESSAGE:
       LOG_DBG("epd show DL_CUSTOM");
       if (dl_custom_msg_label != NULL) {
         k_mutex_lock(&dl_custom_msg_mutex, K_FOREVER);
         lv_label_set_text(dl_custom_msg_label, dl_custom_msg_buf);
         k_mutex_unlock(&dl_custom_msg_mutex);
-
       }
       scr_to_show = screen_dl_custom;
-
       break;
 
     case JOB_FULL_REFRESH:
-      LOG_DBG("epd full_refresh");
+      LOG_STATE("epd full_refresh");
       /* Show current screen again to force refresh */
       switch (current_screen) {
       case DISPLAY_SCREEN_LOGO:
@@ -1095,17 +1186,21 @@
       case DISPLAY_SCREEN_DL_CUSTOM:
         scr_to_show = screen_dl_custom;
         break;
+      case DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE:
+        scr_to_show = screen_room_turnaround;
+        break;
       default:
         break;
       }
       break;
-#ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
     // nk_co1: Room Turnaround Alert System  
     case JOB_SHOW_ROOM_ALERT_STATUS: {
       /* Apply timezone offset for display only (all internals stay UTC). */
       int16_t tz_min_room = 0;
       (void)tz_offset_store_get(&tz_min_room);
-      int64_t display_epoch_room = (int64_t)epoch + (int64_t)tz_min_room * 60;
+      LOG_INF("TZ_Offset , %d", tz_min_room);
+      int64_t display_epoch_room = (int64_t)epoch + (int64_t)(tz_min_room) * 60;
       if (display_epoch_room < 0) {
         display_epoch_room = 0;
       }
@@ -1121,20 +1216,28 @@
       }
       break;
     // =================== nk_co1
-#endif
+#endif /* end FLEXBOX_PLUS_MED */
+
     default:
       break;
     }
-
+    //LOG_STATE("epd screen 1");
     if (scr_to_show == screen_device_status) {
+      //LOG_STATE("epd screen 2");
       refresh_device_status_dynamic();
     }
+    else if(scr_to_show == screen_room_turnaround)
+    {
+      refresh_room_status_screen_dynamic();
+    }
 
+    //LOG_STATE("epd screen 3");
     if (scr_to_show) {
       lv_obj_clear_flag(scr_to_show, LV_OBJ_FLAG_HIDDEN);
       lv_screen_load(scr_to_show);
       lv_obj_invalidate(scr_to_show);
     }
+    //LOG_STATE("epd screen 4");
   }
 
   /** If we dequeue a job then bail before the normal tail, unblock sync callers
@@ -1180,14 +1283,14 @@
       }
       break;
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
     case JOB_SHOW_ROOM_ALERT_STATUS: //nk_co1
       if (atomic_get(&last_room_job_done_sync_waiting) != 0) {
         atomic_set(&last_room_job_done_sync_waiting, 0);
         k_sem_give(&last_room_job_done_sem);
       }
       break;
-#endif
+#endif/* end FLEXBOX_PLUS_MED */
     default:
       break;
     }
@@ -1346,32 +1449,36 @@
       }
       current_screen = DISPLAY_SCREEN_DEVICE_STATUS;
       do_render(display, JOB_SHOW_DEVICE_STATUS, 0);
+      //LOG_STATE("epd screen 5");
       if (need_full_refresh) {
         ssd1683_set_fast_update(display, true);
       }
       break;
     }
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
     case JOB_SHOW_ROOM_ALERT_STATUS:         
       /*  current_screen = DISPLAY_SCREEN_LAST_CLEANED;
         if (atomic_get(&cleaning_timer_active_atomic)) {
           k_timer_stop(&cleaning_timer);
           atomic_set(&cleaning_timer_active_atomic, 0);
         } */ 
+        ssd1683_set_fast_update(display, true);
         rtc_get_epoch_seconds(&epoch);       
         current_screen = DISPLAY_SCREEN_ROOM_CYCLE_COMPLETE;         
         do_render(display, JOB_SHOW_ROOM_ALERT_STATUS, epoch);
       break;
-#endif
+#endif /* end FLEXBOX_PLUS_MED */
 
     case JOB_FULL_REFRESH:
       ssd1683_set_fast_update(display, false);
       do_render(display, JOB_FULL_REFRESH, 0);
       break;
+
     default:
       do_render(display, (enum display_job_type)job.type, job.epoch);
       break;
+      
     }
 
     /* Force LVGL to render and flush to the EPD. A single lv_task_handler() is
@@ -1393,6 +1500,11 @@
     * latch must clear or further votes stay blocked (display_is_public_vote_ui_busy).
     */
     if (job.type == JOB_SHOW_CLEANING && atomic_get(&vote_ack_pending)) {
+      atomic_set(&vote_ack_pending, 0);
+      atomic_set(&vote_ui_busy, 0);
+    }
+
+    if (job.type == JOB_SHOW_LOGO && atomic_get(&vote_ack_pending)) {
       atomic_set(&vote_ack_pending, 0);
       atomic_set(&vote_ui_busy, 0);
     }
@@ -1428,13 +1540,13 @@
       k_sem_give(&device_status_done_sem);
     }
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
     if (job.type == JOB_SHOW_ROOM_ALERT_STATUS && // nk_co1
         atomic_get(&last_room_job_done_sync_waiting)) {
       atomic_set(&last_room_job_done_sync_waiting, 0);
       k_sem_give(&last_room_job_done_sem);
     }
-#endif
+#endif /* end FLEXBOX_PLUS_MED */
 
     atomic_set(&display_epd_spi_busy, 0);
 
@@ -1499,7 +1611,7 @@
     pending_last_cleaned_epoch = 0;
     atomic_set(&cleaning_timer_active_atomic, 0);
     atomic_set(&cleaning_timer_expired_atomic, 0);
-    //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
+    k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
     atomic_set(&cleaning_due_atomic, 0); // nk_co1
 
     /* Get display device */
@@ -1631,7 +1743,7 @@
       till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
       
       LOG_DBG("last_cleaned sync: scan event but cleaning not due");
-      //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
+      k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
       atomic_set(&cleaning_due_atomic, 0);
     }
     // ======================= nk_co1
@@ -1648,10 +1760,10 @@
         LOG_WRN("last_cleaned sync timeout");
       }
       atomic_set(&last_cleaned_sync_waiting, 0);
-     }
-     else{
-       enqueue_job(JOB_SHOW_LOGO, 0);
-     }
+    }
+    else{
+      enqueue_job(JOB_SHOW_LOGO, 0);
+    }
 
   #endif
   }
@@ -1683,55 +1795,28 @@
   #endif
   }
 
-#ifdef ROOM_ALERT_IMPLEMENTATION
-  void display_show_room_alert_status_sync(int button_in, uint32_t epoch_s) {
+#if DEVICE_HW_VARIANT == FLEXBOX_PLUS_MED
+
+  void room_alert_state_update(int button_in, uint32_t epoch_s){
+
+    room_screen_state = button_in + 1; // Buttonid statrs from 0 screen screen starts from 1
+                                       // This is to keep track of the last button pressed and the screen state
+    if(button_in < 6){ // this is to confirm the obj has been created and if it was a button press
+      last_room_state_timestamp = epoch_s;
+    }else{
+      return;
+    }
+  }
+  
+
+  void display_show_room_alert_status_sync(void) {
   #if EPD_ENABLED
 
-  if(next_label){
-    switch (button_in)
-      {
-      case 0:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_2_CASE_CART_OUT);
-        lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_HAS_EXITED); 
-        break;
-      case 1:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_3_EVS_IN);
-        lv_label_set_text(last_job_label, EPD_TEXT_CASE_CART_IS_OUT); 
-        break;  
-      case 2:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_4_BED_IS_BEING_WIPED);
-        lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_IN); 
-        break;
-      case 3:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_5_EVS_OUT);
-        lv_label_set_text(last_job_label, EPD_TEXT_BED_HAS_BEEN_WIPED);
-        break;
-      case 4:
-        lv_label_set_text(next_label, EPD_TEXT_NEXT_ACTION_HEADLINE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_6_PATIENT_IN);
-        lv_label_set_text(last_job_label, EPD_TEXT_EVS_IS_OUT); 
-        break;
-      case 5:
-        lv_label_set_text(next_label, EPD_TEXT_CYCLE);
-        lv_obj_set_style_text_font(next_action_label, &roboto_bold_36, LV_PART_MAIN);
-        lv_label_set_text(next_action_label, EPD_TEXT_COMPLETED);
-        lv_label_set_text(last_job_label, EPD_TEXT_PATIENT_IS_IN);   
-      default:
-        break;
-      }
-  } 
+    
     //enqueue_job(JOB_SHOW_ROOM_ALERT_STATUS, 0);
-    struct display_job job = {.type = JOB_SHOW_ROOM_ALERT_STATUS, .epoch = epoch_s};
+    struct display_job job = {.type = JOB_SHOW_ROOM_ALERT_STATUS, .epoch = last_room_state_timestamp};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
+      LOG_WRN("Room Alert Status sync: job queue full");
       return;
     }
     atomic_set(&last_room_job_done_sync_waiting, 1);
@@ -1742,7 +1827,7 @@
     atomic_set(&last_room_job_done_sync_waiting, 0);
   #endif
   }
-#endif
+#endif /* end FLEXBOX_PLUS_MED */
 
 
   void display_show_cleaning(void) {
@@ -1758,7 +1843,10 @@
     till set next clean due timeout expires set by EPD_ClEANING_DUE_TIMEOUT_HOURS  */
     LOG_DBG("cleaning event, scan event but cleaning not due");
     //k_timer_start(&last_cleaned_timeout_timer, K_MSEC(EPD_CLEANING_DUE_TIMEOUT_MS), K_NO_WAIT);
-    atomic_set(&cleaning_due_atomic, 0);
+    k_timer_stop(&last_cleaned_timeout_timer);  // stop the last cleaned timeout timer 
+                                                // which was previously start at initialization 
+                                                // and cleaning done event
+       atomic_set(&cleaning_due_atomic, 0);
 
     struct display_job job = {.type = JOB_SHOW_CLEANING, .epoch = 0};
     if (k_msgq_put(&display_jobq, &job, K_NO_WAIT) != 0) {
@@ -1810,8 +1898,9 @@
       return;
     }
     atomic_set(&device_status_sync_waiting, 1);
-    (void)k_work_schedule(&display_work, K_MSEC(0));
-    if (k_sem_take(&device_status_done_sem, K_MSEC(30000)) != 0) {
+    int ret = k_work_schedule(&display_work, K_MSEC(0));
+    LOG_STATE("device_status sync: work schedule ret=%d", ret);
+    if (k_sem_take(&device_status_done_sem, K_MSEC(10000)) != 0) {
       LOG_WRN("device_status sync timeout");
     }
     atomic_set(&device_status_sync_waiting, 0);

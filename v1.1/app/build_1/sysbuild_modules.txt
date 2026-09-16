@@ -1,0 +1,2 @@
+"nrf":"/home/jpandya/ncs/v3.0.2/nrf":"/home/jpandya/ncs/v3.0.2/nrf/sysbuild"
+"mcuboot":"/home/jpandya/ncs/v3.0.2/bootloader/mcuboot":"/home/jpandya/ncs/v3.0.2/bootloader/mcuboot/boot/zephyr/sysbuild"

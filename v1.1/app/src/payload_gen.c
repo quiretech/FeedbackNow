@@ -125,6 +125,9 @@ int payload_gen_build_nfc_in(uint32_t epoch_s, const uint8_t *data_4,
   memcpy(&out_buf[5], data_4, 4);
   out_buf[9] = 0x00;
   out_buf[10] = 0x00;
+  for(int i=0; i<11; i++) {
+    LOG_INF("Payload Data %x", out_buf[i]);
+  }
   return 0;
 }
 
@@ -138,6 +141,9 @@ int payload_gen_build_nfc_out(uint32_t epoch_s, const uint8_t *data_4,
   memcpy(&out_buf[5], data_4, 4);
   out_buf[9] = 0x00;
   out_buf[10] = 0x00;
+  for(int i=0; i<11; i++) {
+    LOG_INF("Payload Data %x", out_buf[i]);
+  }
   return 0;
 }
 

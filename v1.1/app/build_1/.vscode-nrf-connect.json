@@ -1,0 +1,22 @@
+{
+  "toolchainPath": "/home/jpandya/ncs/toolchains/7cbc0036f4",
+  "sdkPath": "/home/jpandya/ncs/v3.0.2",
+  "board": "nrf52840dk/nrf52840",
+  "boardDir": "/home/jpandya/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk",
+  "boardDirs": [
+    "/home/jpandya/ncs/v3.0.2/zephyr/boards/nordic/nrf52840dk"
+  ],
+  "optimizations": "debug",
+  "cmakeArgs": [],
+  "confFiles": [
+    "prj.conf",
+    "prj_flexbox_plus_med.conf"
+  ],
+  "buildDirectory": "build_1",
+  "kconfigFragments": [],
+  "snippets": [],
+  "dtcOverlays": [
+    "boards/nrf52840dk_nrf52840_flexbox_plus_med.overlay"
+  ],
+  "extraDtcOverlays": []
+}
