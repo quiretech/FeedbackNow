@@ -213,18 +213,27 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   lora_radio_rail_hold();
   lora_pace_uplink_spacing();
 
+  ret = lorawan_request_link_check(false);
+  if (ret < 0) {
+      LOG_ERR("Failed to append Link Check request: %d", ret);
+  } else {
+      LOG_INF("Link Check MAC command successfully queued");
+  }
+
+  
   for (int attempt = 0; attempt < 5; attempt++)
   {
     ret = lorawan_send(
         port, (uint8_t *)data, (uint8_t)len,
         confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
 
-    if (ret == -EBUSY || ret == -EAGAIN)
+    LOG_INF("lorawan_send returned %d", ret);
+    if (ret == -EBUSY || ret == -EAGAIN || ret == -ETIMEDOUT)
     {
       if (attempt < 4)
       {
-        LOG_INF("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
-        k_msleep(500);
+        LOG_INF("lorawan_send busy, retry %d/5 in 5000ms", attempt + 1);
+        k_msleep(5000);
       }
       else
       {
@@ -360,7 +369,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     }
     else
     {
-      LOG_DBG("lorawan_join ret=%d (%lld ms)", ret, (long long)join_elapsed);
+      LOG_STATE("lorawan_join ret=%d (%lld ms)", ret, (long long)join_elapsed);
     }
 
     if (ret == 0)

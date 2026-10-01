@@ -1,1 +1,2 @@
 "asset_id","dev_eui","join_eui","app_key","provision_utc","fw_version","hw_version","hw_profile","name_prefix","tag_client","decal_type"
+"DEMO-0001","464C587FE41E35B5","FEE0D3A4B0980F94","CC41315C260EFE244BC16DB76AA3360E","2026-09-21T22:07:02Z","1.5.3","1.4.1","FLEXBOX_PLUS","STU","Stuttgart Airport","Restroom"

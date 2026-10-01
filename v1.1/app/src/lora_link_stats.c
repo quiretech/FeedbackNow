@@ -40,7 +40,7 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
   /* Try-lock only: never block the MAC thread. If the reader holds the lock,
    * we drop this sample; next Ans will catch up. */
   if (k_mutex_lock(&stats_mutex, K_NO_WAIT) != 0) {
-    LOG_DBG("LinkCheckAns dropped (stats locked by reader)");
+    LOG_INF("LinkCheckAns dropped (stats locked by reader)");
     return;
   }
 
@@ -61,7 +61,7 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
 
   k_mutex_unlock(&stats_mutex);
 
-  LOG_DBG("LinkCheckAns margin=%u dB gateways=%u (samples=%u)",
+  LOG_INF("LinkCheckAns margin=%u dB gateways=%u (samples=%u)",
           (unsigned)demod_margin, (unsigned)nb_gateways,
           (unsigned)stats.samples);
 }

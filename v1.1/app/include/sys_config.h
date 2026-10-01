@@ -163,7 +163,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h EDT
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h CEST
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -205,7 +205,7 @@
  */
 #if SYS_CONFIG_LAB_FAST
 #define HEARTBEAT_USE_DEVEUI_JITTER 0
-#define HOUSEKEEPING_INTERVAL_SECONDS 100
+#define HOUSEKEEPING_INTERVAL_SECONDS 65
 #else
 #define HEARTBEAT_USE_DEVEUI_JITTER 1
 #define HOUSEKEEPING_INTERVAL_SECONDS 86400
@@ -255,7 +255,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 0
+#define EPD_LOCALE 2
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS

@@ -268,22 +268,28 @@ int lora_app_init(void) {
     return ret;
   }
 
-  // // NEW CHANNEL MASK SUB BAND 2
-  //   uint16_t mask[6] = {
-  //     0xFF00,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000
-  // };
+  // Register this in your initialization phase
+  // lorawan_register_link_check_ans_callback(my_link_check_cb);
+  // LOG_INF("Link check callback registered successfully.");
 
-  // int ret_mask = lorawan_set_channels_mask(mask, ARRAY_SIZE(mask));
-  // if (ret_mask < 0) {
-  //     LOG_ERR("Failed to set channel mask: %d", ret_mask);
-  // } else {
-  //     LOG_DBG("Channel mask set to FSB2 (channels 8–15)");
-  // }
+  // NEW CHANNEL MASK SUB BAND 1
+    uint16_t mask[6] = {
+      0x00FF,
+      0x0000,
+      0x0000,
+      0x0000,
+      0x0000,
+      0x0000
+  };
+
+  int ret_mask = lorawan_set_channels_mask(mask, ARRAY_SIZE(mask));
+  if (ret_mask < 0) {
+      LOG_ERR("Failed to set channel mask: %d", ret_mask);
+  } else {
+    
+      LOG_INF("Channel mask set to FSB1 (channels 0-7)");
+      //LOG_DBG("Channel mask set to FSB2 (channels 8–15)");
+  }
 
   static struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
                                              .cb = lora_app_dl_callback};

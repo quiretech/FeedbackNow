@@ -16,12 +16,12 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
-//#include "last_cleaned_store.h" // added for nk_co1
-//#include "display_manager.h" // added for nk_co1
+#include "lora_link_stats.h"
 
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
 
 LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
 K_SEM_DEFINE(housekeeping_ready_sem, 0, 1);
@@ -95,11 +95,51 @@ static void hk_schedule_next(void) {
 static void hk_timer_handler(struct k_work *work) {
   ARG_UNUSED(work);
 
+  static uint8_t hk_count_without_join = 0;
+
+  uint32_t get_time_ms = k_uptime_get_32();
+  lora_link_stats_snapshot_t ls;
+
+  memset(&ls, 0, sizeof(ls));
+  (void)lora_link_stats_get(&ls);
+
+
+  
   if (lora_is_joined()) {
+
+    hk_count_without_join = 0;
+
     (void)k_work_submit(&hk_daily_work);
+
+    LOG_INF("link check ans received time=%u ms", (unsigned)ls.last_ans_uptime_ms);
+    LOG_INF("time now=%u ms ago", (unsigned)get_time_ms);
+
+    if(ls.last_ans_uptime_ms != 0 && ((get_time_ms - ls.last_ans_uptime_ms) > (HOUSEKEEPING_INTERVAL_SECONDS) * 1000)) {
+      LOG_INF("no link check ans received yet in more than %u seconds", (unsigned)HOUSEKEEPING_INTERVAL_SECONDS);
+      LOG_INF("Set status to not joined and request rejoin");
+
+      lora_request_join();
+      lora_link_stats_init();
+
+    } else {
+      LOG_INF("last link check ans %u seconds ago", (unsigned)(get_time_ms - ls.last_ans_uptime_ms));
+    }
+    
   } else {
     hk_schedule_next();
+
+    hk_count_without_join++;
+
+    LOG_INF("Status not joined # %u, next Housekeeping scheduled", (unsigned)hk_count_without_join);    
+
+    if(hk_count_without_join > 1) {
+      LOG_INF("No join for more than %u housekeeping cycles, request request sys_reboot", (unsigned)hk_count_without_join);
+      sys_reboot(SYS_REBOOT_COLD);
+      hk_count_without_join = 0;
+    }
+
   }
+
 }
 
 static void hk_daily_handler(struct k_work *work) {
@@ -212,36 +252,6 @@ static void housekeeping_run_core(bool counter_sync_burst) {
     app_uplinks += counter_sync_run(epoch_s, LORA_COUNTER_SYNC_CONFIRMED);
   }
  
-/*added for nk_co1 ---------------------
-
-  // Compare the last cleaned epoch with the current epoch and  update screen with logo if more that 24 hr
-
-  LOG_STATE("Last cleaned check");
-  uint32_t last_cleaned_epoch = 0;
-  if (last_cleaned_store_get(&last_cleaned_epoch) != 0 && last_cleaned_epoch != 0) {
-    
-    LOG_STATE("Entered last cleaned check");
-    uint32_t elapsed = epoch_s - last_cleaned_epoch;
-    static bool default_logo_shown = true;
-     
-    if (elapsed > HOUSEKEEPING_INTERVAL_SECONDS && !default_logo_shown) {
-      LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo", (unsigned)last_cleaned_epoch, (unsigned)elapsed);
-      rail_manager_request_3v3a();
-      display_show_logo_sync();
-      rail_manager_release_3v3a();
-      default_logo_shown = true; // Set the flag to true after showing the logo to avoid logo screen refreshing multiple times
-    } 
-    // Below condition is to insure the screen wait to be refresh to logo screen
-    if(elapsed < HOUSEKEEPING_INTERVAL_SECONDS && default_logo_shown) {
-      LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo", (unsigned)last_cleaned_epoch, (unsigned)elapsed);
-      LOG_STATE("Cleaning performed within 24 hr; showing last cleaned screen");
-      default_logo_shown = false;
-    }
-  }
-  *///------------------added for nk_co1
-  
-
-
   lora_schedule_time_sync_after_app_uplinks(app_uplinks);
 
   rail_manager_release_3v3();
