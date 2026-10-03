@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -30,9 +31,13 @@ if str(_ONBOARDING) not in sys.path:
     sys.path.insert(0, str(_ONBOARDING))
 
 from provision_lib import (
+    ALL_BOX_ORDERS_CSV,
+    ONBOARDING_CONFIG_H,
     ONBOARDING_DIR,
     REPO_ROOT,
     BuildProfile,
+    _parse_device_hw_variant,
+    apply_box_order_to_onboarding,
     apply_build_profile,
     generate_keys,
     normalize_asset_id,
@@ -342,12 +347,21 @@ def _run_aws_register(
 
 def _cmd_keys(args: argparse.Namespace) -> int:
     profile = _resolve_preset(args.preset)
-    code, _ = generate_keys(profile, test=args.test)
+    box_order_id = getattr(args, "box_order_id", None)
+    code, _ = generate_keys(profile, test=args.test, box_order_id=box_order_id)
     return code
 
 
 def _cmd_build(args: argparse.Namespace) -> int:
     profile = _resolve_preset(args.preset)
+    box_order_id = getattr(args, "box_order_id", None)
+    if box_order_id is not None:
+        try:
+            row = apply_box_order_to_onboarding(box_order_id)
+            print(f"Box order loaded : ID {row.get('ID')} ({row.get('ClientPrefix')})")
+        except Exception as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
     try:
         apply_build_profile(profile)
     except (RuntimeError, ValueError) as e:
@@ -357,7 +371,97 @@ def _cmd_build(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_order(args: argparse.Namespace) -> int:
+    try:
+        row = apply_box_order_to_onboarding(args.box_order_id)
+        from provision_lib import (
+            ONBOARDING_CONFIG_H,
+            SYS_CONFIG_H,
+            _parse_device_hw_variant,
+            _parse_sys_config_epd_locale,
+            _parse_sys_config_timezone,
+        )
+        onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
+        sc_text = SYS_CONFIG_H.read_text(encoding="utf-8")
+        hw_variant = _parse_device_hw_variant(onb_text)
+        epd_locale = _parse_sys_config_epd_locale(sc_text)
+        tz_def = _parse_sys_config_timezone(sc_text)
+        print(f"Updated configuration from Box Order ID {row.get('ID')}:")
+        print("  onboarding_config.h:")
+        print(f"    #define DEVICE_HW_VARIANT                  {hw_variant} (from UnitType: {row.get('UnitType')!r})")
+        print(f"    #define DEVICE_REGISTRY_NAME_PREFIX_STRING \"{row.get('ClientPrefix')}\"")
+        print(f"    #define DEVICE_REGISTRY_CLIENT_NAME        \"{row.get('ClientName')}\"")
+        print(f"    #define DEVICE_REGISTRY_DECAL_TYPE         \"{row.get('DecalType')}\"")
+        print("  sys_config.h:")
+        print(f"    #define EPD_LOCALE                         {epd_locale} (from Language: {row.get('Language')!r})")
+        print(f"    #define DEFAULT_TIMEZONE_OFFSET_MINUTES    {tz_def} (from Timezone: {row.get('Timezone')!r})")
+        return 0
+    except Exception as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 2
+
+
+def _check_and_sync_build_variant(board: str = "nrf52840dk/nrf52840") -> int:
+    """
+    Checks if the active build in app/build/app/zephyr/.config matches
+    DEVICE_HW_VARIANT in onboarding_config.h. If there is a mismatch
+    (or no build exists), automatically triggers a pristine rebuild ('west build -p always').
+    """
+    if not ONBOARDING_CONFIG_H.exists():
+        return 0
+
+    onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
+    try:
+        target_variant = _parse_device_hw_variant(onb_text)
+    except Exception:
+        return 0
+
+    dot_config = APP_DIR / "build" / "app" / "zephyr" / ".config"
+    merged_hex = APP_DIR / "build" / "merged.hex"
+
+    needs_rebuild = False
+    reason = ""
+
+    if not dot_config.exists() or not merged_hex.exists():
+        needs_rebuild = True
+        reason = "no existing build output found"
+    else:
+        cfg = dot_config.read_text(encoding="utf-8", errors="ignore")
+        has_display = bool(re.search(r"^CONFIG_DISPLAY=y", cfg, re.MULTILINE))
+        has_ssd1683 = bool(re.search(r"^CONFIG_SSD1683=y", cfg, re.MULTILINE))
+        has_pn5180 = bool(re.search(r"^CONFIG_PN5180=y", cfg, re.MULTILINE))
+
+        if target_variant == "FLEXBOX":
+            if has_display or has_ssd1683 or has_pn5180:
+                needs_rebuild = True
+                reason = "active build has display/NFC enabled, but target variant is standard FLEXBOX"
+        elif target_variant == "FLEXBOX_PLUS":
+            if not (has_display and has_ssd1683 and has_pn5180):
+                needs_rebuild = True
+                reason = "active build lacks display/NFC drivers, but target variant is FLEXBOX_PLUS"
+        elif target_variant == "FLEXBOX_PLUS_MED":
+            if not (has_display and has_ssd1683) or has_pn5180:
+                needs_rebuild = True
+                reason = "active build does not match FLEXBOX_PLUS_MED configuration"
+
+    if needs_rebuild:
+        print(f"\n[Hardware Variant Sync] Target variant: {target_variant} ({reason})")
+        print(f"Triggering automatic pristine rebuild: west build -p always -b {board} in {APP_DIR}...")
+        cmd = ["west", "build", "-p", "always", "-b", board]
+        ret = subprocess.call(cmd, cwd=str(APP_DIR))
+        if ret != 0:
+            print(f"ERROR: pristine build failed with code {ret}", file=sys.stderr)
+            return ret
+        print("[Hardware Variant Sync] Build completed successfully.\n")
+
+    return 0
+
+
 def _cmd_flash(args: argparse.Namespace) -> int:
+    board = getattr(args, "board", "nrf52840dk/nrf52840")
+    code = _check_and_sync_build_variant(board=board)
+    if code != 0:
+        return code
     runner = getattr(args, "runner", "jlink")
     cmd = ["west", "flash", "--runner", runner]
     print(f"Running in {APP_DIR}: {' '.join(cmd)}")
@@ -391,12 +495,14 @@ def _cmd_aws(args: argparse.Namespace) -> int:
 
 def _cmd_sync(args: argparse.Namespace) -> int:
     profile = _resolve_preset(args.preset)
+    box_order_id = getattr(args, "box_order_id", None)
     code, _row = sync_unit_from_registry(
         unit=args.unit,
         profile=profile,
         test=args.test,
         dry_run=args.dry_run,
         from_config=getattr(args, "from_config", False),
+        box_order_id=box_order_id,
     )
     if code != 0:
         return code
@@ -468,6 +574,20 @@ def _add_common_flags(p: argparse.ArgumentParser) -> None:
         "--test",
         action="store_true",
         help="Write registry under flexbox_euis/demo_units/ (not master CSVs)",
+    )
+    p.add_argument(
+        "--box-order-id",
+        "--order-id",
+        "--box-id",
+        "--id",
+        dest="box_order_id",
+        metavar="ID",
+        help="Select row from Box_Orders/all_box_orders.csv by ID (e.g. 31, 32) to update registry strings in onboarding_config.h",
+    )
+    p.add_argument(
+        "--board",
+        default="nrf52840dk/nrf52840",
+        help="Target board for west build/flash (default: nrf52840dk/nrf52840)",
     )
 
 
@@ -582,6 +702,21 @@ def main(argv: list[str] | None = None) -> int:
     p_sync.add_argument("--flash", action="store_true", help="Run west flash after sync")
     p_sync.add_argument("--runner", default="jlink", help="west flash runner (default: jlink)")
     p_sync.set_defaults(func=_cmd_sync)
+
+    p_order = sub.add_parser(
+        "order",
+        help="Update onboarding_config.h registry strings from all_box_orders.csv by ID",
+    )
+    p_order.add_argument(
+        "--id",
+        "--box-order-id",
+        "--box-id",
+        "--order-id",
+        dest="box_order_id",
+        required=True,
+        help="Order ID number from all_box_orders.csv (e.g. 32)",
+    )
+    p_order.set_defaults(func=_cmd_order)
 
     p_stamp = sub.add_parser(
         "stamp",

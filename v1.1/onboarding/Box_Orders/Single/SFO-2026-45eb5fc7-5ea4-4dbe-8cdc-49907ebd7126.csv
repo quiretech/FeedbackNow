@@ -1,0 +1,2 @@
+OrderID,ID,Title,Substring,ClientName,ClientPrefix,UnitType,TotalQuantity,Language,DeliveryDate,Timezone,ButtonLayout,FacePlateNotes,DecalType
+SFO-2026-45eb5fc7-5ea4-4dbe-8cdc-49907ebd7126,33,SFO-2026-45eb5fc7-5ea4-4dbe-8cdc-49907ebd7126,SFO,SFO,SFO,Flex+,25,English,2026-10-01,Pacific Time (PT),"GYRRRR - Cleaning, Product Refill, Maintenance, Smell",These are extra flex boxes for the maintenance team at SFO if any more devices break. These need to be loaded into the old AWS account so I can do that as a manual load,Restroom

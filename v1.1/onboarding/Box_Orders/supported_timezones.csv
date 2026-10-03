@@ -1,0 +1,117 @@
+Timezone,Region,Resolved_IANA_Timezone,Current_Offset_Minutes,Current_Offset_Display
+Eastern Time (ET),North America,America/New_York,-240,UTC-4h EDT
+Central Time (CT),North America,America/Chicago,-300,UTC-5h CDT
+Mountain Time (MT),North America,America/Denver,-360,UTC-6h MDT
+Pacific Time (PT),North America,America/Los_Angeles,-420,UTC-7h PDT
+Alaska Time (AKT),North America,America/Anchorage,-480,UTC-8h AKDT
+Hawaii Time (HST),North America,Pacific/Honolulu,-600,UTC-10h HST
+Atlantic Time,North America,America/Halifax,-180,UTC-3h ADT
+America/New_York,North America (IANA),America/New_York,-240,UTC-4h EDT
+America/Chicago,North America (IANA),America/Chicago,-300,UTC-5h CDT
+America/Denver,North America (IANA),America/Denver,-360,UTC-6h MDT
+America/Los_Angeles,North America (IANA),America/Los_Angeles,-420,UTC-7h PDT
+America/Phoenix,"North America (IANA, no DST)",America/Phoenix,-420,UTC-7h MST
+America/Toronto,North America (IANA),America/Toronto,-240,UTC-4h EDT
+America/Vancouver,North America (IANA),America/Vancouver,-420,UTC-7h PDT
+Central European Time (CET),Europe,Europe/Berlin,120,UTC+2h CEST
+Western European Time (WET),Europe / UK,Europe/London,60,UTC+1h BST
+Eastern European Time (EET),Eastern Europe,Europe/Athens,180,UTC+3h EEST
+British Time,UK,Europe/London,60,UTC+1h BST
+London,UK (City),Europe/London,60,UTC+1h BST
+Dublin,Ireland (City),Europe/London,60,UTC+1h BST
+Paris,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Berlin,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Frankfurt,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Munich,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Stuttgart,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Amsterdam,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Brussels,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Vienna,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Zurich,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Rome,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Madrid,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Lisbon,Europe (City),Europe/London,60,UTC+1h BST
+Stockholm,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Oslo,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Copenhagen,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Prague,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Warsaw,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Budapest,Europe (City),Europe/Berlin,120,UTC+2h CEST
+Athens,Europe (City),Europe/Athens,180,UTC+3h EEST
+Helsinki,Europe (City),Europe/Athens,180,UTC+3h EEST
+Bucharest,Europe (City),Europe/Athens,180,UTC+3h EEST
+Sofia,Europe (City),Europe/Athens,180,UTC+3h EEST
+Kyiv,Europe (City),Europe/Athens,180,UTC+3h EEST
+Istanbul,Europe / Turkey,Europe/Athens,180,UTC+3h EEST
+Moscow Time (MSK),Eastern Europe,Europe/Moscow,180,UTC+3h MSK
+Gulf Standard Time (GST),Middle East,Asia/Dubai,240,UTC+4h +04
+Dubai,Middle East (City),Asia/Dubai,240,UTC+4h +04
+Abu Dhabi,Middle East (City),Asia/Dubai,240,UTC+4h +04
+Oman,Middle East,Asia/Dubai,240,UTC+4h +04
+Muscat,Middle East (City),Asia/Dubai,240,UTC+4h +04
+Arabia Standard Time (AST),Middle East,Asia/Riyadh,180,UTC+3h +03
+Saudi,Middle East,Asia/Riyadh,180,UTC+3h +03
+Riyadh,Middle East (City),Asia/Riyadh,180,UTC+3h +03
+Jeddah,Middle East (City),Asia/Riyadh,180,UTC+3h +03
+Qatar,Middle East,Asia/Riyadh,180,UTC+3h +03
+Doha,Middle East (City),Asia/Riyadh,180,UTC+3h +03
+Kuwait,Middle East,Asia/Riyadh,180,UTC+3h +03
+Bahrain,Middle East,Asia/Riyadh,180,UTC+3h +03
+India Standard Time (IST),Asia,Asia/Kolkata,330,UTC+5.5h IST
+Delhi,Asia (City),Asia/Kolkata,330,UTC+5.5h IST
+Mumbai,Asia (City),Asia/Kolkata,330,UTC+5.5h IST
+Bangalore,Asia (City),Asia/Kolkata,330,UTC+5.5h IST
+Kolkata,Asia (City),Asia/Kolkata,330,UTC+5.5h IST
+Pakistan Standard Time (PKT),Asia,Asia/Karachi,300,UTC+5h PKT
+Karachi,Asia (City),Asia/Karachi,300,UTC+5h PKT
+Bangladesh Time,Asia,Asia/Dhaka,360,UTC+6h +06
+Dhaka,Asia (City),Asia/Dhaka,360,UTC+6h +06
+Nepal Time,Asia,Asia/Kathmandu,345,UTC+5.75h +0545
+Kathmandu,Asia (City),Asia/Kathmandu,345,UTC+5.75h +0545
+Indochina Time (ICT),Asia,Asia/Bangkok,420,UTC+7h +07
+Bangkok,Asia (City),Asia/Bangkok,420,UTC+7h +07
+Thailand,Asia,Asia/Bangkok,420,UTC+7h +07
+Vietnam,Asia,Asia/Bangkok,420,UTC+7h +07
+Western Indonesia Time (WIB),Asia,Asia/Jakarta,420,UTC+7h WIB
+Jakarta,Asia (City),Asia/Jakarta,420,UTC+7h WIB
+Singapore Time (SGT),Asia,Asia/Singapore,480,UTC+8h +08
+Singapore,Asia (City),Asia/Singapore,480,UTC+8h +08
+Malaysia Time (MYT),Asia,Asia/Kuala_Lumpur,480,UTC+8h +08
+Kuala Lumpur,Asia (City),Asia/Kuala_Lumpur,480,UTC+8h +08
+Hong Kong Time (HKT),Asia,Asia/Hong_Kong,480,UTC+8h HKT
+Hong Kong,Asia (City),Asia/Hong_Kong,480,UTC+8h HKT
+China Standard Time (CST),Asia,Asia/Shanghai,480,UTC+8h CST
+Shanghai,Asia (City),Asia/Shanghai,480,UTC+8h CST
+Beijing,Asia (City),Asia/Shanghai,480,UTC+8h CST
+Shenzhen,Asia (City),Asia/Shanghai,480,UTC+8h CST
+Taiwan Time,Asia,Asia/Taipei,480,UTC+8h CST
+Taipei,Asia (City),Asia/Taipei,480,UTC+8h CST
+Philippines Time (PHT),Asia,Asia/Manila,480,UTC+8h PST
+Manila,Asia (City),Asia/Manila,480,UTC+8h PST
+Japan Standard Time (JST),Asia,Asia/Tokyo,540,UTC+9h JST
+Tokyo,Asia (City),Asia/Tokyo,540,UTC+9h JST
+Osaka,Asia (City),Asia/Tokyo,540,UTC+9h JST
+Korea Standard Time (KST),Asia,Asia/Seoul,540,UTC+9h KST
+Seoul,Asia (City),Asia/Seoul,540,UTC+9h KST
+Sydney,Australia (City),Australia/Sydney,600,UTC+10h AEST
+Melbourne,Australia (City),Australia/Sydney,600,UTC+10h AEST
+Canberra,Australia (City),Australia/Sydney,600,UTC+10h AEST
+Brisbane,Australia (no DST),Australia/Brisbane,600,UTC+10h AEST
+Adelaide,Australia (City),Australia/Adelaide,570,UTC+9.5h ACST
+Perth,Australia (City),Australia/Perth,480,UTC+8h AWST
+New Zealand Time,Pacific,Pacific/Auckland,720,UTC+12h NZST
+Auckland,Pacific (City),Pacific/Auckland,720,UTC+12h NZST
+UTC,Global,UTC,0,UTC+0h UTC
+GMT,Global,UTC,0,UTC+0h GMT
+UTC+1,Numeric Offset,Fixed +60 min,60,UTC+1h
+UTC+2,Numeric Offset,Fixed +120 min,120,UTC+2h
+UTC+3,Numeric Offset,Fixed +180 min,180,UTC+3h
+UTC+4,Numeric Offset,Fixed +240 min,240,UTC+4h
+UTC+5:30,Numeric Offset,Fixed +330 min,330,UTC+5.5h
+UTC+8,Numeric Offset,Fixed +480 min,480,UTC+8h
+UTC+9,Numeric Offset,Fixed +540 min,540,UTC+9h
+UTC-4,Numeric Offset,Fixed -240 min,-240,UTC-4h
+UTC-5,Numeric Offset,Fixed -300 min,-300,UTC-5h
+UTC-6,Numeric Offset,Fixed -360 min,-360,UTC-6h
+UTC-7,Numeric Offset,Fixed -420 min,-420,UTC-7h
+UTC-8,Numeric Offset,Fixed -480 min,-480,UTC-8h

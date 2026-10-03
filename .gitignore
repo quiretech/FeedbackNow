@@ -1,5 +1,8 @@
 # Build directories (anywhere in repo)
 **/build/
+**/build_*/
+.~lock.*#
+.~lock.*
 
 # Zephyr/CMake build artifacts
 **/zephyr/
