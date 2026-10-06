@@ -11,12 +11,17 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/util.h>
+#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+#include <zephyr/dfu/mcuboot.h>
+#endif
 
 #include "battery_adc.h"
+#include "ble_manager.h"
 #include "boot_info.h"
 #include "button_counter_store.h"
 #include "button_thread.h"
 #include "buttons.h"
+#include "config_store.h"
 #include "devnonce_store.h"
 #include "display_manager.h"
 #include "eeprom_probe.h"
@@ -29,9 +34,9 @@
 #include "nfc_service.h"
 #include "payload_gen.h"
 #include "power_ctrl.h"
-#include "rtos_thread_affinity.h"
 #include "rail_manager.h"
 #include "rtc.h"
+#include "rtos_thread_affinity.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
@@ -66,6 +71,11 @@ static int system_init(void) {
   if (ret != 0) {
     LOG_ERR("rail_manager_init failed: %d", ret);
     return ret;
+  }
+
+  ret = config_store_init();
+  if (ret != 0) {
+    LOG_WRN("config_store_init warning (%d)", ret);
   }
 
   ret = button_counter_store_init();
@@ -139,6 +149,19 @@ static int system_init(void) {
     return ret;
   }
 
+  ret = ble_manager_init();
+  if (ret != 0) {
+    LOG_WRN("ble_manager_init failed (%d); BLE service unavailable", ret);
+  }
+
+#if defined(CONFIG_BOOTLOADER_MCUBOOT)
+  /* If booted via MCUboot in test/swap mode, mark the running image confirmed
+   */
+  if (boot_write_img_confirmed() == 0) {
+    LOG_INF("MCUboot image confirmed permanently");
+  }
+#endif
+
   return 0;
 }
 
@@ -146,10 +169,16 @@ int main(void) {
 
 // This is part of testing enableing NFC between MED and Non MED device
 #ifdef NFC_ENABLED
-    printk("Macro is DEFINED. Value: %d\n", NFC_ENABLED);
+  printk("Macro is DEFINED. Value: %d\n", NFC_ENABLED);
 #else
-    printk("Macro is NOT defined.\n");
+  printk("Macro is NOT defined.\n");
 #endif
+
+  // Mark this image as permanently confirmed so MCUboot doesn't revert it
+  int err = boot_write_img_confirmed();
+  if (err) {
+    printk("Failed to confirm image: %d\n", err);
+  }
 
   int ret;
 
@@ -214,13 +243,15 @@ int main(void) {
 #endif
 #if EPD_ENABLED
   uint32_t epoch = 0;
-  //epoch = 1778665556; // hardcoded epoch for testing
+  // epoch = 1778665556; // hardcoded epoch for testing
   rtc_get_epoch_seconds(&epoch);
   /* Logo uses long EPD SPI; finish before LoRa thread joins (same SPI bus). */
 #if DEVICE_HW_VARIANT != FLEXBOX_PLUS_MED
   display_show_logo();
 #else
-  room_alert_state_update(SCREEN_STATE_6_PATIENT_IS_IN, epoch); // Initialize the room alert state to last button
+  room_alert_state_update(
+      SCREEN_STATE_6_PATIENT_IS_IN,
+      epoch); // Initialize the room alert state to last button
   display_show_room_alert_status_sync();
 #endif /* end FLEXBOX_PLUS_MED */
 #endif /* end EPD_ENABLE */
@@ -238,7 +269,7 @@ int main(void) {
   (void)button_thread_wait_until_ready(K_SECONDS(1));
 
   LOG_STATE("House Keeing Started 1");
-  
+
   (void)housekeeping_init();
   (void)housekeeping_wait_until_ready(K_SECONDS(1));
 

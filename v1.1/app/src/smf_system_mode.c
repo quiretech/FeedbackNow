@@ -11,6 +11,7 @@
  */
 #include "smf_system_mode.h"
 #include "app_logic.h"
+#include "ble_manager.h"
 #include "log_fmt.h"
 #include "boot_info.h"
 #include "downlink_dispatch.h"
@@ -529,6 +530,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
         rail_manager_release_3v3a(); /* Staff no longer needs LED rail */
         /* Joined: forced LinkCheck then latest link stats; RX timeout → no response. */
         display_show_device_status_for_user_sync();
+        (void)ble_manager_start_advertising();
         LOG_STATE("smf Staff->DevInfo t_ms=%u", DEVICE_INFO_TIMEOUT_MS);
         atomic_set(&mode_timeout_ev, SMF_EVT_DEVICE_INFO_TIMEOUT);
         k_timer_start(&mode_timeout_timer, K_MSEC(DEVICE_INFO_TIMEOUT_MS),

@@ -13,7 +13,8 @@ From repo root or `app/`:
 ```text
 west build -b nrf52840dk/nrf52840
 west build -p always -b nrf52840dk/nrf52840
-west flash --runner nrfjprog
+west flash --runner nrfjprog --erase
+west build -p always -b nrf52840dk/nrf52840 && west flash --runner nrfjprog
 ```
 
 CMake reads `include/onboarding_config.h` **`DEVICE_HW_VARIANT`** and automatically:

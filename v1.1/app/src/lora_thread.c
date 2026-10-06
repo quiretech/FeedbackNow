@@ -1,3 +1,4 @@
+#include "config_store.h"
 #include "devnonce_store.h"
 #include "display_manager.h"
 #include "join_state_store.h"
@@ -465,6 +466,10 @@ static void lora_thread_fn(void *a, void *b, void *c)
   LOG_DBG("tid=%p prio=%d stk=%u", k_current_get(),
           k_thread_priority_get(k_current_get()), LORA_THREAD_STACK_SIZE);
 
+  config_store_get_dev_eui(dev_eui);
+  config_store_get_join_eui(join_eui);
+  config_store_get_app_key(app_key);
+
   struct lorawan_join_config join_cfg = {.mode = LORAWAN_ACT_OTAA,
                                          .dev_eui = dev_eui,
                                          .otaa.join_eui = join_eui,
@@ -578,6 +583,9 @@ static void lora_thread_fn(void *a, void *b, void *c)
           {
             join_installer_rail_release();
           }
+          config_store_get_dev_eui(dev_eui);
+          config_store_get_join_eui(join_eui);
+          config_store_get_app_key(app_key);
           if (!run_join_cycle(&join_cfg, show_join_led, cmd == LORA_CMD_JOIN))
           {
             /* Deliberate Staff rejoin: keep installer LED on silent backoff retry. */

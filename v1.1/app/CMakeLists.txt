@@ -80,6 +80,9 @@ set(APP_SOURCES
   src/app_logic.c
   src/housekeeping.c
   src/adc.c
+  src/config_store.c
+  src/ble_fbn_service.c
+  src/ble_manager.c
 )
 
 if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")
@@ -87,22 +90,21 @@ if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")
     ${APP_DIR}/assets/fonts
     ${APP_DIR}/assets/display_screens
   )
+  file(READ "${APP_DIR}/include/sys_config.h" SYS_CONFIG_H_CONTENT)
+  if(SYS_CONFIG_H_CONTENT MATCHES "\n[ \t]*#[ \t]*define[ \t]+EPD_LOCALE[ \t]+EPD_LOCALE_([A-Za-z]+)")
+    string(TOLOWER "${CMAKE_MATCH_1}" LOCALE_SUFFIX)
+  else()
+    set(LOCALE_SUFFIX "es")
+  endif()
+  message(STATUS "Selected EPD Locale Suffix: ${LOCALE_SUFFIX}")
+
   list(APPEND APP_SOURCES
     assets/fonts/roboto_20.c
-    assets/fonts/roboto_32.c
-    assets/fonts/roboto_28.c
     assets/fonts/roboto_36.c
     assets/fonts/roboto_bold_36.c
-    assets/fonts/roboto_bold_42.c
     assets/display_screens/boot_screen.c
-    assets/display_screens/thanks_en.c
-    assets/display_screens/thanks_fr.c
-    assets/display_screens/thanks_de.c
-    assets/display_screens/thanks_es.c
-    assets/display_screens/cleaning_en.c
-    assets/display_screens/cleaning_fr.c
-    assets/display_screens/cleaning_de.c
-    assets/display_screens/cleaning_es.c
+    assets/display_screens/thanks_${LOCALE_SUFFIX}.c
+    assets/display_screens/cleaning_${LOCALE_SUFFIX}.c
   )
 elseif(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS_MED")
   target_include_directories(app PRIVATE
@@ -111,11 +113,8 @@ elseif(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS_MED")
   )
   list(APPEND APP_SOURCES
     assets/fonts/roboto_20.c
-    assets/fonts/roboto_32.c
-    assets/fonts/roboto_28.c
     assets/fonts/roboto_36.c
     assets/fonts/roboto_bold_36.c
-    assets/fonts/roboto_bold_42.c
     assets/display_screens/boot_screen.c
   )
 endif()

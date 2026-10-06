@@ -6,16 +6,16 @@
  *
  * Related headers:
  *   sys_config_profile.h  — PRODUCTION / DESK / LAB (change SYS_CONFIG_PROFILE)
- *   onboarding_config.h   — unit id, provision UTC, DEVICE_HW_VARIANT, registry strings
- *   eeprom_layout.h       — fixed EEPROM map (do not tune per deployment)
+ *   onboarding_config.h   — unit id, provision UTC, DEVICE_HW_VARIANT, registry
+ * strings eeprom_layout.h       — fixed EEPROM map (do not tune per deployment)
  *   display_strings.h     — EPD UI copy (when EPD_ENABLED)
  *
  * Release checklist: SYS_CONFIG_PROFILE_PRODUCTION, eui_keys.h production keys.
  */
 
-#include "sys_config_profile.h"
-#include "onboarding_config.h"
 #include "eeprom_layout.h"
+#include "onboarding_config.h"
+#include "sys_config_profile.h"
 
 /* =============================================================================
  * Product variant (from onboarding_config.h → EPD compile-time gate)
@@ -31,7 +31,8 @@
 #define EPD_ENABLED 1
 #define NFC_ENABLED 0
 #else
-#error "DEVICE_HW_VARIANT must be FLEXBOX (0) or FLEXBOX_PLUS (1) or FLEXBOX_PLUS_MED(2)"
+#error                                                                         \
+    "DEVICE_HW_VARIANT must be FLEXBOX (0) or FLEXBOX_PLUS (1) or FLEXBOX_PLUS_MED(2)"
 #endif
 
 /* =============================================================================
@@ -54,9 +55,11 @@
 #define LORA_THREAD_PRIORITY 7
 #define LORA_JOIN_RETRY_DELAY_SECONDS 60
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 10
-/** lorawan_join() faster than this after DevTimeReq is a stale-MLME-sem false OK. */
+/** lorawan_join() faster than this after DevTimeReq is a stale-MLME-sem false
+ * OK. */
 #define LORA_JOIN_SUSPICIOUS_MAX_MS 3000U
-/** Keep SPI/radio free at least this long after JoinRequest before post-join EPD/MAC. */
+/** Keep SPI/radio free at least this long after JoinRequest before post-join
+ * EPD/MAC. */
 #define LORA_JOIN_OTAA_GUARD_MS 9000U
 #if SYS_CONFIG_LAB_FAST
 #define LORA_JOIN_BACKOFF_HOURS 0
@@ -70,18 +73,19 @@
 #define LORA_POST_JOIN_MAC_PROBE_RETRY_MS 500
 #define LORA_POST_JOIN_ANS_SETTLE_MS 2500
 #if EPD_ENABLED
-/** Typical full EPD refresh (~400x300); margin before LoRa MAC uses SPI again. */
+/** Typical full EPD refresh (~400x300); margin before LoRa MAC uses SPI again.
+ */
 #define LORA_EPD_FULL_REFRESH_MS 3600U
-/** Defer post-join DeviceTime until after join LED + LAST_CLEANED EPD (shared SPI). */
-#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                       \
-  (((show_join_led) != 0)                                                        \
-       ? ((uint32_t)POST_JOIN_LED_BEFORE_EPD_MS +                                \
-          (uint32_t)LORA_EPD_FULL_REFRESH_MS +                                   \
-          (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)                                 \
-       : ((uint32_t)LORA_EPD_FULL_REFRESH_MS +                                   \
-          (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS))
+/** Defer post-join DeviceTime until after join LED + LAST_CLEANED EPD (shared
+ * SPI). */
+#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                     \
+  (((show_join_led) != 0) ? ((uint32_t)POST_JOIN_LED_BEFORE_EPD_MS +           \
+                             (uint32_t)LORA_EPD_FULL_REFRESH_MS +              \
+                             (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)           \
+                          : ((uint32_t)LORA_EPD_FULL_REFRESH_MS +              \
+                             (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS))
 #else
-#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                       \
+#define LORA_POST_JOIN_DEVICE_TIME_DELAY_MS(show_join_led)                     \
   ((void)(show_join_led), (uint32_t)LORA_POST_JOIN_ANS_SETTLE_MS)
 #endif
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
@@ -96,8 +100,8 @@
 
 /* Defer DeviceTime after N app uplinks (3 s spacing each + fudge). */
 #define LORA_POST_APP_UPLINK_MAC_FUDGE_MS 500U
-#define LORA_POST_APP_UPLINKS_MAC_DELAY_MS(count)                                  \
-  (((uint32_t)(count) * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +                   \
+#define LORA_POST_APP_UPLINKS_MAC_DELAY_MS(count)                              \
+  (((uint32_t)(count) * (uint32_t)LORA_UPLINK_MIN_INTERVAL_MS) +               \
    (uint32_t)LORA_POST_APP_UPLINK_MAC_FUDGE_MS)
 
 /* =============================================================================
@@ -112,11 +116,13 @@
 #define BUTTON_DEBOUNCE_MS 50
 #if EPD_ENABLED
 #define BUTTON_COOLDOWN_MS 13000
-//#define BUTTON_COOLDOWN_MS 5000 // nk_co1: reduced the cooldown to 5s to make the display more responsive
+// #define BUTTON_COOLDOWN_MS 5000 // nk_co1: reduced the cooldown to 5s to make
+// the display more responsive
 #else
-#define BUTTON_COOLDOWN_MS 5000 
+#define BUTTON_COOLDOWN_MS 5000
 #endif
-/* Combo hold + session recovery deadlines: k_work_delayable in button_thread.c */
+/* Combo hold + session recovery deadlines: k_work_delayable in button_thread.c
+ */
 #define INPUT_SESSION_RECOVERY_MS 250
 #define COMBO_STAFF_HOLD_MS 1000
 #define COMBO_DEVICE_INFO_HOLD_MS 1000
@@ -128,8 +134,9 @@
 #define STAFF_TIMEOUT_MS 20000
 #define DEVICE_INFO_TIMEOUT_MS 10000
 /** Max wait for LinkCheckAns after user opens device info (joined). Covers
- * lora_pace_uplink_spacing (up to LORA_UPLINK_MIN_INTERVAL_MS) plus RX windows. */
-#define DEVICE_INFO_LINK_PROBE_TIMEOUT_MS                                        \
+ * lora_pace_uplink_spacing (up to LORA_UPLINK_MIN_INTERVAL_MS) plus RX windows.
+ */
+#define DEVICE_INFO_LINK_PROBE_TIMEOUT_MS                                      \
   (LORA_UPLINK_MIN_INTERVAL_MS + LORA_POST_JOIN_ANS_SETTLE_MS + 500U)
 #define REBOOT_LED_MS 3000
 
@@ -163,9 +170,9 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (120) // UTC+2h CEST
-#define TZ_OFFSET_MIN_MINUTES           (-1440)
-#define TZ_OFFSET_MAX_MINUTES           (1440)
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h
+#define TZ_OFFSET_MIN_MINUTES (-1440)
+#define TZ_OFFSET_MAX_MINUTES (1440)
 /* =============================================================================
  * RTC / time sync
  * =============================================================================
@@ -245,8 +252,8 @@
 #define EPD_CLEANING_REVERT_MINUTES 45u
 #define EPD_CLEANING_AUTO_REVERT_MS (EPD_CLEANING_REVERT_MINUTES * 60U * 1000U)
 #define EPD_ClEANING_DUE_TIMEOUT_HOURS 24U // nk_co1
-#define EPD_CLEANING_DUE_TIMEOUT_MS (EPD_ClEANING_DUE_TIMEOUT_HOURS * 60U  * 60U * 1000U) //nk_co1
-
+#define EPD_CLEANING_DUE_TIMEOUT_MS                                            \
+  (EPD_ClEANING_DUE_TIMEOUT_HOURS * 60U * 60U * 1000U) // nk_co1
 
 #if EPD_ENABLED
 /** Compile-time EPD locale — set EPD_LOCALE below (default EN if unset). */
@@ -255,7 +262,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE EPD_LOCALE_DE
+#define EPD_LOCALE EPD_LOCALE_ES
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS
@@ -265,23 +272,26 @@
 #endif
 #endif
 
-#if EPD_LOCALE != EPD_LOCALE_EN && EPD_LOCALE != EPD_LOCALE_FR &&         \
+#if EPD_LOCALE != EPD_LOCALE_EN && EPD_LOCALE != EPD_LOCALE_FR &&              \
     EPD_LOCALE != EPD_LOCALE_DE && EPD_LOCALE != EPD_LOCALE_ES
-#error "EPD_LOCALE must be EPD_LOCALE_EN, EPD_LOCALE_FR, EPD_LOCALE_DE, or EPD_LOCALE_ES"
+#error                                                                         \
+    "EPD_LOCALE must be EPD_LOCALE_EN, EPD_LOCALE_FR, EPD_LOCALE_DE, or EPD_LOCALE_ES"
 #endif
 
 #include "display_strings.h"
 #endif
 
 #ifndef EPD_DEVICE_STATUS_COMMISSION_BOOT
-#define EPD_DEVICE_STATUS_COMMISSION_BOOT 0 // set to 1 to show device reason for boot (EPD_ENABLED only)
+#define EPD_DEVICE_STATUS_COMMISSION_BOOT                                      \
+  0 // set to 1 to show device reason for boot (EPD_ENABLED only)
 #endif
 #if EPD_DEVICE_STATUS_COMMISSION_BOOT
 #define EPD_DEVICE_STATUS_COMMISSION_MS 10000
 #endif
 
 #define DISPLAY_WORK_DELAY_MS 5000
-//#define DISPLAY_WORK_DELAY_MS 1000 //nk_co1: redduced the delay to 1s to make the display more responsive
+// #define DISPLAY_WORK_DELAY_MS 1000 //nk_co1: redduced the delay to 1s to make
+// the display more responsive
 
 /* =============================================================================
  * Thread and message queue sizing
@@ -304,8 +314,8 @@
  */
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 5
-#define FW_VERSION_PATCH 3
-#define FW_VERSION_STRING "1.5.3"
+#define FW_VERSION_PATCH 38
+#define FW_VERSION_STRING "1.5.38"
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4
 #define HW_VERSION_PATCH 2

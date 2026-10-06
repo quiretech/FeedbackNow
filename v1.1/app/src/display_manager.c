@@ -36,11 +36,8 @@
 
   /* Font declarations */
   LV_FONT_DECLARE(roboto_20);
-  LV_FONT_DECLARE(roboto_28);
-  LV_FONT_DECLARE(roboto_32);
   LV_FONT_DECLARE(roboto_36);
   LV_FONT_DECLARE(roboto_bold_36);
-  LV_FONT_DECLARE(roboto_bold_42);
   LV_IMG_DECLARE(boot_screen);
 #if EPD_LOCALE == EPD_LOCALE_FR
   LV_IMG_DECLARE(thanks_fr);
@@ -403,6 +400,9 @@
     screen_logo = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_logo, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_logo, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(screen_logo, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(screen_logo, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(screen_logo, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *img_logo = lv_img_create(screen_logo);
     lv_img_set_src(img_logo, &boot_screen);
     lv_obj_center(img_logo);
@@ -434,11 +434,7 @@
     lv_label_set_text(label, EPD_TEXT_LAST_CLEANED_HEADLINE);
 
 
-#if EPD_LOCALE == EPD_LOCALE_EN
-    lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
-#else
     lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
-#endif
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     last_cleaned_label = lv_label_create(cont);
@@ -531,6 +527,9 @@
     screen_thanks = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_thanks, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_thanks, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(screen_thanks, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(screen_thanks, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(screen_thanks, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *img_thanks = lv_img_create(screen_thanks);
 #if EPD_LOCALE == EPD_LOCALE_FR
     lv_img_set_src(img_thanks, &thanks_fr);
@@ -548,6 +547,9 @@
     screen_cleaning = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(screen_cleaning, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(screen_cleaning, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(screen_cleaning, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_width(screen_cleaning, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(screen_cleaning, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_t *img_cleaning = lv_img_create(screen_cleaning);
 #if EPD_LOCALE == EPD_LOCALE_FR
     lv_img_set_src(img_cleaning, &cleaning_fr);
@@ -579,7 +581,7 @@
 
     label = lv_label_create(cont_connecting);
     lv_label_set_text(label, EPD_TEXT_CONNECTING);
-    lv_obj_set_style_text_font(label, &roboto_bold_42, LV_PART_MAIN);
+    lv_obj_set_style_text_font(label, &roboto_bold_36, LV_PART_MAIN);
     lv_obj_set_style_text_color(label, lv_color_black(), LV_PART_MAIN);
 
     lv_obj_add_flag(screen_connecting, LV_OBJ_FLAG_HIDDEN);
@@ -659,7 +661,7 @@
     lv_obj_set_style_pad_row(ds_root, 4, LV_PART_MAIN);
 
     (void)epd_status_lr_row_create(ds_root, &ds_brand, &ds_unit_ra);
-    lv_obj_set_style_text_font(ds_brand, &roboto_bold_42, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ds_brand, &roboto_bold_36, LV_PART_MAIN);
     lv_obj_set_style_text_font(ds_unit_ra, &roboto_36, LV_PART_MAIN);
     lv_label_set_text(ds_brand, EPD_TEXT_BRAND_TITLE);
     lv_label_set_text(ds_unit_ra, "---");

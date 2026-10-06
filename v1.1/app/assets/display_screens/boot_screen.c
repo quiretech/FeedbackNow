@@ -332,6 +332,7 @@ const lv_image_dsc_t boot_screen = {
   .header.magic = LV_IMAGE_HEADER_MAGIC,
   .header.w = 400,
   .header.h = 300,
+  .header.stride = 50,
   .data_size = 15008,
   .data = boot_screen_map,
 };

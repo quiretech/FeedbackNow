@@ -19,14 +19,14 @@
 #define FLEXBOX_PLUS_MED 2
 
 /* BEGIN DEVICE_HW_VARIANT (gen_euis.py) — do not edit by hand */
-#define DEVICE_HW_VARIANT FLEXBOX
+#define DEVICE_HW_VARIANT FLEXBOX_PLUS
 /* END DEVICE_HW_VARIANT (gen_euis.py) */
 /* =============================================================================
  * Unit identity (written by onboarding/gen_euis.py — matches eui_registry)
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "DEMO-0019"
+#define DEVICE_UNIT_ID_STRING "DEMO-0027"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -34,8 +34,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1790344679ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-09-25T13:57:59Z"
+#define DEVICE_PROVISION_UNIX_UTC 1791248439ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-10-06T01:00:39Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -43,9 +43,9 @@
  * name_prefix → CSV name_prefix; client → tag_client; decal → decal_type (AWS Decal).
  * =============================================================================
  */
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "STU"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "SDQ"
 
-#define DEVICE_REGISTRY_CLIENT_NAME "Stuttgart Airport"
+#define DEVICE_REGISTRY_CLIENT_NAME "SDQ"
 
 #define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
 

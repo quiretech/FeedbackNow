@@ -20,5 +20,8 @@
  * int16_t 2B. */
 #define EEPROM_TZ_OFFSET_OFF 0x0254U
 #define EEPROM_TZ_OFFSET_SIZE 4U
+/** Dynamic BLE Onboarding Config Store (DevEUI, JoinEUI, AppKey, Unit ID, Region, CRC32). */
+#define EEPROM_CONFIG_STORE_OFF 0x0260U
+#define EEPROM_CONFIG_STORE_SIZE 128U
 
 #endif /* EEPROM_LAYOUT_H */
