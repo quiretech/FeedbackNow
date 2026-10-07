@@ -163,7 +163,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h EDT
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-360) // UTC-6h CT
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -255,7 +255,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE 0
+#define EPD_LOCALE EPD_LOCALE_ES
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS

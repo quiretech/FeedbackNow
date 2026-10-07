@@ -875,7 +875,7 @@
       lv_label_set_text(ds_eui_la, deveui_tail);
     }
     int32_t battery_mv = 0;
-    if (battery_adc_last_mv_get(&battery_mv) == 0) {
+    if (battery_adc_read_mv(&battery_mv) == 0) {
       (void)battery_adc_format_mv_display(battery_mv, battery_buf,
                                          sizeof(battery_buf));
     } else {
