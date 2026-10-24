@@ -34,6 +34,21 @@
 #error "DEVICE_HW_VARIANT must be FLEXBOX (0) or FLEXBOX_PLUS (1) or FLEXBOX_PLUS_MED(2)"
 #endif
 
+
+/* =============================================================================
+ * Inactivity Watchdog Engine Design Specification (24-Hour Auto-Restart)
+ * =============================================================================
+ */
+
+#if SYS_CONFIG_LAB_FAST
+  /* 60 seconds for bench/lab testing */
+  #define INACTIVITY_WDT_TIMEOUT_SEC 180U
+#else
+  /* 48 hours for field deployment */
+  #define INACTIVITY_WDT_TIMEOUT_SEC (48U * 3600U)
+#endif
+
+
 /* =============================================================================
  * LoRa (FRD 4.5)
  * =============================================================================
@@ -53,6 +68,7 @@
 #define LORA_THREAD_STACK_SIZE 2048
 #define LORA_THREAD_PRIORITY 7
 #define LORA_JOIN_RETRY_DELAY_SECONDS 60
+#define LORA_JOIN_RETRY_LED_BLINK_TIME_SECONDS 0
 #define LORA_JOIN_ATTEMPTS_PER_CYCLE 10
 /** lorawan_join() faster than this after DevTimeReq is a stale-MLME-sem false OK. */
 #define LORA_JOIN_SUSPICIOUS_MAX_MS 3000U
@@ -87,6 +103,7 @@
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
 #define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
 #define LORA_BUTTON_PORT 2
+#define LORA_CONFIRM_RETRIES 3
 #define LORA_BUTTON_UPLINK_CONFIRMED 0
 #define LORA_NFC_UPLINK_CONFIRMED 0
 #define LORA_HEARTBEAT_UPLINK_CONFIRMED 0
@@ -111,8 +128,12 @@
 #define BUTTON_THREAD_PRIORITY 8
 #define BUTTON_DEBOUNCE_MS 50
 #if EPD_ENABLED
+#if LORA_BUTTON_UPLINK_CONFIRMED == 1
+#define BUTTON_COOLDOWN_MS 5000 + LORA_CONFIRM_RETRIES*5000
+#else
 #define BUTTON_COOLDOWN_MS 13000
 //#define BUTTON_COOLDOWN_MS 5000 // nk_co1: reduced the cooldown to 5s to make the display more responsive
+#endif
 #else
 #define BUTTON_COOLDOWN_MS 5000 
 #endif
@@ -134,7 +155,7 @@
 #define REBOOT_LED_MS 3000
 
 /* =============================================================================
- * LED (FRD 4.4)
+ * LED (FRD 4.4) 
  * =============================================================================
  */
 #define NUM_LEDS 1
@@ -163,7 +184,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-360) // UTC-6h CT
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC 4h
 #define TZ_OFFSET_MIN_MINUTES           (-1440)
 #define TZ_OFFSET_MAX_MINUTES           (1440)
 /* =============================================================================
@@ -304,8 +325,8 @@
  */
 #define FW_VERSION_MAJOR 1
 #define FW_VERSION_MINOR 5
-#define FW_VERSION_PATCH 3
-#define FW_VERSION_STRING "1.5.3"
+#define FW_VERSION_PATCH 4
+#define FW_VERSION_STRING "1.5.4"
 #define HW_VERSION_MAJOR 1
 #define HW_VERSION_MINOR 4
 #define HW_VERSION_PATCH 2

@@ -7,6 +7,7 @@
 #include "log_fmt.h"
 #include "smf_system_mode.h"
 #include "sys_config.h"
+#include "inactivity_wdt.h"
 
 #include <stdint.h>
 #include <zephyr/kernel.h>
@@ -195,6 +196,7 @@ static void input_deadline_work_handler(struct k_work *work) {
 
 static void input_handle_event_locked(const button_event_t *evt) {
   if (evt->type == BUTTON_EVENT_PRESS) {
+    inactivity_wdt_feed();
     st.held |= BUTTON_MASK(evt->button_id);
     st.session_buttons |= BUTTON_MASK(evt->button_id);
   } else {

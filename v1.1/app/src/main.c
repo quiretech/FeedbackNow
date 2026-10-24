@@ -36,6 +36,7 @@
 #include "sys_config.h"
 #include "time_sync.h"
 #include "tz_offset_store.h"
+#include "inactivity_wdt.h"
 
 #include <zephyr/sys/reboot.h>
 
@@ -200,6 +201,8 @@ int main(void) {
   if (ret != 0) {
     return ret;
   }
+
+  inactivity_wdt_init();
 
   /* Enter idle before worker threads run to avoid refcount-reset races. */
   rail_manager_enter_idle();

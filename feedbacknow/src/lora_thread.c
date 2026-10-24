@@ -149,7 +149,7 @@ static void lora_thread_fn(void *a, void *b, void *c) {
     if (!lora_get_event(&msg, K_MSEC(1000))) {
       continue;
     }
-
+    
     if (msg.len > 0 && msg.len <= LORA_MAX_PAYLOAD_SIZE) {
       ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
       if (ret < 0) {

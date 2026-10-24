@@ -118,14 +118,16 @@ void app_logic_public_vote(uint8_t button_id) {
   memcpy(msg.data, payload, PAYLOAD_LEN_BYTES);
 
   if (lora_is_joined()) {
-    ret = lora_put_event(&msg, K_NO_WAIT);
-    if (ret != 0) {
-      LOG_ERR("Queue button uplink failed: %d", ret);
-    } else {
-      last_accepted_any_press_ms = now_ms;
-      LOG_EVT("vote UL btn=%u ctr=%u ts=%u", payload_button_id, new_counter,
-              epoch_s);
-    }
+    //for (int i = 0; i < 3; i++) {   // nk_co1: retry 3 uplink attempts
+      ret = lora_put_event(&msg, K_NO_WAIT);
+      if (ret != 0) {
+        LOG_ERR("Queue button uplink failed: %d", ret);
+      } else {
+        last_accepted_any_press_ms = now_ms;
+        LOG_EVT("vote UL btn=%u ctr=%u ts=%u", payload_button_id, new_counter,
+                epoch_s);
+      }
+    //}
   } else {
     last_accepted_any_press_ms =
         now_ms; /* Cooldown same as when joined (no EPD flood). */

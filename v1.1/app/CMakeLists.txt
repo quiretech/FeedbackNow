@@ -80,6 +80,7 @@ set(APP_SOURCES
   src/app_logic.c
   src/housekeeping.c
   src/adc.c
+  src/inactivity_wdt.c
 )
 
 if(FB_DEVICE_HW_VARIANT STREQUAL "FLEXBOX_PLUS")

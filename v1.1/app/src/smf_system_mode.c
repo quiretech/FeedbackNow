@@ -509,7 +509,7 @@ static void smf_thread_fn(void *a, void *b, void *c)
         rail_manager_release_3v3a(); /* Staff ref; reboot will reset system */
         LOG_WRN("smf Staff factory reset (all buttons %u ms, counters kept)",
                 (unsigned)COMBO_FACTORY_RESET_HOLD_MS);
-        factory_reset_perform(&smf_dl_ops, false);
+        factory_reset_perform(&smf_dl_ops, true);
       }
       else if (msg.ev_type == SMF_EVT_COMBO_MAGIC_RESET)
       {

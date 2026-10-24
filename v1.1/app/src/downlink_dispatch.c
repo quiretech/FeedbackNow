@@ -146,7 +146,7 @@ bool downlink_queue_housekeeping_state_snapshot(void) {
 
 void factory_reset_perform(const struct downlink_dispatch_ops *ops,
                            bool reset_counters) {
-  LOG_WRN("factory reset: devnonce + has_joined_once%s",
+  LOG_WRN("factory reset: has_joined_once%s",
           reset_counters ? " + counters" : " (counters kept)");
   rail_manager_request_3v3a();
   if (reset_counters) {
@@ -156,11 +156,11 @@ void factory_reset_perform(const struct downlink_dispatch_ops *ops,
       LOG_ERR("factory reset: counters failed");
     }
   }
-  if (devnonce_store_factory_reset() == 0) {
-    LOG_DBG("factory reset: devnonce reset to 0");
-  } else {
-    LOG_WRN("factory reset: devnonce reset failed");
-  }
+  // if (devnonce_store_factory_reset() == 0) {
+  //   LOG_DBG("factory reset: devnonce reset to 0");
+  // } else {
+  //   LOG_WRN("factory reset: devnonce reset failed");
+  // }
   if (join_state_store_clear_has_joined_once() == 0) {
     LOG_DBG("factory reset: has_joined_once cleared");
   } else {

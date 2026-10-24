@@ -158,7 +158,7 @@ void time_sync_request_and_update_rtc(void) {
   atomic_set(&time_sync_last_result, -EINPROGRESS);
   k_sem_reset(&time_sync_done_sem);
 
-  LOG_DBG("DeviceTimeReq (network time)");
+  LOG_INF("DeviceTimeReq (network time)");
 
   /* Log current RTC time before attempting network sync */
   uint32_t rtc_epoch_before = 0;

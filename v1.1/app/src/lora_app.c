@@ -67,7 +67,7 @@ void lora_schedule_time_sync_after_app_uplinks(uint32_t app_uplink_count) {
 
   lora_cancel_scheduled_post_burst_mac();
 
-  LOG_DBG("post-HK MAC: DeviceTime @%u ms (app_ul=%u)", (unsigned)delay_ms,
+  LOG_INF("post-HK MAC: DeviceTime @%u ms (app_ul=%u)", (unsigned)delay_ms,
           (unsigned)app_uplink_count);
 
   (void)k_work_schedule(&lora_burst_tail_time_sync_w, K_MSEC(delay_ms));
@@ -193,6 +193,7 @@ int lora_put_event(const lora_uplink_msg_t *msg, k_timeout_t timeout) {
   if (ret != 0) {
     LOG_ERR("uplink queue full (drop): %d", ret);
   }
+
   return ret;
 }
 
@@ -266,6 +267,13 @@ int lora_app_init(void) {
   if (ret < 0) {
     LOG_ERR("lorawan_start failed: %d", ret);
     return ret;
+  }
+
+  /*CONFIGURE: Set the confirmed message tries after start */
+
+  ret = lorawan_set_conf_msg_tries(LORA_CONFIRM_RETRIES);
+  if (ret < 0) {
+      printk("Failed to set retries: %d\n", ret);
   }
 
   // // NEW CHANNEL MASK SUB BAND 2

@@ -33,11 +33,13 @@ enum payload_event_type {
 /* LoRaWAN FPorts (semantic routing) */
 #define FPORT_BUTTON 10
 #define FPORT_NFC 11
+#define FPORT_FUTURE 13
 #define FPORT_HOUSEKEEPING 20
 /** On-demand FW/HW version (EVT 0x14); DL 0x08 queues one uplink here. */
 #define FPORT_DEVICE_INFO 21
+#define FPORT_BATTERY 22
 #define FPORT_ALARMS 30
-#define FPORT_FUTURE 13
+
 
 #ifdef __cplusplus
 extern "C" {

@@ -19,7 +19,8 @@
 
 LOG_MODULE_REGISTER(lora_thread, CONFIG_LOG_DEFAULT_LEVEL);
 
-#define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS)
+#define LORA_JOIN_RETRY_DELAY K_SECONDS(LORA_JOIN_RETRY_DELAY_SECONDS - LORA_JOIN_RETRY_LED_BLINK_TIME_SECONDS)
+#define LORA_JOIN_RETRY_LED_BLINK_TIME K_SECONDS(LORA_JOIN_RETRY_LED_BLINK_TIME_SECONDS)
 
 static uint8_t dev_eui[] = LORAWAN_DEV_EUI;
 static uint8_t join_eui[] = LORAWAN_JOIN_EUI;
@@ -213,18 +214,21 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   lora_radio_rail_hold();
   lora_pace_uplink_spacing();
 
-  for (int attempt = 0; attempt < 5; attempt++)
+ for (int attempt = 0; attempt < 5; attempt++)
   {
     ret = lorawan_send(
         port, (uint8_t *)data, (uint8_t)len,
         confirmed ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
-
-    if (ret == -EBUSY || ret == -EAGAIN)
+    if (ret != 0)
+    {
+      LOG_INF("lorawan_send failed: %d", ret);
+    }
+    if (ret == -EBUSY || ret == -EAGAIN)// || ret == -ETIMEDOUT)
     {
       if (attempt < 4)
       {
         LOG_INF("lorawan_send busy, retry %d/5 in 500ms", attempt + 1);
-        k_msleep(500);
+        k_msleep(5000);
       }
       else
       {
@@ -241,7 +245,7 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
 
   if (ret == 0)
   {
-    LOG_INF("UL OK p=%u len=%zu", (unsigned)port, len);
+    LOG_INF("UL OK p=%u len=%zu conf=%d", (unsigned)port, len, confirmed ? 1 : 0);
   }
   else if (ret < 0)
   {
@@ -315,17 +319,13 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
 
   /* CONNECTING EPD: SMF runs display_show_connecting_sync() before
    * lora_request_join(); do not post JOIN_STARTED from LoRa thread. */
-  LOG_DBG("join loop start attempts=%d deliberate=%d",
+  LOG_INF("join loop start attempts=%d deliberate=%d",
           LORA_JOIN_ATTEMPTS_PER_CYCLE, (int)deliberate_rejoin);
   if (deliberate_rejoin)
   {
     lora_prepare_deliberate_rejoin();
   }
-  if (show_join_led)
-  {
-    (void)led_manager_show(
-        0, LED_PATTERN_JOINING);
-  }
+  
   join_installer_rail_hold(show_join_led);
 
   for (int attempt = 0; attempt < LORA_JOIN_ATTEMPTS_PER_CYCLE; attempt++)
@@ -352,7 +352,15 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     display_wait_until_spi_idle(15000);
 #endif
     int64_t join_t0 = k_uptime_get();
+
+    if(show_join_led)
+    {
+      (void)led_manager_show(
+          0, LED_PATTERN_JOINING);
+    }
+    //lora_radio_rail_hold();
     ret = lorawan_join(join_cfg);
+
     int64_t join_elapsed = k_uptime_get() - join_t0;
     if (ret == 0)
     {
@@ -443,7 +451,12 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
     if (attempt + 1 < LORA_JOIN_ATTEMPTS_PER_CYCLE)
     {
       LOG_DBG("sleep %d s until next attempt", LORA_JOIN_RETRY_DELAY_SECONDS);
-      join_led_show_active(show_join_led);
+      //join_led_show_active(show_join_led);
+      //k_sleep(LORA_JOIN_RETRY_LED_BLINK_TIME);
+      /* Allow tickless sleep during backoff: turn off LED and release 3.3A rail */
+      (void)led_manager_show(0, LED_PATTERN_OFF);
+      //lora_radio_rail_release();
+      join_installer_rail_release();
       k_sleep(LORA_JOIN_RETRY_DELAY);
     }
   }
@@ -451,7 +464,7 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
   LOG_WRN("join failed after %d attempts (no gateway or RF issue)",
           LORA_JOIN_ATTEMPTS_PER_CYCLE);
   /* Keep JOINING blink + 3.3A through inter-cycle backoff; release on success. */
-  join_led_show_active(show_join_led);
+  //join_led_show_active(!show_join_led);
   return false;
 }
 
@@ -479,7 +492,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
    * join_state_store is inited from main before this thread starts. */
   bool has_joined_once = false;
   (void)join_state_store_has_joined_once(&has_joined_once);
-  LOG_DBG("has_joined_once=%d clear_on_boot=%d", has_joined_once,
+  LOG_INF("has_joined_once=%d clear_on_boot=%d", has_joined_once,
           EEPROM_JOIN_STATE_CLEAR_ON_BOOT);
   if (has_joined_once)
   {
@@ -496,13 +509,19 @@ static void lora_thread_fn(void *a, void *b, void *c)
   (void)lora_get_cmd(&cmd, K_FOREVER);
   LOG_STATE("join cmd=%u starting cycle", cmd);
 
-  const bool show_join_led_boot = join_installer_led_for_cmd(cmd);
+  //const bool show_join_led_boot = join_installer_led_for_cmd(cmd);
+  bool show_join_led = join_installer_led_for_cmd(cmd);
 
-  while (!run_join_cycle(&join_cfg, show_join_led_boot, cmd == LORA_CMD_JOIN))
+  while (!run_join_cycle(&join_cfg, show_join_led, cmd == LORA_CMD_JOIN))
   {
     (void)smf_post_event(SMF_EVT_JOIN_CYCLE_FAILED, 0, k_uptime_get());
     LOG_WRN("join retry in %d h", (int)LORA_JOIN_BACKOFF_HOURS);
-    join_led_show_active(show_join_led_boot);
+
+    /* Allow tickless sleep during backoff: turn off LED and release 3.3A rail */
+    (void)led_manager_show(0, LED_PATTERN_OFF);
+    join_installer_rail_release();
+    //show_join_led = false; /* Subsequent backoff retries must be silent */
+
     if (LORA_JOIN_BACKOFF_HOURS > 0)
     {
       k_sleep(K_HOURS(LORA_JOIN_BACKOFF_HOURS));
@@ -529,7 +548,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
 
   while (1)
   {
-    ret = k_poll(events, 2, K_FOREVER);
+    ret = k_poll(events,2, K_FOREVER);
     if (ret != 0)
     {
       LOG_ERR("k_poll failed: %d", ret);
@@ -545,6 +564,10 @@ static void lora_thread_fn(void *a, void *b, void *c)
         {
           /* lora_send_helper: 3.3A hold + rate limit + lorawan_send (TX/RX). */
           ret = lora_send_helper(msg.port, msg.data, msg.len, msg.confirmed);
+
+          LOG_INF("lora_send_helper returned %d for port=%u len=%zu conf=%d",
+                  ret, (unsigned)msg.port, msg.len, msg.confirmed ? 1 : 0);
+
           if (ret == 0)
           {
             last_uplink_ms = (uint32_t)k_uptime_get();
@@ -569,6 +592,7 @@ static void lora_thread_fn(void *a, void *b, void *c)
 
     if (ev_cmdq->state == K_POLL_STATE_MSGQ_DATA_AVAILABLE)
     {
+      LOG_INF("lora_cmdq event %d", cmd);
       if (lora_get_cmd(&cmd, K_NO_WAIT))
       {
         if (cmd == LORA_CMD_JOIN || cmd == LORA_CMD_JOIN_SILENT)
