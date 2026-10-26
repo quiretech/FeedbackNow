@@ -212,39 +212,6 @@ static void housekeeping_run_core(bool counter_sync_burst) {
     app_uplinks += counter_sync_run(epoch_s, LORA_COUNTER_SYNC_CONFIRMED);
   }
 
-  /*added for nk_co1 ---------------------
-
-    // Compare the last cleaned epoch with the current epoch and  update screen
-    with logo if more that 24 hr
-
-    LOG_STATE("Last cleaned check");
-    uint32_t last_cleaned_epoch = 0;
-    if (last_cleaned_store_get(&last_cleaned_epoch) != 0 && last_cleaned_epoch
-    != 0) {
-
-      LOG_STATE("Entered last cleaned check");
-      uint32_t elapsed = epoch_s - last_cleaned_epoch;
-      static bool default_logo_shown = true;
-
-      if (elapsed > HOUSEKEEPING_INTERVAL_SECONDS && !default_logo_shown) {
-        LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo",
-    (unsigned)last_cleaned_epoch, (unsigned)elapsed);
-        rail_manager_request_3v3a();
-        display_show_logo_sync();
-        rail_manager_release_3v3a();
-        default_logo_shown = true; // Set the flag to true after showing the
-    logo to avoid logo screen refreshing multiple times
-      }
-      // Below condition is to insure the screen wait to be refresh to logo
-    screen if(elapsed < HOUSEKEEPING_INTERVAL_SECONDS && default_logo_shown) {
-        LOG_STATE("last cleaned epoch=%u elapsed=%u > 24 hr; showing logo",
-    (unsigned)last_cleaned_epoch, (unsigned)elapsed); LOG_STATE("Cleaning
-    performed within 24 hr; showing last cleaned screen"); default_logo_shown =
-    false;
-      }
-    }
-    *///------------------added for nk_co1
-
   lora_schedule_time_sync_after_app_uplinks(app_uplinks);
 
   rail_manager_release_3v3();
