@@ -51,3 +51,9 @@ __pycache__/
 
 # AWS automation generated configs
 aws-iot-core-lorawan/automation/batchregistration/lorawan_configs/
+
+# Google Sheets API credentials and local config
+*service_account*.json
+*credentials*.json
+*authorized_user*.json
+**/google_sheets_config.json
