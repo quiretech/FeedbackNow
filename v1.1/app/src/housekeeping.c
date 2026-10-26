@@ -134,6 +134,7 @@ static void hk_timer_handler(struct k_work *work) {
 
     if(hk_count_without_join > 1) {
       LOG_INF("No join for more than %u housekeeping cycles, request request sys_reboot", (unsigned)hk_count_without_join);
+      k_sleep(K_SECONDS(2));
       sys_reboot(SYS_REBOOT_COLD);
       hk_count_without_join = 0;
     }
