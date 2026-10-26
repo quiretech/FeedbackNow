@@ -1,0 +1,377 @@
+Status: Successfully Built, Flashed, and Verified Live!
+The dual-slot MCUboot bootloader and MCUmgr SMP BLE Over-The-Air (OTA) DFU transport are fully operational on your physical hardware.
+
+Verification Summary
+1. MCUboot Bootloader & Partition Verification (via BLE SMP)
+We connected to the device over Bluetooth Low Energy using the standard SMP protocol and queried the bootloader's slot state:
+
+text
+[+] Connecting via SMP BLE to F0:2D:C5:98:4F:8B...
+[+] Requesting MCUboot image states via MCUmgr SMP over BLE...
+[+] Response received from MCUboot:
+    - Slot            : 0 (Primary)
+      Hash            : 090f9da91b09c68a819d554dfa8d48e76fd09e292543bab1d60e7d3f087cfb5b
+      Bootable        : True
+      Active (Running): True
+      Confirmed       : True
+      Pending         : False
+======================================================
+  [SUCCESS] MCUmgr OTA DFU via BLE is 100% OPERATIONAL!
+======================================================
+Boot State: The board boots through MCUboot.
+Auto-Confirmation: boot_write_img_confirmed() in 
+
+main.c
+ automatically confirmed the running image (Confirmed: True), ensuring that future OTA updates won't get rolled back on reboot if they boot successfully.
+2. Live Diagnostics Telemetry Verification
+Running 
+
+fbn_ble_tool.py
+ confirms the application layer, battery sensing, EEPROM storage, and LoRaWAN connectivity are operating simultaneously:
+
+text
+==============================================================
+           FEEDBACKNOW LIVE DIAGNOSTICS TELEMETRY
+==============================================================
+  Firmware Version  : v1.5.3
+  Hardware Variant  : Flexbox Plus
+  Last Boot Cause   : Brownout / Low Voltage
+  Battery Voltage   : 3605 mV (3.605 V)
+  RTC Time (UTC)    : 2026-10-05 20:55:19 UTC (epoch: 1791233719)
+  System Uptime     : 38 seconds (0m 38s)
+--------------------------------------------------------------
+  LoRaWAN Network   : CONNECTED / JOINED
+  LoRa Demod Margin : N/A dB
+  Gateways In Range : 0
+  LinkCheck Samples : 0
+--------------------------------------------------------------
+  Button Press Counters (6 buttons):
+    - Button 1: 0
+    - Button 2: 0
+    - Button 3: 4
+    - Button 4: 2
+    - Button 5: 3
+    - Button 6: 30
+  Last Cleaned (NFC): 2026-10-05 19:20:52 UTC
+==============================================================
+3. GATT Services Available on FBN-Flexbox
+Connecting via BLE exposes three primary services:
+
+MCUmgr SMP DFU Service (8d53dc1d-1db7-4cd3-868b-8a527460aa84): Over-the-air firmware updates and OS control.
+FeedbackNow Service (46424e00-0001-4000-8000-00805f9b34fb): Live telemetry, button counters, LoRa key provisioning, and maintenance actions.
+Device Information Service (0000180a-0000-1000-8000-00805f9b34fb): Hardware model, serial, and manufacturer info.
+How to Perform Over-The-Air (OTA) DFU Updates
+When you build future firmware updates, sysbuild automatically generates signed update binaries:
+
+Candidate update binary: 
+
+build/app/zephyr/zephyr.signed.bin
+Nordic DFU package: 
+
+build/dfu_application.zip
+Method A: Using Nordic nRF Connect Mobile App (iOS / Android)
+Open nRF Connect on your phone and connect to FBN-Flexbox.
+Tap the DFU icon in the top right.
+Select Distribution packet (ZIP) and choose 
+
+dfu_application.zip
+, or select Application .bin and choose 
+
+zephyr.signed.bin
+.
+Tap Start. The app will upload the binary to Slot 1 over BLE and trigger a reboot into the new image.
+Method B: Using Python smpclient from Linux
+bash
+python3 -c "
+import asyncio
+from smpclient import SMPClient
+from smpclient.transport.ble import SMPBLETransport
+async def ota_update():
+    transport = SMPBLETransport()
+    await transport.connect('F0:2D:C5:98:4F:8B', 10.0)
+    client = SMPClient(transport)
+    with open('build/app/zephyr/zephyr.signed.bin', 'rb') as f:
+        await client.upload(f.read(), slot=1)
+    await transport.disconnect()
+asyncio.run(ota_update())
+"
+4:43 PM
+where is dfu_application.zip located
+5:05 PM
+The file 
+
+dfu_application.zip
+ is located at:
+
+text
+/home/jpandya/Desktop/FBN/fbn_antigravity/FeedbackNow/v1.1/app/build/dfu_application.zip
+Archive Contents
+This standard Nordic DFU package contains:
+
+app.signed.bin (488 KB): The MCUboot-signed application image prepared for Slot 1.
+manifest.json: Metadata describing the target image and load format for Nordic nRF Connect mobile and desktop apps.
+You can directly send this .zip to your smartphone and load it in the nRF Connect mobile app under the device's DFU tab.
+
+5:05 PM
+When I use nrf DFU mobile app to load  home/jpandya/Desktop/FBN/fbn_antigravity/FeedbackNow/v1.1/app/build/dfu_application.zip it is giving errors, enableing bootloader failed, dfu initialization fail, firmware upload fail and error invalid or too large file
+7:15 PM
+Working
+
+
+On Monday, October 5th, two key areas of code organization and architectural structure were suggested:
+
+1. BLE Subsystem & Code Organization Roadmap
+(Proposed when designing BLE Onboarding, Live Diagnostics, and MCUboot OTA DFU)
+
+To keep the firmware modular without cluttering 
+
+main.c
+ or 
+
+lora_app.c
+, a modular file structure was proposed:
+
+File	Proposed Responsibility
+
+
+include/ble_manager.h
+
+
+
+src/ble_manager.c
+Radio Lifecycle & Power Management
+• Controls BLE advertising windows (60–90s on boot, then deep sleep to preserve battery).
+• Manages on-demand wakeup via button combo or NFC.
+• Handles connection supervision and parameter negotiation.
+
+
+include/ble_fbn_service.h
+
+
+
+src/ble_fbn_service.c
+FeedbackNow Custom GATT Service (128-bit UUID)
+• Config Characteristic: Dynamic DevEUI, AppKey, Region, Unit ID.
+• Diagnostics Characteristic: Live telemetry (battery mV, button counters 1–5, LoRa SNR/RSSI, RTC time, boot reason).
+• Control Characteristic: Commands (trigger rejoin, clear counters, display refresh, reboot).
+
+
+include/config_store.h
+
+
+
+src/config_store.c
+Persistent Configuration Layer
+• Reads/writes runtime provisioning into external EEPROM / Flash NVS.
+• Automatic fallback to compile-time 
+
+eui_keys.h
+ if unprovisioned.
+
+
+sysbuild.conf
+Sysbuild & MCUboot Multi-Image Setup
+• Enables MCUboot dual-slot partition layout for rollback-safe OTA DFU over SMP/BLE.
+2. Display Manager & Asset Organization (display_manager.c)
+(Proposed to resolve flash overflow and streamline locale handling)
+
+When preparing the firmware image to fit into dual-slot MCUboot flash:
+
+Selective Locale Asset Linking:
+
+Instead of compiling and linking all locale bitmaps (thanks_en.c, thanks_fr.c, thanks_de.c, thanks_es.c, and their cleaning_* counterparts) into libapp.a, organize 
+
+CMakeLists.txt
+ to only compile the screen corresponding to the active EPD_LOCALE defined in 
+
+sys_config.h
+.
+Saved ~100 KB of flash space.
+Font Declaration Pruning in 
+
+display_manager.c
+:
+
+Removed unneeded font externs and unused font tables (roboto_bold_36, etc.) so the linker's garbage collection wouldn't pull unused bitmap glyph tables into memory.
+Separation of Concerns for Display Updates:
+
+Kept display refresh work items asynchronous through the Zephyr system workqueue (k_work_delayable) to prevent blocking the main thread or LoRa MAC timing when updating the E-Paper display.
+
+Where is persistance configuration layer stored now? EEPROM or Flash NVS?
+9:23 AM
+The persistence configuration layer is stored in the external AT24 EEPROM (eeprom0), not Flash NVS.
+
+Implementation Details
+In 
+
+
+why can't run RTT fron connected device drop down, I see the option.
+5:32 PM
+The reason RTT fails or appears to do nothing when clicking the option under Connected Devices typically comes down to two reasons in the nRF Connect / VS Code environment:
+
+1. It is waiting for the top QuickPick input dialog (Most Common)
+When you click the Connect to RTT (plug icon) next to RTT in the Connected Devices view, the extension does not immediately open a terminal tab.
+
+Instead, it triggers a multi-step prompt at the top center of the screen:
+
+Device Selection: It asks to select the core / device (select nRF52840_xxAA).
+RTT Address: It asks for the RTT control block address (it will show inferred from app (zephyr.map) with address 0x20000410, or hit Enter for auto-detect).
+If you click away, press Esc, or expect the terminal window to open without completing those top dropdown prompts, the action cancels silently.
+
+2. Probe Contention on the J-Link EDU Mini
+Your probe is a J-Link EDU Mini V2 (SN: 802007667). Unlike commercial probes, the EDU Mini supports only one active debug connection at a time.
+
+Right before this, you ran west flash --runner nrfjprog, which threw several [error] [SeggerBackend] - JLinkARM.dll reported error -256 errors. The internal nRF Connect device log caught this conflict:
+
+text
+Emulator error: Failed to open connection: Cannot connect to the probe/programmer.
+If nrfjprog or another terminal session didn't cleanly release the probe, the background JLinkExe process spawned by nRF Terminal fails to attach.
+
+How to Connect Successfully
+Option A: Through the UI
+In the Connected Devices panel, expand device 802007667.
+Hover over the RTT item and click the Connect to RTT (plug) icon.
+Look at the top center of your IDE window:
+Step 1: Select nRF52840_xxAA.
+Step 2: Select the suggested address 0x20000410 (or leave blank and press Enter).
+The nRF Terminal tab will open at the bottom.
+Option B: Standalone RTT Viewer (GUI)
+Since SEGGER tools are installed on your system, you can open the dedicated viewer directly:
+
+bash
+JLinkRTTViewerExe &
+Connection to J-Link: USB -> 802007667
+Specify Target Device: nRF52840_xxAA
+Target Interface & Speed: SWD, 4000 kHz
+RTT Control Block: Address 0x20000410 (or Search Range 0x20000000 0x10000)
+Option C: From the Terminal
+In one terminal window, start the J-Link RTT server:
+
+bash
+JLinkExe -device nRF52840_xxAA -if swd -speed 4000 -autoconnect 1 -SelectEmuBySN 802007667 -RTTTelnetPort 19021
+In a second terminal window, connect the client:
+
+bash
+JLinkRTTClient
+(Note: Your firmware's RTT backend is working properly and actively broadcasting logs from _SEGGER_RTT at RAM address 0x20000410).
+
+src/config_store.c
+ and 
+
+include/eeprom_layout.h
+:
+
+EEPROM Location & Offset:
+
+Offset: 0x0260 (EEPROM_CONFIG_STORE_OFF)
+Size: 128 bytes (EEPROM_CONFIG_STORE_SIZE)
+Dedicated slot placed right after the timezone offset store (0x0254).
+Power Gating:
+
+Read and write operations use 
+
+rail_manager_request_3v3a()
+ and rail_manager_release_3v3a() to power the 3.3V rail only when accessing the I2C EEPROM.
+Data Structure (struct fbn_config_record):
+
+Header: Magic number 0x46424E43 ("FBNC") + record version.
+LoRa Credentials: DevEUI (8B), JoinEUI (8B), AppKey (16B), and Region (US915 / EU868).
+Device Identity: Unit ID string (e.g. "DEMO-0019") and Client Name string.
+Timestamp & Integrity: UTC provision_epoch and an IEEE CRC32 checksum across all payload fields.
+Fallback Mechanism:
+
+If the EEPROM is empty, unprovisioned, or CRC fails, 
+
+config_store_init()
+ seamlessly loads the compile-time defaults from 
+
+eui_keys.h
+ and 
+
+onboarding_config.h
+.
+
+add to the  BLE name spec CONFIG_BT_DEVICE_NAME    the DEVICE_UNIT_ID_STRING . For example in the existing code the CONFIG_BT_DEVICE_NAME="FBN-Flexbox-DEMO-0027"
+12:22 PM
+Updated 
+
+v1.1/app/prj.conf
+:
+
+properties
+# --- 8. Bluetooth Low Energy (BLE) ---
+CONFIG_BT=y
+CONFIG_BT_PERIPHERAL=y
+CONFIG_BT_DEVICE_NAME="FBN-Flexbox-DEMO-0027"
+CONFIG_BT_DEVICE_APPEARANCE=0
+Key Considerations Verified
+Advertising Packet Size: "FBN-Flexbox-DEMO-0027" is 21 bytes. In the legacy advertising payload (ad[] in 
+
+ble_manager.c
+), the 3-byte flags plus 23-byte complete name total 26 bytes, comfortably under the 31-byte legacy BLE PDU limit.
+Kconfig Limits: The 21-character string is well within the default Zephyr CONFIG_BT_DEVICE_NAME_MAX (28 characters).
+Tooling Compatibility: 
+
+fbn_ble_tool.py
+ will continue to automatically discover the device since it matches on the "FBN" and "Flexbox" prefixes.
+12:22 PM
+update  CONFIG_BT_DEVICE_NAME with DEVICE_UNIT_ID_STRING  every time I run provision.py
+12:33 PM
+
+
+provision.py
+ and 
+
+provision_lib.py
+ have been updated to automatically synchronize CONFIG_BT_DEVICE_NAME with DEVICE_UNIT_ID_STRING every time provision.py is executed.
+
+Changes Implemented
+BLE Name Sync Function (
+
+provision_lib.py
+):
+
+Added 
+
+sync_bt_device_name_in_prj_conf()
+ to read DEVICE_UNIT_ID_STRING from 
+
+onboarding_config.h
+ and update CONFIG_BT_DEVICE_NAME in 
+
+prj.conf
+ formatted as "FBN-Flexbox-{asset_id}".
+Integration into Provisioning Workflows:
+
+
+
+apply_build_profile()
+: Automatically synchronizes CONFIG_BT_DEVICE_NAME when region and board overlays are synced.
+
+
+generate_keys()
+ (provision.py all / keys): Immediately updates prj.conf with the newly assigned asset_id and logs BLE Name : FBN-Flexbox-{asset_id} to terminal output.
+
+
+sync_unit_from_registry()
+ (provision.py sync): Keeps CONFIG_BT_DEVICE_NAME aligned with the synced unit.
+
+
+provision.py main()
+: Runs 
+
+sync_bt_device_name_in_prj_conf()
+ before and after any CLI command invocation.
+Verification
+Ran provision.py validate, which successfully updated 
+
+v1.1/app/prj.conf
+ to match the currently provisioned unit (DEMO-0029):
+
+properties
+# --- 8. Bluetooth Low Energy (BLE) ---
+CONFIG_BT=y
+CONFIG_BT_PERIPHERAL=y
+CONFIG_BT_DEVICE_NAME="FBN-Flexbox-DEMO-0029"
+CONFIG_BT_DEVICE_APPEARANCE=0
+

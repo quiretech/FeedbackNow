@@ -1,6 +1,7 @@
 /**
  * @file ble_manager.h
- * @brief Bluetooth Low Energy lifecycle and advertising manager for FeedbackNow.
+ * @brief Bluetooth Low Energy lifecycle and advertising manager for
+ * FeedbackNow.
  *
  * Responsibilities:
  *  - Initialize the Zephyr Bluetooth stack.
@@ -19,13 +20,15 @@
 extern "C" {
 #endif
 
-/** Default duration (in seconds) that BLE advertises before automatically sleeping */
+/** Default duration (in seconds) that BLE advertises before automatically
+ * sleeping */
 #ifndef BLE_ADV_TIMEOUT_SECONDS
-#define BLE_ADV_TIMEOUT_SECONDS 300U
+#define BLE_ADV_TIMEOUT_SECONDS 60U
 #endif
 
 /**
- * @brief Initialize BLE stack, register callbacks, and start initial boot advertising.
+ * @brief Initialize BLE stack, register callbacks, and start initial boot
+ * advertising.
  * @return 0 on success, negative errno on failure.
  */
 int ble_manager_init(void);
@@ -41,7 +44,8 @@ int ble_manager_init(void);
 int ble_manager_start_advertising(void);
 
 /**
- * @brief Stop BLE advertising immediately and return radio to lowest power state.
+ * @brief Stop BLE advertising immediately and return radio to lowest power
+ * state.
  * @return 0 on success, negative errno on failure.
  */
 int ble_manager_stop_advertising(void);

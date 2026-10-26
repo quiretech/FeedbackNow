@@ -26,7 +26,7 @@
  * =============================================================================
  */
 /* BEGIN UNIT_ID (gen_euis.py) — do not edit by hand */
-#define DEVICE_UNIT_ID_STRING "DEMO-0027"
+#define DEVICE_UNIT_ID_STRING "DEMO-0032"
 /* END UNIT_ID (gen_euis.py) */
 
 /* Last provisioning stamp (UTC) from onboarding/gen_euis.py (--stamp-provision-only
@@ -34,8 +34,8 @@
  * factory/test default (RTC_SET_*), or still before this stamp (PRODUCTION).
  * DESK/LAB overwrite every boot. If 0, RTC falls back to RTC_SET_* in sys_config.h. */
 /* BEGIN PROVISION_UTC (gen_euis.py) — do not edit by hand */
-#define DEVICE_PROVISION_UNIX_UTC 1791248439ULL
-#define DEVICE_PROVISION_ISO8601_UTC "2026-10-06T01:00:39Z"
+#define DEVICE_PROVISION_UNIX_UTC 1791581804ULL
+#define DEVICE_PROVISION_ISO8601_UTC "2026-10-09T21:36:44Z"
 /* END PROVISION_UTC (gen_euis.py) */
 
 /* =============================================================================
@@ -43,9 +43,9 @@
  * name_prefix → CSV name_prefix; client → tag_client; decal → decal_type (AWS Decal).
  * =============================================================================
  */
-#define DEVICE_REGISTRY_NAME_PREFIX_STRING "SDQ"
+#define DEVICE_REGISTRY_NAME_PREFIX_STRING "SFO"
 
-#define DEVICE_REGISTRY_CLIENT_NAME "SDQ"
+#define DEVICE_REGISTRY_CLIENT_NAME "SFO"
 
 #define DEVICE_REGISTRY_DECAL_TYPE "Restroom"
 

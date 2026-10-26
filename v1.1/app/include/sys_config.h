@@ -91,9 +91,10 @@
 #define LORA_INSTALL_EXTRA_LINK_SAMPLES 0
 #define LORA_INSTALL_EXTRA_LINK_SPACING_MS 2000
 #define LORA_BUTTON_PORT 2
+#define LORA_CONFIRM_RETRIES 4
 #define LORA_BUTTON_UPLINK_CONFIRMED 0
 #define LORA_NFC_UPLINK_CONFIRMED 0
-#define LORA_HEARTBEAT_UPLINK_CONFIRMED 0
+#define LORA_HEARTBEAT_UPLINK_CONFIRMED 1
 #define LORA_COUNTER_SYNC_CONFIRMED 0
 #define COUNTER_SYNC_DELAY_MS 100
 #define COUNTER_SYNC_JITTER_MAX_MS 600
@@ -170,7 +171,7 @@
  * Timezone (display only; internals stay UTC)
  * =============================================================================
  */
-#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-240) // UTC-4h
+#define DEFAULT_TIMEZONE_OFFSET_MINUTES (-420) // UTC-7h PDT
 #define TZ_OFFSET_MIN_MINUTES (-1440)
 #define TZ_OFFSET_MAX_MINUTES (1440)
 /* =============================================================================
@@ -262,7 +263,7 @@
 #define EPD_LOCALE_DE 2
 #define EPD_LOCALE_ES 3
 
-#define EPD_LOCALE EPD_LOCALE_ES
+#define EPD_LOCALE EPD_LOCALE_EN
 
 #ifndef EPD_LOCALE
 #if defined(EPD_LOCALE_FR_BITMAPS) && EPD_LOCALE_FR_BITMAPS

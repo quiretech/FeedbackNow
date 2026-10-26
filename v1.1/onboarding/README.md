@@ -31,6 +31,15 @@ python3 onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --uni
 python3 onboarding/provision.py aws --target fbn-eu --preset seeed-us915 --all-rows --confirm
 
 python3 onboarding/provision.py validate
+
+# Sync registry to Google Sheet (using google_sheets_config.json):
+python3 onboarding/sync_google_sheet.py           # Sync US915 -> 'Device EUI US915'
+python3 onboarding/sync_google_sheet.py --eu      # Sync EU868 -> 'Device EUI EU868'
+python3 onboarding/sync_google_sheet.py --all     # Sync BOTH US915 and EU868
+
+# Or via provision CLI:
+python3 onboarding/provision.py sync-sheet --eu
+python3 onboarding/provision.py sync-sheet --all
 ```
 
 **Presets:** `lr-us915` (LR62E, US915) · `seeed-us915` · `seeed-eu868` (Seeed WIO, US915 or EU868)

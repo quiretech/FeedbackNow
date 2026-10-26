@@ -8,7 +8,7 @@
 
 ## Build and flash
 
-From repo root or `app/`:
+From repo root or `app/`:s
 
 ```text
 west build -b nrf52840dk/nrf52840

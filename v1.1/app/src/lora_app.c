@@ -1,16 +1,16 @@
+#include "lora_app.h"
+#include "battery_adc.h"
+#include "eui_keys.h"
+#include "log_fmt.h"
+#include "lora_link_stats.h"
+#include "smf_system_mode.h"
+#include "sys_config.h"
+#include "time_sync.h"
 #include <string.h>
 #include <zephyr/device.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/lorawan/lorawan.h>
-#include "battery_adc.h"
-#include "lora_app.h"
-#include "lora_link_stats.h"
-#include "log_fmt.h"
-#include "eui_keys.h"
-#include "smf_system_mode.h"
-#include "sys_config.h"
-#include "time_sync.h"
 
 LOG_MODULE_REGISTER(lora_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -48,7 +48,8 @@ void lora_request_time_sync(void) { (void)lora_cmd_put(LORA_CMD_TIME_SYNC); }
 
 static void lora_burst_tail_time_sync_fn(struct k_work *work);
 
-K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w, lora_burst_tail_time_sync_fn);
+K_WORK_DELAYABLE_DEFINE(lora_burst_tail_time_sync_w,
+                        lora_burst_tail_time_sync_fn);
 
 static void lora_burst_tail_time_sync_fn(struct k_work *work) {
   ARG_UNUSED(work);
@@ -114,8 +115,8 @@ bool lora_probe_link_check_sync(uint32_t timeout_ms) {
     if (now.samples > samples_before ||
         (now.last_ans_uptime_ms != 0U &&
          now.last_ans_uptime_ms != ans_ms_before)) {
-      LOG_DBG("link probe: Ans margin=%d gw=%u",
-              (int)now.last_demod_margin, (unsigned)now.last_nb_gateways);
+      LOG_DBG("link probe: Ans margin=%d gw=%u", (int)now.last_demod_margin,
+              (unsigned)now.last_nb_gateways);
       return true;
     }
     k_msleep(50);
@@ -131,6 +132,11 @@ void lora_reset_dr_time_sync_retry(void) {
 
 void lora_on_join_success(void) {
   lora_reset_dr_time_sync_retry();
+  /* CONFIGURE : Set the confirmed message tries after start */
+  int ret = lorawan_set_conf_msg_tries(LORA_CONFIRM_RETRIES);
+  if (ret < 0) {
+    LOG_INF("Failed to set retries: %d\n", ret);
+  }
 }
 
 int lora_wait_until_ready(k_timeout_t timeout) {
@@ -148,9 +154,9 @@ bool lora_get_cmd(uint8_t *cmd_out, k_timeout_t timeout) {
   return true;
 }
 
-/* Battery level callback for LoRaWAN MAC (0=external, 1..254 level, 255=unknown).
- * Value is cached when housekeeping reads ADC (slow path); this callback must
- * stay non-blocking for the LoRa stack.
+/* Battery level callback for LoRaWAN MAC (0=external, 1..254 level,
+ * 255=unknown). Value is cached when housekeeping reads ADC (slow path); this
+ * callback must stay non-blocking for the LoRa stack.
  */
 static uint8_t lora_battery_level_cb(void) {
   return battery_adc_lorawan_level_get();
@@ -269,20 +275,13 @@ int lora_app_init(void) {
   }
 
   // // NEW CHANNEL MASK SUB BAND 2
-  //   uint16_t mask[6] = {
-  //     0xFF00,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000,
-  //     0x0000
-  // };
+  // uint16_t mask[6] = {0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000};
 
   // int ret_mask = lorawan_set_channels_mask(mask, ARRAY_SIZE(mask));
   // if (ret_mask < 0) {
-  //     LOG_ERR("Failed to set channel mask: %d", ret_mask);
+  //   LOG_ERR("Failed to set channel mask: %d", ret_mask);
   // } else {
-  //     LOG_DBG("Channel mask set to FSB2 (channels 8–15)");
+  //   LOG_DBG("Channel mask set to FSB2 (channels 8–15)");
   // }
 
   static struct lorawan_downlink_cb dl_cb = {.port = LW_RECV_PORT_ANY,
@@ -291,7 +290,8 @@ int lora_app_init(void) {
 
   lorawan_register_dr_changed_callback(lora_app_dr_changed);
 
-  /* Register battery level callback (cached from last ADC read; 255 unknown). */
+  /* Register battery level callback (cached from last ADC read; 255 unknown).
+   */
   lorawan_register_battery_level_callback(lora_battery_level_cb);
 
   /* LinkCheckAns capture: (demod_margin, nb_gateways) into atomic snapshot.

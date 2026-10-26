@@ -195,6 +195,12 @@ def apply_build_profile(profile: BuildProfile) -> None:
     prj_text = _replace_between_markers(
         prj_text, PRJ_REGION_BEGIN, PRJ_REGION_END, prj_inner
     )
+    if ONBOARDING_CONFIG_H.exists():
+        try:
+            unit_id = _parse_device_unit_id(ONBOARDING_CONFIG_H.read_text(encoding="utf-8"))
+            prj_text = _replace_prj_conf_bt_device_name(prj_text, unit_id)
+        except Exception:
+            pass
     _atomic_write(PRJ_CONF, prj_text)
 
     ovl_text = BOARD_OVERLAY.read_text(encoding="utf-8")
@@ -202,6 +208,42 @@ def apply_build_profile(profile: BuildProfile) -> None:
         ovl_text, OVERLAY_RADIO_BEGIN, OVERLAY_RADIO_END, ovl_inner
     )
     _atomic_write(BOARD_OVERLAY, ovl_text)
+
+
+def _parse_device_unit_id(contents: str) -> str:
+    m = re.search(r'#define\s+DEVICE_UNIT_ID_STRING\s+"([^"]+)"', contents)
+    if not m:
+        raise RuntimeError(f"Could not parse DEVICE_UNIT_ID_STRING in {ONBOARDING_CONFIG_H}")
+    return m.group(1).strip()
+
+
+def _replace_prj_conf_bt_device_name(prj_text: str, unit_id: str) -> str:
+    new_name = f'CONFIG_BT_DEVICE_NAME="FBN-Flexbox-{unit_id}"'
+    pattern = re.compile(r"^CONFIG_BT_DEVICE_NAME\s*=.*$", re.MULTILINE)
+    if pattern.search(prj_text):
+        return pattern.sub(new_name, prj_text)
+    return prj_text + f"\n{new_name}\n"
+
+
+def sync_bt_device_name_in_prj_conf(unit_id: str | None = None) -> bool:
+    """Sync CONFIG_BT_DEVICE_NAME in prj.conf with DEVICE_UNIT_ID_STRING."""
+    if not PRJ_CONF.exists():
+        return False
+    if unit_id is None:
+        if not ONBOARDING_CONFIG_H.exists():
+            return False
+        try:
+            onb_text = ONBOARDING_CONFIG_H.read_text(encoding="utf-8")
+            unit_id = _parse_device_unit_id(onb_text)
+        except Exception:
+            return False
+
+    prj_text = PRJ_CONF.read_text(encoding="utf-8")
+    new_prj_text = _replace_prj_conf_bt_device_name(prj_text, unit_id)
+    if new_prj_text != prj_text:
+        _atomic_write(PRJ_CONF, new_prj_text)
+        return True
+    return False
 
 
 _LEGACY_HW_PROFILE_ALIASES = {"EPD_NFC": "FLEXBOX_PLUS", "NFC_BUTTONS": "FLEXBOX"}
@@ -890,6 +932,7 @@ def sync_unit_from_registry(
         decal_type=decal_type,
     )
     _atomic_write(ONBOARDING_CONFIG_H, onb_text)
+    sync_bt_device_name_in_prj_conf(asset_id)
 
     _update_registry_row_metadata(
         csv_path,
@@ -913,6 +956,7 @@ def sync_unit_from_registry(
     print(f"Updated   : {EUI_KEYS_H.name}, {ONBOARDING_CONFIG_H.name}")
     print(f"Updated   : {csv_path} row {asset_id}")
     print(f"Build     : {PRJ_CONF.name} + overlay ({profile.hardware}/{profile.region})")
+    print(f"BLE Name  : FBN-Flexbox-{asset_id}")
     print("")
     return 0, row
 
@@ -1038,6 +1082,7 @@ def generate_keys(
     onb_text = _replace_onboarding_unit_id(onb_text, asset_id)
     onb_text = _replace_onboarding_provision_utc(onb_text, provision_unix, provision_iso)
     _atomic_write(ONBOARDING_CONFIG_H, onb_text)
+    sync_bt_device_name_in_prj_conf(asset_id)
 
     new_row = {
         "asset_id": asset_id,
@@ -1075,6 +1120,7 @@ def generate_keys(
     print(f"JoinEUI  : {_colon_hex(join_eui)}")
     print(f"Registry : {registry_csv}")
     print(f"Build    : {PRJ_CONF.name} + overlay ({profile.hardware}/{profile.region})")
+    print(f"BLE Name : FBN-Flexbox-{asset_id}")
     print("")
     return 0, new_row
 

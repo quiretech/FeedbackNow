@@ -1,0 +1,11 @@
+{
+  "_comment": "Rename to google_sheets_config.json to set your Google Sheet target and credentials defaults",
+  "webhook_url": "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+  "worksheet_us915": "Device EUI US915",
+  "worksheet_eu868": "Device EUI EU868",
+  "worksheet": "Device EUI US915",
+  "sheet_url": "",
+  "sheet_name": "",
+  "sheet_id": "",
+  "service_account_path": "service_account.json"
+}

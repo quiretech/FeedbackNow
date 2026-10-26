@@ -27,7 +27,8 @@ static K_WORK_DELAYABLE_DEFINE(adv_timeout_work, adv_timeout_handler);
 /* Advertising payload: Flags + Complete Device Name in primary ad packet */
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+    BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME,
+            sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 };
 
 /* Scan response: 128-bit FeedbackNow Service UUID */
@@ -37,8 +38,9 @@ static const struct bt_data sd[] = {
 
 static void adv_timeout_handler(struct k_work *work) {
   ARG_UNUSED(work);
-  LOG_INF("BLE advertising timed out (%u s); stopping radio to conserve battery",
-          BLE_ADV_TIMEOUT_SECONDS);
+  LOG_INF(
+      "BLE advertising timed out (%u s); stopping radio to conserve battery",
+      BLE_ADV_TIMEOUT_SECONDS);
   (void)ble_manager_stop_advertising();
 }
 
@@ -81,7 +83,8 @@ static void disconnected_cb(struct bt_conn *conn, uint8_t reason) {
 
   LOG_INF("BLE disconnected from %s (reason 0x%02X)", addr, reason);
 
-  /* After disconnection, defer advertising restart slightly to allow controller to settle */
+  /* After disconnection, defer advertising restart slightly to allow controller
+   * to settle */
   k_work_schedule(&restart_adv_work, K_MSEC(150));
 }
 
@@ -93,7 +96,8 @@ static void le_param_updated_cb(struct bt_conn *conn, uint16_t interval,
 
 static void security_changed_cb(struct bt_conn *conn, bt_security_t level,
                                 enum bt_security_err err) {
-  LOG_INF("BLE security changed: level=%u err=%u", (unsigned)level, (unsigned)err);
+  LOG_INF("BLE security changed: level=%u err=%u", (unsigned)level,
+          (unsigned)err);
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
@@ -139,7 +143,17 @@ int ble_manager_start_advertising(void) {
     return 0;
   }
 
-  int ret = bt_le_adv_start(BT_LE_ADV_CONN_FAST_2, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+  // Define custom parameters manually, adv interval 500ms - 2.5 sec
+  static const struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
+      BT_LE_ADV_OPT_CONN, // Options: Connectable advertising
+      800,                // Min Interval: 500 ms (800 * 0.625 ms)
+      4000,               // Max Interval: 2500 ms (4000 * 0.625 ms)
+      NULL                // Peer address
+  );
+
+  // Use &adv_param or use BT_LE_ADV_CONN_FAST_2(100ms) or BT_LE_ADV_CONN_FAST_1
+  // (20ms)
+  int ret = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
   if (ret == -EALREADY) {
     ret = 0;
   }
@@ -179,10 +193,6 @@ int ble_manager_stop_advertising(void) {
   return ret;
 }
 
-bool ble_manager_is_advertising(void) {
-  return is_advertising;
-}
+bool ble_manager_is_advertising(void) { return is_advertising; }
 
-bool ble_manager_is_connected(void) {
-  return (current_conn != NULL);
-}
+bool ble_manager_is_connected(void) { return (current_conn != NULL); }

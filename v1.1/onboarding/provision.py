@@ -13,6 +13,7 @@ Examples (from repo root v1.1):
   python3 onboarding/provision.py aws --target fbn-main --preset seeed-eu868 --unit UNIT-0042
   python3 onboarding/provision.py sync --unit UNIT-0322 --preset lr-us915 --target fbn-admin --reprov --flash
   python3 onboarding/provision.py sync --unit 194 --preset lr-us915 --from-config --target fbn-admin --reprov --flash
+  python3 onboarding/provision.py all --preset seeed-us915 --target fbn-prod-eu --flash --test --box-order-id 38
   python3 onboarding/provision.py validate
 """
 
@@ -43,6 +44,7 @@ from provision_lib import (
     normalize_asset_id,
     registry_csv_path,
     stamp_provision_only,
+    sync_bt_device_name_in_prj_conf,
     sync_unit_from_registry,
     validate_hw_variant_build,
 )
@@ -407,6 +409,7 @@ def _check_and_sync_build_variant(board: str = "nrf52840dk/nrf52840") -> int:
     DEVICE_HW_VARIANT in onboarding_config.h. If there is a mismatch
     (or no build exists), automatically triggers a pristine rebuild ('west build -p always').
     """
+    sync_bt_device_name_in_prj_conf()
     if not ONBOARDING_CONFIG_H.exists():
         return 0
 
@@ -559,9 +562,52 @@ def _cmd_all(args: argparse.Namespace) -> int:
             return code
 
     if args.target:
-        return _cmd_aws(args)
+        code = _cmd_aws(args)
+        if code != 0:
+            return code
+
+    if getattr(args, "sync_sheet", False):
+        return _cmd_sync_sheet(args)
 
     return 0
+
+
+def _cmd_sync_sheet(args: argparse.Namespace) -> int:
+    from sync_google_sheet import main as sync_main
+    forward_args: list[str] = []
+    if getattr(args, "webhook_url", None):
+        forward_args.extend(["--webhook-url", args.webhook_url])
+    if getattr(args, "sheet_url", None):
+        forward_args.extend(["--sheet-url", args.sheet_url])
+    if getattr(args, "sheet_id", None):
+        forward_args.extend(["--sheet-id", args.sheet_id])
+    if getattr(args, "sheet_name", None):
+        forward_args.extend(["--sheet-name", args.sheet_name])
+    if getattr(args, "worksheet", None):
+        forward_args.extend(["--worksheet", args.worksheet])
+    if getattr(args, "csv", None):
+        forward_args.extend(["--csv", str(args.csv)])
+    if getattr(args, "preset", None):
+        forward_args.extend(["--preset", args.preset])
+    if getattr(args, "region", None):
+        forward_args.extend(["--region", args.region])
+    if getattr(args, "eu", False):
+        forward_args.append("--eu")
+    if getattr(args, "us", False):
+        forward_args.append("--us")
+    if getattr(args, "sync_all", False):
+        forward_args.append("--all")
+    if getattr(args, "service_account", None):
+        forward_args.extend(["--service-account", args.service_account])
+    if getattr(args, "oauth", False):
+        forward_args.append("--oauth")
+    if getattr(args, "mode", None):
+        forward_args.extend(["--mode", args.mode])
+    if getattr(args, "dry_run", False):
+        forward_args.append("--dry-run")
+    if getattr(args, "config", None):
+        forward_args.extend(["--config", str(args.config)])
+    return sync_main(forward_args)
 
 
 def _add_common_flags(p: argparse.ArgumentParser) -> None:
@@ -678,7 +724,30 @@ def main(argv: list[str] | None = None) -> int:
     p_all.add_argument("--skip-keys", action="store_true", help="Skip key generation (re-flash/onboard only)")
     p_all.add_argument("--flash", action="store_true", help="Run west flash after keys")
     p_all.add_argument("--runner", default="jlink", help="west flash runner (default: jlink)")
+    p_all.add_argument("--sync-sheet", action="store_true", help="Sync registry CSV to Google Sheet after provisioning")
     p_all.set_defaults(func=_cmd_all)
+
+    p_sheet = sub.add_parser(
+        "sync-sheet",
+        help="Sync EUI registry CSV to a Google Sheet via gspread",
+    )
+    p_sheet.add_argument("--sheet-url", help="Google Sheet full URL")
+    p_sheet.add_argument("--sheet-id", help="Google Sheet ID")
+    p_sheet.add_argument("--sheet-name", help="Google Sheet title in Drive")
+    p_sheet.add_argument("--worksheet", help="Worksheet / tab title or index")
+    p_sheet.add_argument("--csv", type=Path, help="CSV path (default: based on region)")
+    p_sheet.add_argument("--preset", help="Hardware preset (lr-us915, seeed-eu868, etc.) to choose registry CSV")
+    p_sheet.add_argument("-eu", "--eu", action="store_true", help="Sync EU868 registry to 'Device EUI EU868' tab")
+    p_sheet.add_argument("-us", "--us", action="store_true", help="Sync US915 registry to 'Device EUI US915' tab")
+    p_sheet.add_argument("-all", "--all", dest="sync_all", action="store_true", help="Sync BOTH US915 and EU868 registries")
+    p_sheet.add_argument("--webhook-url", help="Google Apps Script Web App URL")
+    p_sheet.add_argument("--test", action="store_true", help="Use demo_units registry CSV")
+    p_sheet.add_argument("--service-account", "--creds", dest="service_account", help="Service account JSON path")
+    p_sheet.add_argument("--oauth", action="store_true", help="Use Google OAuth user login flow")
+    p_sheet.add_argument("--mode", choices=["replace", "append", "update"], default="replace", help="Sync mode (default: replace)")
+    p_sheet.add_argument("--dry-run", action="store_true", help="Dry run without modifying Google Sheet")
+    p_sheet.add_argument("--config", type=Path, help="Path to google_sheets_config.json")
+    p_sheet.set_defaults(func=_cmd_sync_sheet)
 
     p_sync = sub.add_parser(
         "sync",
@@ -725,7 +794,10 @@ def main(argv: list[str] | None = None) -> int:
     p_stamp.set_defaults(func=lambda _a: stamp_provision_only())
 
     args = parser.parse_args(argv)
-    return args.func(args)
+    sync_bt_device_name_in_prj_conf()
+    ret = args.func(args)
+    sync_bt_device_name_in_prj_conf()
+    return ret
 
 
 if __name__ == "__main__":
