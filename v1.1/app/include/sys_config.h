@@ -42,12 +42,17 @@
 
 #if SYS_CONFIG_LAB_FAST
   /* 60 seconds for bench/lab testing */
-  #define INACTIVITY_WDT_TIMEOUT_SEC 180U
+  #define INACTIVITY_WDT_TIMEOUT_SEC 300U
 #else
   /* 48 hours for field deployment */
   #define INACTIVITY_WDT_TIMEOUT_SEC (48U * 3600U)
 #endif
 
+/* =============================================================================
+ * Unresponsive Gateway Auto-Restart
+ * =============================================================================
+ */
+#define UNRESPONSIVE_GATEWAY_REBOOT_ENABLED 0
 
 /* =============================================================================
  * LoRa (FRD 4.5)

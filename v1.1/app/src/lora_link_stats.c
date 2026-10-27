@@ -61,9 +61,9 @@ static void on_link_check_ans(uint8_t demod_margin, uint8_t nb_gateways) {
 
   k_mutex_unlock(&stats_mutex);
 
-  LOG_DBG("LinkCheckAns margin=%u dB gateways=%u (samples=%u)",
+  LOG_INF("LinkCheckAns margin=%u dB gateways=%u (samples=%u) LastAnsUptime=%ums",
           (unsigned)demod_margin, (unsigned)nb_gateways,
-          (unsigned)stats.samples);
+          (unsigned)stats.samples, (unsigned)stats.last_ans_uptime_ms);
 }
 
 void lora_link_stats_init(void) {

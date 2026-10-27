@@ -115,6 +115,34 @@ int payload_gen_build_battery_status(uint32_t epoch_s, uint16_t battery_mv,
   return 0;
 }
 
+int payload_gen_build_link_check_answer(uint32_t epoch_s,
+                                        uint8_t *out_buf) {
+  if (!out_buf) {
+    return -EINVAL;
+  }
+
+  k_mutex_lock(&ctx.lock, K_FOREVER);
+
+  /* Timestamp */
+  write_be32(out_buf, epoch_s);
+  /* Event type */
+  out_buf[4] = EVT_LINK_CHECK_ANS;
+  
+  out_buf[5] = 0x00;
+  out_buf[6] = 0x00;
+  out_buf[7] = 0x00;
+  out_buf[8] = 0x00;
+  out_buf[9] = 0x00;
+  out_buf[10] = 0x00;
+  // char unit_id[] = "LinkC";
+  // memcpy(&out_buf[5], unit_id, 5);
+  // out_buf[10] = 0x00;
+
+  k_mutex_unlock(&ctx.lock);
+  return 0;
+} 
+
+
 int payload_gen_build_nfc_in(uint32_t epoch_s, const uint8_t *data_4,
                              uint8_t *out_buf) {
   if (!out_buf || !data_4) {

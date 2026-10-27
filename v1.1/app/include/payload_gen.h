@@ -26,6 +26,7 @@ enum payload_event_type {
    * 0x14 on FPORT_DEVICE_INFO (21): DL 0x08 — no leading ts; see build_device_version_info */
   EVT_DEVICE_STATE_SNAPSHOT = 0x13,
   EVT_DEVICE_VERSION_INFO = 0x14,
+  EVT_LINK_CHECK_ANS = 0x15, // ts + unit_id(4)
 
   /* Reserved */
   EVT_FUTURE = 0xFF,
@@ -38,6 +39,7 @@ enum payload_event_type {
 /** On-demand FW/HW version (EVT 0x14); DL 0x08 queues one uplink here. */
 #define FPORT_DEVICE_INFO 21
 #define FPORT_BATTERY 22
+#define FPORT_LINK_CHECK 23
 #define FPORT_ALARMS 30
 
 

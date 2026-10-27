@@ -16,12 +16,13 @@
 #include "rail_manager.h"
 #include "rtc.h"
 #include "sys_config.h"
-//#include "last_cleaned_store.h" // added for nk_co1
-//#include "display_manager.h" // added for nk_co1
+#include "lora_link_stats.h"
 
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/reboot.h>
+
 
 LOG_MODULE_REGISTER(housekeeping, CONFIG_LOG_DEFAULT_LEVEL);
 K_SEM_DEFINE(housekeeping_ready_sem, 0, 1);
@@ -95,10 +96,52 @@ static void hk_schedule_next(void) {
 static void hk_timer_handler(struct k_work *work) {
   ARG_UNUSED(work);
 
+
+  static uint8_t hk_count_without_join = 0;
+
+  uint32_t get_time_ms = k_uptime_get_32();
+  lora_link_stats_snapshot_t ls;
+
+  memset(&ls, 0, sizeof(ls));
+  (void)lora_link_stats_get(&ls);
+
   if (lora_is_joined()) {
+
     (void)k_work_submit(&hk_daily_work);
+
+#if UNRESPONSIVE_GATEWAY_REBOOT_ENABLED == 1
+    
+    hk_count_without_join = 0;    
+
+    LOG_INF("link check ans received time=%u ms", (unsigned)ls.last_ans_uptime_ms);
+    LOG_INF("time now=%u ms ago", (unsigned)get_time_ms);
+
+    if(ls.last_ans_uptime_ms != 0 && ((get_time_ms - ls.last_ans_uptime_ms) > (HOUSEKEEPING_INTERVAL_SECONDS) * 1000)) {
+      LOG_INF("no link check ans received yet in more than %u seconds", (unsigned)HOUSEKEEPING_INTERVAL_SECONDS);
+      LOG_INF("Set status to not joined and request rejoin");
+
+      lora_request_join();
+      lora_link_stats_init();
+
+    } else {
+      LOG_INF("last link check ans %u seconds ago", (unsigned)(get_time_ms - ls.last_ans_uptime_ms));
+    }
+#endif
+
   } else {
+
     hk_schedule_next();
+#if UNRESPONSIVE_GATEWAY_REBOOT_ENABLED == 1
+    hk_count_without_join++;
+
+    LOG_INF("Status not joined # %u, next Housekeeping scheduled", (unsigned)hk_count_without_join);    
+
+    if(hk_count_without_join > 1) {
+      LOG_INF("No join for more than %u housekeeping cycles, request request sys_reboot", (unsigned)hk_count_without_join);
+      sys_reboot(SYS_REBOOT_COLD);
+      hk_count_without_join = 0;
+    }
+#endif
   }
 }
 

@@ -8,6 +8,9 @@
 #include "smf_system_mode.h"
 #include "sys_config.h"
 #include "time_sync.h"
+#include "payload_gen.h"
+
+
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -214,6 +217,13 @@ static int lora_send_helper(uint8_t port, uint8_t *data, size_t len,
   lora_radio_rail_hold();
   lora_pace_uplink_spacing();
 
+  ret = lorawan_request_link_check(false);
+  if (ret < 0) {
+      LOG_ERR("Failed to append Link Check request: %d", ret);
+  } else {
+      LOG_INF("Link Check MAC command successfully queued");
+  }
+
  for (int attempt = 0; attempt < 5; attempt++)
   {
     ret = lorawan_send(
@@ -317,6 +327,12 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
   int ret;
   uint16_t dev_nonce;
 
+  // uint32_t epoch_s = 0;
+  // (void)rtc_get_epoch_seconds(&epoch_s);
+  // if (epoch_s == 0) {
+  //   epoch_s = (uint32_t)(k_uptime_get() / 1000U);
+  // }
+
   /* CONNECTING EPD: SMF runs display_show_connecting_sync() before
    * lora_request_join(); do not post JOIN_STARTED from LoRa thread. */
   LOG_INF("join loop start attempts=%d deliberate=%d",
@@ -410,6 +426,27 @@ static bool run_join_cycle(struct lorawan_join_config *join_cfg,
       atomic_set(&lora_joined_flag, 1);
       lora_on_join_success();
       k_sem_give(&lora_join_sem);
+
+      ret = lorawan_request_link_check(false);
+      if (ret < 0) {
+        LOG_ERR("Failed to append Link Check request: %d", ret);
+      } else {
+
+        // uint8_t payload[PAYLOAD_LEN_BYTES];
+
+        // int pret = payload_gen_build_link_check_answer(epoch_s, payload);
+        // if (pret == 0) {
+        //   lora_uplink_msg_t msg_lc = (lora_uplink_msg_t){0};
+        //   msg_lc.port = FPORT_LINK_CHECK;
+        //   msg_lc.confirmed = 0;
+        //   msg_lc.len = PAYLOAD_LEN_BYTES;
+        //   memcpy(msg_lc.data, payload, PAYLOAD_LEN_BYTES);
+        //   lora_put_event(&msg_lc, K_MSEC(5000));
+        //   LOG_INF("Dummy LoRawann uplink will be sent to trigger the LinkCheckAns");
+        // }
+        
+        LOG_INF("Link Check MAC command successfully queued after join");
+      }
 
 #if LORA_POST_JOIN_MAC_SETTLE_MS > 0
       k_msleep(LORA_POST_JOIN_MAC_SETTLE_MS);
